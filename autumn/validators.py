@@ -1,4 +1,15 @@
+from __future__ import absolute_import, unicode_literals
 import re
+
+try:
+    str = unicode  # Python 2.* compatible
+    str_types = ()
+    string_types = (basestring,)
+    integer_types = (int, long)
+except NameError:
+    string_types = (str,)
+    integer_types = (int,)
+
 
 class Validator(object):
     pass
@@ -30,7 +41,7 @@ class Number(Validator):
         self.maximum = maximum
         
     def __call__(self, number):
-        return isinstance(number, (int, long, float, complex)) and \
+        return isinstance(number, integer_types + (float, complex,)) and \
                (self.minimum is None or number >= self.minimum) and \
                (self.maximum is None or number <= self.maximum)
                

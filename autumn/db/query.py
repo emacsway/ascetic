@@ -1,5 +1,16 @@
+from __future__ import absolute_import, unicode_literals
 from autumn.db import escape
 from autumn.db.connection import autumn_db
+
+try:
+    str = unicode  # Python 2.* compatible
+    str_types = ()
+    string_types = (basestring,)
+    integer_types = (int, long)
+except NameError:
+    string_types = (str,)
+    integer_types = (int,)
+
 
 class Query(object):
     '''
@@ -89,7 +100,7 @@ class Query(object):
         if self.cache != None:
             return self.cache[k]
         
-        if isinstance(k, (int, long)):
+        if isinstance(k, integer_types):
             self.limit = (k,1)
             lst = self.get_data()
             if not lst:
@@ -134,7 +145,7 @@ class Query(object):
             return 'WHERE %s' % ' AND '.join("%s=%s" % (escape(k), self.db.conn.placeholder) for k in self.conditions)
         
     def extract_condition_values(self):
-        return list(self.conditions.itervalues())
+        return list(self.conditions.values())
         
     def query_template(self):
         return '%s FROM %s %s %s %s' % (
@@ -180,7 +191,7 @@ class Query(object):
         db = db or cls.get_db()
         cursor = Query.raw_sql(sql, values, db)
         fields = [f[0] for f in cursor.description]
-        return [dict(zip(fields, row)) for row in cursor.fetchall()]
+        return [dict(list(zip(fields, row))) for row in cursor.fetchall()]
             
     @classmethod
     def raw_sql(cls, sql, values=(), db=None):
@@ -190,11 +201,11 @@ class Query(object):
             cursor.execute(sql, values)
             if db.b_commit:
                 db.conn.connection.commit()
-        except BaseException, ex:
+        except BaseException as ex:
             if db.b_debug:
-                print "raw_sql: exception: ", ex
-                print "sql:", sql
-                print "values:", values
+                print("raw_sql: exception: ", ex)
+                print("sql:", sql)
+                print("values:", values)
             raise
         return cursor
 
@@ -206,10 +217,10 @@ class Query(object):
             cursor.executescript(sql)
             if db.b_commit:
                 db.conn.connection.commit()
-        except BaseException, ex:
+        except BaseException as ex:
             if db.b_debug:
-                print "raw_sqlscript: exception: ", ex
-                print "sql:", sql
+                print("raw_sqlscript: exception: ", ex)
+                print("sql:", sql)
             raise
         return cursor
 

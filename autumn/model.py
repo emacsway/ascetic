@@ -1,9 +1,21 @@
+from __future__ import absolute_import, unicode_literals
 import re
 from autumn.db.query import Query
 from autumn.db import escape
 from autumn.db.connection import autumn_db, Database
 from autumn.validators import ValidatorChain
-    
+import collections
+
+try:
+    str = unicode  # Python 2.* compatible
+    str_types = ()
+    string_types = (basestring,)
+    integer_types = (int, long)
+except NameError:
+    string_types = (str,)
+    integer_types = (int,)
+
+
 class ModelCache(object):
     models = {}
     
@@ -28,7 +40,7 @@ class ModelBase(type):
     
     '''
     def __new__(cls, name, bases, attrs):
-        if name == 'Model':
+        if name in ('Model', 'NewBase', ):
             return super(ModelBase, cls).__new__(cls, name, bases, attrs)
             
         new_class = type.__new__(cls, name, bases, attrs)
@@ -49,7 +61,7 @@ class ModelBase(type):
             new_class.Meta.pk = 'id'
         
         # Create function to loop over iterable validations
-        for k, v in getattr(new_class.Meta, 'validations', {}).iteritems():
+        for k, v in getattr(new_class.Meta, 'validations', {}).items():
             if isinstance(v, (list, tuple)):
                 new_class.Meta.validations[k] = ValidatorChain(*v)
         
@@ -64,7 +76,7 @@ class ModelBase(type):
         cache.add(new_class)
         return new_class
 
-class Model(object):
+class Model(ModelBase(bytes("NewBase"), (object, ), {})):
     '''
     Allows for automatic attributes based on table columns.
     
@@ -146,7 +158,6 @@ class Model(object):
         # Removing the second argument defaults the order to ASC
         
     '''
-    __metaclass__ = ModelBase
     
     debug = False
 
@@ -155,7 +166,7 @@ class Model(object):
         self.__dict__[self.Meta.pk] = None
         self._new_record = True
         [setattr(self, self._fields[i], arg) for i, arg in enumerate(args)]
-        [setattr(self, k, v) for k, v in kwargs.iteritems()]
+        [setattr(self, k, v) for k, v in kwargs.items()]
         self._changed = set()
         
     def __setattr__(self, name, value):
@@ -207,9 +218,9 @@ class Model(object):
         
     def _get_defaults(self):
         'Sets attribute defaults based on ``defaults`` dict'
-        for k, v in getattr(self.Meta, 'defaults', {}).iteritems():
+        for k, v in getattr(self.Meta, 'defaults', {}).items():
             if not getattr(self, k, None):
-                if callable(v):
+                if isinstance(v, collections.Callable):
                     v = v()
                 setattr(self, k, v)
         
@@ -230,11 +241,11 @@ class Model(object):
     
     def _validate(self):
         'Tests all ``validations``, raises ``Model.ValidationError``'
-        for k, v in getattr(self.Meta, 'validations', {}).iteritems():
-            assert callable(v), 'The validator must be callable'
+        for k, v in getattr(self.Meta, 'validations', {}).items():
+            assert isinstance(v, collections.Callable), 'The validator must be callable'
             value = getattr(self, k)
             if not v(value):
-                raise Model.ValidationError, 'Improper value "%s" for "%s"' % (value, k)
+                raise Model.ValidationError('Improper value "%s" for "%s"' % (value, k))
         
     def save(self):
         'Sets defaults, validates and inserts into or updates database'

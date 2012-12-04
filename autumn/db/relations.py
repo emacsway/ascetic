@@ -1,5 +1,16 @@
+from __future__ import absolute_import, unicode_literals
 from autumn.db.query import Query
 from autumn.model import cache
+
+try:
+    str = unicode  # Python 2.* compatible
+    str_types = ()
+    string_types = (basestring,)
+    integer_types = (int, long)
+except NameError:
+    string_types = (str,)
+    integer_types = (int,)
+
 
 class Relation(object):
     
@@ -8,7 +19,7 @@ class Relation(object):
         self.field = field
     
     def _set_up(self, instance, owner):
-        if isinstance(self.model, basestring):
+        if isinstance(self.model, string_types):
             self.model = cache.get(self.model)
 
 class ForeignKey(Relation):

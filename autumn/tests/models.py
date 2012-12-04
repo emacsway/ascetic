@@ -1,3 +1,4 @@
+from __future__ import absolute_import, unicode_literals
 from autumn.db.connection import autumn_db
 from autumn.model import Model
 from autumn.db.relations import ForeignKey, OneToMany
