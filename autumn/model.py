@@ -7,7 +7,7 @@ class ModelCache(object):
     models = {}
     
     def add(self, model):
-        self.models[model.__name__] = model
+        self.models[".".join(model.__module__, model.__name__)] = model
         
     def get(self, model_name):
         return self.models[model_name]
