@@ -1,4 +1,10 @@
 #!/usr/bin/env python
+if __name__ == '__main__':
+    import os
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__))
+    )))
 import unittest
 import datetime
 from autumn.model import Model
@@ -7,48 +13,50 @@ from autumn.db.query import Query
 from autumn.db import escape
 from autumn import validators
 
+
 class TestModels(unittest.TestCase):
         
     def testmodel(self):
         # Create tables
         
         ### MYSQL ###
-        #
-        # DROP TABLE IF EXISTS author;
-        # CREATE TABLE author (
-        #     id INT(11) NOT NULL auto_increment,
-        #     first_name VARCHAR(40) NOT NULL,
-        #     last_name VARCHAR(40) NOT NULL,
-        #     bio TEXT,
-        #     PRIMARY KEY (id)
-        # );
-        # DROP TABLE IF EXISTS books;
-        # CREATE TABLE books (
-        #     id INT(11) NOT NULL auto_increment,
-        #     title VARCHAR(255),
-        #     author_id INT(11),
-        #     FOREIGN KEY (author_id) REFERENCES author(id),
-        #     PRIMARY KEY (id)
-        # );
-        
-        ### SQLITE ###
-        #
-        # DROP TABLE IF EXISTS author;
-        # DROP TABLE IF EXISTS books;
-        # CREATE TABLE author (
-        #   id INTEGER PRIMARY KEY AUTOINCREMENT,
-        #   first_name VARCHAR(40) NOT NULL,
-        #   last_name VARCHAR(40) NOT NULL,
-        #   bio TEXT
-        # );
-        # CREATE TABLE books (
-        #   id INTEGER PRIMARY KEY AUTOINCREMENT,
-        #   title VARCHAR(255),
-        #   author_id INT(11),
-        #   FOREIGN KEY (author_id) REFERENCES author(id)
-        # );
-        
-        for table in ('author', 'books'):
+        create_sql = {
+            'mysql': """
+                DROP TABLE IF EXISTS autumn_tests_models_author;
+                CREATE TABLE autumn_tests_models_author (
+                    id INT(11) NOT NULL auto_increment,
+                    first_name VARCHAR(40) NOT NULL,
+                    last_name VARCHAR(40) NOT NULL,
+                    bio TEXT,
+                    PRIMARY KEY (id)
+                );
+                DROP TABLE IF EXISTS books;
+                CREATE TABLE books (
+                    id INT(11) NOT NULL auto_increment,
+                    title VARCHAR(255),
+                    author_id INT(11),
+                    FOREIGN KEY (author_id) REFERENCES author(id),
+                    PRIMARY KEY (id)
+                );
+             """,
+            'sqlite3': """
+                DROP TABLE IF EXISTS autumn_tests_models_author;
+                DROP TABLE IF EXISTS books;
+                CREATE TABLE autumn_tests_models_author (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  first_name VARCHAR(40) NOT NULL,
+                  last_name VARCHAR(40) NOT NULL,
+                  bio TEXT
+                );
+                CREATE TABLE books (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  title VARCHAR(255),
+                  author_id INT(11),
+                  FOREIGN KEY (author_id) REFERENCES author(id)
+                );
+            """
+        }
+        for table in ('autumn_tests_models_author', 'books'):
             Query.raw_sql('DELETE FROM %s' % escape(table))
         
         # Test Creation

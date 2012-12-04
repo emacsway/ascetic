@@ -1,3 +1,4 @@
+import re
 from autumn.db.query import Query
 from autumn.db import escape
 from autumn.db.connection import autumn_db, Database
@@ -7,7 +8,7 @@ class ModelCache(object):
     models = {}
     
     def add(self, model):
-        self.models[".".join(model.__module__, model.__name__)] = model
+        self.models[".".join((model.__module__, model.__name__))] = model
         
     def get(self, model_name):
         return self.models[model_name]
@@ -36,7 +37,11 @@ class ModelBase(type):
             new_class.Meta = Empty
         
         if not getattr(new_class.Meta, 'table', None):
-            new_class.Meta.table = name.lower()
+            #new_class.Meta.table = name.lower()
+            new_class.Meta.table = "_".join([
+                re.sub(r"[^a-z0-9]", "", i.lower())
+                for i in (new_class.__module__.split(".") + [name, ])
+            ])
         new_class.Meta.table_safe = escape(new_class.Meta.table)
         
         # Assume id is the default 

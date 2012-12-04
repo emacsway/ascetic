@@ -18,7 +18,7 @@ class ForeignKey(Relation):
         if not instance:
             return self.model
         if not self.field:
-            self.field = '%s_id' % self.model.Meta.table
+            self.field = '%s_id' % self.model.Meta.table.split("_").pop()
         conditions = {self.model.Meta.pk: getattr(instance, self.field)}
         return Query(model=self.model, conditions=conditions)[0]
 
@@ -29,6 +29,6 @@ class OneToMany(Relation):
         if not instance:
             return self.model
         if not self.field:
-            self.field = '%s_id' % instance.Meta.table
+            self.field = '%s_id' % instance.Meta.table.split("_").pop()
         conditions = {self.field: getattr(instance, instance.Meta.pk)}
         return Query(model=self.model, conditions=conditions)

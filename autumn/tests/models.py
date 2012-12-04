@@ -5,10 +5,10 @@ from autumn import validators
 import datetime
 
 #autumn_db.conn.connect('sqlite3', '/tmp/example.db')
-autumn_db.conn.connect('mysql', user='root', db='autumn')
+autumn_db.conn.connect('mysql', user='devel', db='devel_autumn', passwd="devel")
     
 class Author(Model):
-    books = OneToMany('Book')
+    books = OneToMany('autumn.tests.models.Book')
     
     class Meta:
         defaults = {'bio': 'No bio available'}
