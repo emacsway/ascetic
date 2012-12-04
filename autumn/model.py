@@ -70,7 +70,7 @@ class ModelBase(type):
         if not hasattr(new_class, "db"):
             new_class.db = autumn_db
         db = new_class.db
-        q = Query.raw_sql('SELECT * FROM %s LIMIT 1' % new_class.Meta.table_safe, db=new_class.db)
+        q = Query.raw_sql('SELECT * FROM {0} LIMIT 1'.format(new_class.Meta.table_safe), db=new_class.db)
         new_class._fields = [f[0] for f in q.description]
         
         cache.add(new_class)
@@ -185,9 +185,9 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         
     def _update(self):
         'Uses SQL UPDATE to update record'
-        query = 'UPDATE %s SET ' % self.Meta.table_safe
-        query += ', '.join(['%s = %s' % (escape(f), self.db.conn.placeholder) for f in self._changed])
-        query += ' WHERE %s = %s ' % (escape(self.Meta.pk), self.db.conn.placeholder)
+        query = 'UPDATE {0} SET '.format(self.Meta.table_safe)
+        query += ', '.join(['{0} = {1}'.format(escape(f), self.db.conn.placeholder) for f in self._changed])
+        query += ' WHERE {0} = {1} '.format(escape(self.Meta.pk), self.db.conn.placeholder)
         
         values = [getattr(self, f) for f in self._changed]
         values.append(self._get_pk())
@@ -203,7 +203,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
             escape(f) for f in self._fields 
             if f != self.Meta.pk or not auto_pk
         ]
-        query = 'INSERT INTO %s (%s) VALUES (%s)' % (
+        query = 'INSERT INTO {0} ({1}) VALUES ({2})'.format(
                self.Meta.table_safe,
                ', '.join(fields),
                ', '.join([self.db.conn.placeholder] * len(fields) )
@@ -226,7 +226,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         
     def delete(self):
         'Deletes record from database'
-        query = 'DELETE FROM %s WHERE %s = %s' % (self.Meta.table_safe, self.Meta.pk, self.db.conn.placeholder)
+        query = 'DELETE FROM {0} WHERE {1} = {2}'.format(self.Meta.table_safe, self.Meta.pk, self.db.conn.placeholder)
         values = [getattr(self, self.Meta.pk)]
         Query.raw_sql(query, values, self.db)
         return True
@@ -245,7 +245,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
             assert isinstance(v, collections.Callable), 'The validator must be callable'
             value = getattr(self, k)
             if not v(value):
-                raise Model.ValidationError('Improper value "%s" for "%s"' % (value, k))
+                raise Model.ValidationError('Improper value "{0}" for "{1}"'.format(value, k))
         
     def save(self):
         'Sets defaults, validates and inserts into or updates database'

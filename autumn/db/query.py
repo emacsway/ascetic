@@ -137,18 +137,23 @@ class Query(object):
         return self
         
     def order_by(self, field, direction='ASC'):
-        self.order = 'ORDER BY %s %s' % (escape(field), direction)
+        self.order = 'ORDER BY {0} {1}'.format(escape(field), direction)
         return self
         
     def extract_condition_keys(self):
         if len(self.conditions):
-            return 'WHERE %s' % ' AND '.join("%s=%s" % (escape(k), self.db.conn.placeholder) for k in self.conditions)
+            return 'WHERE {0}'.format(
+                ' AND '.join(
+                    "{0}={1}".format(escape(k), self.db.conn.placeholder)
+                    for k in self.conditions
+                )
+            )
         
     def extract_condition_values(self):
         return list(self.conditions.values())
         
     def query_template(self):
-        return '%s FROM %s %s %s %s' % (
+        return '{0} FROM {1} {2} {3} {4}'.format(
             self.type,
             self.model.Meta.table_safe,
             self.extract_condition_keys() or '',
@@ -158,7 +163,7 @@ class Query(object):
         
     def extract_limit(self):
         if len(self.limit):
-            return 'LIMIT %s' % ', '.join(str(l) for l in self.limit)
+            return 'LIMIT {0}'.format(', '.join(str(l) for l in self.limit))
         
     def get_data(self):
         if self.cache is None:
