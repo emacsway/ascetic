@@ -1,6 +1,6 @@
 from __future__ import absolute_import, unicode_literals
 from autumn.db import escape
-from autumn.db.connection import autumn_db
+from autumn.db.connection import connections
 
 try:
     str = unicode  # Python 2.* compatible
@@ -65,22 +65,22 @@ class Query(object):
         
         count = Query(model=MyModel).filter=(name='John').count()
         
-    Query(model=MyModel).raw(sql, values) uses ``raw`` SQL.
+    Query(model=MyModel).raw(sql, params) uses ``raw`` SQL.
             
     Class Methods
     -------------
     
-    ``Query.raw_sql(sql, values)`` returns a database cursor. Usage::
+    ``Query.raw_sql(sql, params)`` returns a database cursor. Usage::
     
         query = 'SELECT * FROM `users` WHERE id = ?'
-        values = (1,) # values must be a tuple or list
+        params = (1,) # params must be a tuple or list
         
         # Now we have the database cursor to use as we wish
-        cursor = Query.raw_swl(query, values)
+        cursor = Query.raw_swl(query, params)
     
     '''
     
-    def __init__(self, query_type='SELECT *', conditions={}, model=None, db=None):
+    def __init__(self, query_type='SELECT *', conditions={}, model=None, using=None):
         from autumn.model import Model
         self._type = query_type
         self._conditions = conditions
@@ -92,11 +92,12 @@ class Query(object):
         if model and not issubclass(model, Model):
             raise Exception('Query objects must be created with a model class.')
         self._model = model
-        if db:
-            self.db = db
+        if using:
+            self.using = using
         elif model:
-            self.db = model.db
-        
+            self.using = model.using
+        self.placeholder = connections[self.using].conn.placeholder
+
     def __getitem__(self, k):
         if self._cache != None:
             return self._cache[k]
@@ -137,7 +138,7 @@ class Query(object):
             "SELECT COUNT(1) as c FROM ({0}) as t".format(
                 self.query_template(limit=False)
             ),
-            self.extract_params(), self.db
+            self.extract_params(), self.using
         ).fetchone()[0]
         
     def filter(self, **kwargs):
@@ -152,7 +153,7 @@ class Query(object):
         if len(self._conditions):
             return 'WHERE {0}'.format(
                 ' AND '.join(
-                    "{0}={1}".format(escape(k), self.db.conn.placeholder)
+                    "{0}={1}".format(escape(k), self.placeholder)
                     for k in self._conditions
                 )
             )
@@ -199,45 +200,46 @@ class Query(object):
                 yield data
             
     def execute_query(self):
-        return Query.raw_sql(self.query_template(), self.extract_params(), self.db)
+        return Query.raw_sql(self.query_template(), self.extract_params(), self.using)
         
     @classmethod
-    def get_db(cls, db=None):
-        if not db:
-            db = getattr(cls, "db", autumn_db)
-        return db
+    def get_db(cls, using=None):
+        if not using:
+            using = getattr(cls, 'using', 'default')
+        return connections[using]
         
     @classmethod
-    def get_cursor(cls, db=None):
-        db = db or cls.get_db()
-        return db.conn.connection.cursor()
+    def get_cursor(cls, using=None):
+        return cls.get_db(using).cursor()
             
     @classmethod
-    def raw_sql(cls, sql, values=(), db=None):
-        db = db or cls.get_db()
-        cursor = cls.get_cursor(db)
+    def raw_sql(cls, sql, params=(), using=None):
+        db = cls.get_db(using)
+        if db.debug:
+            print (sql, params)
+        cursor = cls.get_cursor(using)
         try:
-            cursor.execute(sql, values)
-            if db.b_commit:
+            cursor.execute(sql, params)
+            if db.conn.b_commit:
                 db.conn.connection.commit()
         except BaseException as ex:
-            if db.b_debug:
+            if db.debug:
                 print("raw_sql: exception: ", ex)
                 print("sql:", sql)
-                print("values:", values)
+                print("params:", params)
             raise
         return cursor
 
     @classmethod
-    def raw_sqlscript(cls, sql, db=None):
-        db = db or cls.get_db()
-        cursor = cls.get_cursor(db)
+    def raw_sqlscript(cls, sql, using=None):
+        db = cls.get_db(using)
+        cursor = cls.get_cursor(using)
         try:
             cursor.executescript(sql)
-            if db.b_commit:
+            if db.conn.b_commit:
                 db.conn.connection.commit()
         except BaseException as ex:
-            if db.b_debug:
+            if db.debug:
                 print("raw_sqlscript: exception: ", ex)
                 print("sql:", sql)
             raise
@@ -250,24 +252,22 @@ class Query(object):
 # http://www.python.org/doc/2.5/lib/sqlite3-Controlling-Transactions.html
 
     @classmethod
-    def begin(cls, db=None):
+    def begin(cls, using=None):
         """
         begin() and commit() let you explicitly specify an SQL transaction.
         Be sure to call commit() after you call begin().
         """
-        db = db or cls.get_db()
-        db.b_commit = False
+        cls.get_db(using).conn.b_commit = False
 
     @classmethod
-    def commit(cls, db=None):
+    def commit(cls, using=None):
         """
         begin() and commit() let you explicitly specify an SQL transaction.
         Be sure to call commit() after you call begin().
         """
         cursor = None
         try:
-            db = db or cls.get_db()
-            db.conn.connection.commit()
+            cls.get_db(using).conn.connection.commit()
         finally:
-            db.b_commit = True
+            cls.get_db(using).conn.b_commit = True
         return cursor

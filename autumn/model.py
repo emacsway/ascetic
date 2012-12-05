@@ -2,7 +2,7 @@ from __future__ import absolute_import, unicode_literals
 import re
 from autumn.db.query import Query
 from autumn.db import escape
-from autumn.db.connection import autumn_db, Database
+from autumn.db.connection import connections
 from autumn.validators import ValidatorChain
 import collections
 
@@ -67,10 +67,11 @@ class ModelBase(type):
         
         # See cursor.description
         # http://www.python.org/dev/peps/pep-0249/
-        if not hasattr(new_class, "db"):
-            new_class.db = autumn_db
-        db = new_class.db
-        q = Query.raw_sql('SELECT * FROM {0} LIMIT 1'.format(new_class.Meta.table_safe), db=new_class.db)
+        if not hasattr(new_class, "using"):
+            new_class.using = 'default'
+        new_class.placeholder = connections[new_class.using].conn.placeholder
+        using = new_class.using
+        q = Query.raw_sql('SELECT * FROM {0} LIMIT 1'.format(new_class.Meta.table_safe), using=new_class.using)
         new_class._fields = [f[0] for f in q.description]
         
         cache.add(new_class)
@@ -186,13 +187,13 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
     def _update(self):
         'Uses SQL UPDATE to update record'
         query = 'UPDATE {0} SET '.format(self.Meta.table_safe)
-        query += ', '.join(['{0} = {1}'.format(escape(f), self.db.conn.placeholder) for f in self._changed])
-        query += ' WHERE {0} = {1} '.format(escape(self.Meta.pk), self.db.conn.placeholder)
+        query += ', '.join(['{0} = {1}'.format(escape(f), self.placeholder) for f in self._changed])
+        query += ' WHERE {0} = {1} '.format(escape(self.Meta.pk), self.placeholder)
         
-        values = [getattr(self, f) for f in self._changed]
-        values.append(self._get_pk())
+        params = [getattr(self, f) for f in self._changed]
+        params.append(self._get_pk())
         
-        cursor = Query.raw_sql(query, values, self.db)
+        cursor = Query.raw_sql(query, params, self.using)
         
     def _new_save(self):
         'Uses SQL INSERT to create new record'
@@ -206,11 +207,11 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         query = 'INSERT INTO {0} ({1}) VALUES ({2})'.format(
                self.Meta.table_safe,
                ', '.join(fields),
-               ', '.join([self.db.conn.placeholder] * len(fields) )
+               ', '.join([self.placeholder] * len(fields) )
         )
-        values = [getattr(self, f, None) for f in self._fields
+        params = [getattr(self, f, None) for f in self._fields
                if f != self.Meta.pk or not auto_pk]
-        cursor = Query.raw_sql(query, values, self.db)
+        cursor = Query.raw_sql(query, params, self.using)
        
         if self._get_pk() is None:
             self._set_pk(cursor.lastrowid)
@@ -226,9 +227,9 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         
     def delete(self):
         'Deletes record from database'
-        query = 'DELETE FROM {0} WHERE {1} = {2}'.format(self.Meta.table_safe, self.Meta.pk, self.db.conn.placeholder)
-        values = [getattr(self, self.Meta.pk)]
-        Query.raw_sql(query, values, self.db)
+        query = 'DELETE FROM {0} WHERE {1} = {2}'.format(self.Meta.table_safe, self.Meta.pk, self.placeholder)
+        params = [getattr(self, self.Meta.pk)]
+        Query.raw_sql(query, params, self.using)
         return True
         
     def is_valid(self):
