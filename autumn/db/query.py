@@ -126,7 +126,12 @@ class Query(object):
         
     def __repr__(self):
         return repr(self.get_data())
-        
+
+    def raw(self, sql, params=None):
+        self._sql = sql,
+        self._params = params or []
+        return self
+
     def count(self):
         return Query.raw_sql(
             "SELECT COUNT(1) as c FROM ({0}) as t".format(
