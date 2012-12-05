@@ -170,9 +170,12 @@ class Query(object):
             self.cache = list(self.iterator())
         return self.cache
         
-    def iterator(self):        
-        for row in self.execute_query().fetchall():
-            obj = self.model(*row)
+    def iterator(self):
+        cursor = self.execute_query()
+        fields = [f[0] for f in cursor.description]
+        for row in cursor.fetchall():
+            # obj = self.model(*row)
+            obj = self.model(**dict(list(zip(fields, row))))
             obj._new_record = False
             yield obj
             
