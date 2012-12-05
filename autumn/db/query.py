@@ -64,6 +64,8 @@ class Query(object):
     COUNT(*)`` instead of a ``SELECT *``. ``count`` returns an integer::
         
         count = Query(model=MyModel).filter=(name='John').count()
+        
+    Query(model=MyModel).raw(sql, values) uses ``raw`` SQL.
             
     Class Methods
     -------------
@@ -75,33 +77,32 @@ class Query(object):
         
         # Now we have the database cursor to use as we wish
         cursor = Query.raw_swl(query, values)
-        
-    ``Query.sql(sql, values)`` has the same syntax as ``Query.raw_sql``, but 
-    it returns a dictionary of the result, the field names being the keys.
     
     '''
     
     def __init__(self, query_type='SELECT *', conditions={}, model=None, db=None):
         from autumn.model import Model
-        self.type = query_type
-        self.conditions = conditions
-        self.order = ''
-        self.limit = ()
-        self.cache = None
-        if not issubclass(model, Model):
+        self._type = query_type
+        self._conditions = conditions
+        self._order = ''
+        self._limit = ()
+        self._cache = None
+        self._sql = None
+        self._params = []
+        if model and not issubclass(model, Model):
             raise Exception('Query objects must be created with a model class.')
-        self.model = model
+        self._model = model
         if db:
             self.db = db
         elif model:
             self.db = model.db
         
     def __getitem__(self, k):
-        if self.cache != None:
-            return self.cache[k]
+        if self._cache != None:
+            return self._cache[k]
         
         if isinstance(k, integer_types):
-            self.limit = (k,1)
+            self._limit = (k,1)
             lst = self.get_data()
             if not lst:
                 return None
@@ -110,13 +111,14 @@ class Query(object):
             if k.start is not None:
                 assert k.stop is not None, "Limit must be set when an offset is present"
                 assert k.stop >= k.start, "Limit must be greater than or equal to offset"
-                self.limit = k.start, (k.stop - k.start)
+                self._limit = k.start, (k.stop - k.start)
             elif k.stop is not None:
-                self.limit = 0, k.stop
+                self._limit = 0, k.stop
         
         return self.get_data()
         
     def __len__(self):
+        return self.count()
         return len(self.get_data())
         
     def __iter__(self):
@@ -126,62 +128,73 @@ class Query(object):
         return repr(self.get_data())
         
     def count(self):
-        if self.cache is None:
-            self.type = 'SELECT COUNT(*)'
-            return self.execute_query().fetchone()[0]
-        else:
-            return len(self.cache)
+        return Query.raw_sql(
+            "SELECT COUNT(1) as c FROM ({0}) as t".format(
+                self.query_template(limit=False)
+            ),
+            self.extract_params(), self.db
+        ).fetchone()[0]
         
     def filter(self, **kwargs):
-        self.conditions.update(kwargs)
+        self._conditions.update(kwargs)
         return self
         
     def order_by(self, field, direction='ASC'):
-        self.order = 'ORDER BY {0} {1}'.format(escape(field), direction)
+        self._order = 'ORDER BY {0} {1}'.format(escape(field), direction)
         return self
         
     def extract_condition_keys(self):
-        if len(self.conditions):
+        if len(self._conditions):
             return 'WHERE {0}'.format(
                 ' AND '.join(
                     "{0}={1}".format(escape(k), self.db.conn.placeholder)
-                    for k in self.conditions
+                    for k in self._conditions
                 )
             )
         
-    def extract_condition_values(self):
-        return list(self.conditions.values())
+    def extract_params(self):
+        if self._sql:
+            return self._params
+        return list(self._conditions.values())
         
-    def query_template(self):
+    def query_template(self, limit=True):
+        if self._sql:
+            return '{0} {1}'.format(
+                self._sql,
+                limit and self.extract_limit() or ''
+            )
         return '{0} FROM {1} {2} {3} {4}'.format(
-            self.type,
-            self.model.Meta.table_safe,
+            self._type,
+            self._model.Meta.table_safe,
             self.extract_condition_keys() or '',
-            self.order,
-            self.extract_limit() or '',
+            self._order,
+            limit and self.extract_limit() or '',
         )
         
     def extract_limit(self):
-        if len(self.limit):
-            return 'LIMIT {0}'.format(', '.join(str(l) for l in self.limit))
+        if len(self._limit):
+            return 'LIMIT {0}'.format(', '.join(str(l) for l in self._limit))
         
     def get_data(self):
-        if self.cache is None:
-            self.cache = list(self.iterator())
-        return self.cache
+        if self._cache is None:
+            self._cache = list(self.iterator())
+        return self._cache
         
     def iterator(self):
         cursor = self.execute_query()
         fields = [f[0] for f in cursor.description]
         for row in cursor.fetchall():
-            # obj = self.model(*row)
-            obj = self.model(**dict(list(zip(fields, row))))
-            obj._new_record = False
-            yield obj
+            data = dict(list(zip(fields, row)))
+            if self._model:
+                # obj = self._model(*row)
+                obj = self._model(**data)
+                obj._new_record = False
+                yield obj
+            else:
+                yield data
             
     def execute_query(self):
-        values = self.extract_condition_values()
-        return Query.raw_sql(self.query_template(), values, self.db)
+        return Query.raw_sql(self.query_template(), self.extract_params(), self.db)
         
     @classmethod
     def get_db(cls, db=None):
@@ -193,13 +206,6 @@ class Query(object):
     def get_cursor(cls, db=None):
         db = db or cls.get_db()
         return db.conn.connection.cursor()
-        
-    @classmethod
-    def sql(cls, sql, values=(), db=None):
-        db = db or cls.get_db()
-        cursor = Query.raw_sql(sql, values, db)
-        fields = [f[0] for f in cursor.description]
-        return [dict(list(zip(fields, row))) for row in cursor.fetchall()]
             
     @classmethod
     def raw_sql(cls, sql, values=(), db=None):
