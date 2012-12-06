@@ -97,7 +97,7 @@ class Query(object):
             self.using = using
         elif model:
             self.using = model.using
-        self.placeholder = connections[self.using].conn.placeholder
+        self.placeholder = connections[self.using].placeholder
 
     def __getitem__(self, k):
         if self._cache != None:
@@ -226,8 +226,8 @@ class Query(object):
         cursor = cls.get_cursor(using)
         try:
             cursor.execute(sql, params)
-            if db.conn.b_commit:
-                db.conn.connection.commit()
+            if db.ctx.b_commit:
+                db.conn.commit()
         except BaseException as ex:
             if db.debug:
                 print("raw_sql: exception: ", ex)
@@ -242,8 +242,8 @@ class Query(object):
         cursor = cls.get_cursor(using)
         try:
             cursor.executescript(sql)
-            if db.conn.b_commit:
-                db.conn.connection.commit()
+            if db.ctx.b_commit:
+                db.conn.commit()
         except BaseException as ex:
             if db.debug:
                 print("raw_sqlscript: exception: ", ex)
@@ -263,7 +263,7 @@ class Query(object):
         begin() and commit() let you explicitly specify an SQL transaction.
         Be sure to call commit() after you call begin().
         """
-        cls.get_db(using).conn.b_commit = False
+        cls.get_db(using).ctx.b_commit = False
 
     @classmethod
     def commit(cls, using=None):
@@ -273,7 +273,7 @@ class Query(object):
         """
         cursor = None
         try:
-            cls.get_db(using).conn.connection.commit()
+            cls.get_db(using).conn.commit()
         finally:
-            cls.get_db(using).conn.b_commit = True
+            cls.get_db(using).ctx.b_commit = True
         return cursor

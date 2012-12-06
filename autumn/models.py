@@ -69,7 +69,7 @@ class ModelBase(type):
         # http://www.python.org/dev/peps/pep-0249/
         if not hasattr(new_class, "using"):
             new_class.using = 'default'
-        new_class.placeholder = connections[new_class.using].conn.placeholder
+        new_class.placeholder = connections[new_class.using].placeholder
         using = new_class.using
         q = Query.raw_sql('SELECT * FROM {0} LIMIT 1'.format(new_class.Meta.table_safe), using=new_class.using)
         new_class._fields = new_class.Meta.fields = [f[0] for f in q.description]
