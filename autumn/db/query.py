@@ -135,7 +135,7 @@ class Query(object):
         return copy.deepcopy(self)
 
     def raw(self, sql, params=None):
-        self._sql = sql,
+        self._sql = sql
         self._params = params or []
         return self
 

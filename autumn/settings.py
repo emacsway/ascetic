@@ -4,5 +4,6 @@ DATABASES = {
         'user': 'devel',
         'db': 'devel_autumn',
         'passwd': 'devel',
+        'debug': True,
     }
 }

@@ -1,9 +1,9 @@
 from __future__ import absolute_import, unicode_literals
 import re
-from autumn.db.query import Query
-from autumn.db import escape
-from autumn.db.connection import connections
-from autumn.validators import ValidatorChain
+from .db.query import Query
+from .db import escape
+from .db.connection import connections
+from .validators import ValidatorChain
 import collections
 
 try:
@@ -72,7 +72,7 @@ class ModelBase(type):
         new_class.placeholder = connections[new_class.using].conn.placeholder
         using = new_class.using
         q = Query.raw_sql('SELECT * FROM {0} LIMIT 1'.format(new_class.Meta.table_safe), using=new_class.using)
-        new_class._fields = [f[0] for f in q.description]
+        new_class._fields = new_class.Meta.fields = [f[0] for f in q.description]
         
         cache.add(new_class)
         return new_class
@@ -270,3 +270,10 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         
     class ValidationError(Exception):
         pass
+
+try:
+    from .db.smartsql import smartsql_init
+except ImportError:
+    pass
+else:
+    smartsql_init()

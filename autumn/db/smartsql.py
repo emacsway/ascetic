@@ -1,6 +1,12 @@
+"""
+sqlbuilder integration, https://bitbucket.org/evotech/sqlbuilder
+"""
+
+from __future__ import absolute_import, unicode_literals
+from sqlbuilder import smartsql
 from autumn import settings
 from autumn.db.query import Query
-from sqlbuilder import smartsql
+from autumn.models import Model
 
 SMARTSQL_ALIAS = getattr(settings, 'SQLBUILDER_SMARTSQL_ALIAS', 'ss')
 
@@ -12,37 +18,6 @@ class classproperty(object):
 
     def __get__(self, instance, owner):
         return self.getter(owner)
-
-
-class Facade(object):
-    """Facade for smartsql integration"""
-
-    def __init__(self, model):
-        """Constructor"""
-        self.model = model
-        self.table = Table(self.model.Meta.table)
-        self.table.facade = self
-        self.query_set = QS(self.table).fields(self.get_fields())
-        self.query_set.facade = self
-
-    def get_fields(self, prefix=None):
-        """Returns field list."""
-        if prefix is None:
-            prefix = self.table
-        result = []
-        for f in self.model.Meta.fields:
-            result.append(smartsql.Field(f, prefix))
-        return result
-
-    @property
-    def qs(self):
-        """Returns query set."""
-        return self.query_set
-
-    @property
-    def t(self):
-        """Returns table instance."""
-        return self.table
 
 
 class QS(smartsql.QS):
@@ -71,14 +46,14 @@ class QS(smartsql.QS):
     def execute(self):
         """Implementation of query execution"""
         if self._action in ('select', 'count', ):
-            return Query(model=self.facade.model).raw(
+            return Query(model=self.model).raw(
                 smartsql.sqlrepr(self), smartsql.sqlparams(self)
             )
         else:
             return Query.raw_sql(
                 smartsql.sqlrepr(self),
                 smartsql.sqlparams(self),
-                self.facade.model.db
+                self.model.db
             )
 
     def result(self):
@@ -90,13 +65,37 @@ class QS(smartsql.QS):
 
 class Table(smartsql.Table):
     """Table class"""
-    pass
+
+    def get_fields(self, prefix=None):
+        """Returns field list."""
+        if prefix is None:
+            prefix = self
+        result = []
+        for f in self.model._fields:
+            result.append(smartsql.Field(f, prefix))
+        return result
+
+    @property
+    def qs(self):
+        r = QS(self).fields(self.get_fields())
+        r.base_table = self
+        r.model = self.model
+        return r
+
+
+def make_table(cls):
+    """Table factory"""
+    t = Table(cls.Meta.table)
+    t.model = cls
+    return t
 
 
 @classproperty
 def ss(cls):
     if getattr(cls, '_{0}'.format(SMARTSQL_ALIAS), None) is None:
-        setattr(cls, '_{0}'.format(SMARTSQL_ALIAS), Facade(cls))
+        setattr(cls, '_{0}'.format(SMARTSQL_ALIAS), make_table(cls))
     return getattr(cls, '_{0}'.format(SMARTSQL_ALIAS))
 
-setattr(Model, SMARTSQL_ALIAS, ss)
+
+def smartsql_init():
+    setattr(Model, SMARTSQL_ALIAS, ss)
