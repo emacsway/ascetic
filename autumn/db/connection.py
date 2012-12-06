@@ -11,6 +11,7 @@ class Database(object):
     placeholder = '%s'
 
     def __init__(self, **kwargs):
+        self.engine = kwargs.pop('engine')
         self.debug = kwargs.pop('debug', False)
         self._conf = kwargs
         self.ctx = local()
@@ -47,12 +48,12 @@ class Database(object):
         return cursor
 
     @classmethod
-    def factory(cls, engine, **kwargs):
+    def factory(cls, **kwargs):
         relations = {
             'sqlite3': SqliteDatabase,
             'mysql': MySQLDatabase,
         }
-        return relations.get(engine)(**kwargs)
+        return relations.get(kwargs['engine'])(**kwargs)
 
 
 class SqliteDatabase(Database):

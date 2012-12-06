@@ -7,8 +7,18 @@ from sqlbuilder import smartsql
 from autumn import settings
 from autumn.db.query import Query
 from autumn.models import Model
+from autumn.db.connection import connections
 
 SMARTSQL_ALIAS = getattr(settings, 'SQLBUILDER_SMARTSQL_ALIAS', 'ss')
+
+SMARTSQL_DIALECTS = {
+    'sqlite3': 'sqlite',
+    'mysql': 'mysql',
+    'postgresql': 'postgres',
+    'postgresql_psycopg2': 'postgres',
+    'postgis': 'postgres',
+    'oracle': 'oracle',
+}
 
 
 class classproperty(object):
@@ -43,17 +53,28 @@ class QS(smartsql.QS):
         """Returns sliced self or item."""
         return self.execute()[key]
 
+    def dialect(self):
+        engine = connections[self.model.using].engine
+        SMARTSQL_DIALECTS[engine]
+
+    def sqlrepr(self):
+        return smartsql.sqlrepr(self, self.dialect())
+
+    def sqlparams(self):
+        return smartsql.sqlparams(self)
+
     def execute(self):
         """Implementation of query execution"""
         if self._action in ('select', 'count', ):
             return Query(model=self.model).raw(
-                smartsql.sqlrepr(self), smartsql.sqlparams(self)
+                self.sqlrepr(),
+                self.sqlparams()
             )
         else:
             return Query.raw_sql(
-                smartsql.sqlrepr(self),
-                smartsql.sqlparams(self),
-                self.model.db
+                self.sqlrepr(),
+                self.sqlparams(),
+                self.model.using
             )
 
     def result(self):
@@ -66,6 +87,14 @@ class QS(smartsql.QS):
 class Table(smartsql.Table):
     """Table class"""
 
+    def __init__(self, model, *args, **kwargs):
+        """Constructor"""
+        super(Table, self).__init__(model.Meta.table, *args, **kwargs)
+        self.model = model
+        self.qs = kwargs.pop('query_set', QS(self).fields(self.get_fields()))
+        self.qs.base_table = self
+        self.qs.model = self.model
+
     def get_fields(self, prefix=None):
         """Returns field list."""
         if prefix is None:
@@ -75,25 +104,11 @@ class Table(smartsql.Table):
             result.append(smartsql.Field(f, prefix))
         return result
 
-    @property
-    def qs(self):
-        r = QS(self).fields(self.get_fields())
-        r.base_table = self
-        r.model = self.model
-        return r
-
-
-def make_table(cls):
-    """Table factory"""
-    t = Table(cls.Meta.table)
-    t.model = cls
-    return t
-
 
 @classproperty
 def ss(cls):
     if getattr(cls, '_{0}'.format(SMARTSQL_ALIAS), None) is None:
-        setattr(cls, '_{0}'.format(SMARTSQL_ALIAS), make_table(cls))
+        setattr(cls, '_{0}'.format(SMARTSQL_ALIAS), Table(cls))
     return getattr(cls, '_{0}'.format(SMARTSQL_ALIAS))
 
 

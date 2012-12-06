@@ -8,11 +8,12 @@ if __name__ == '__main__':
     )))
 import unittest
 import datetime
+from autumn import validators
+from autumn.db import escape
+from autumn.db.connection import connections
+from autumn.db.query import Query
 from autumn.models import Model
 from autumn.tests.models import Book, Author
-from autumn.db.query import Query
-from autumn.db import escape
-from autumn import validators
 
 
 class TestModels(unittest.TestCase):
@@ -131,7 +132,35 @@ class TestModels(unittest.TestCase):
             raise Exception('Validation not caught')
         except Model.ValidationError:
             pass
-            
+
+        # Test smartsql integration
+        try:
+            from autumn.db.smartsql import SMARTSQL_ALIAS, smartsql
+        except ImportError:
+            pass
+        else:
+            print '### Testing for smartsql integration'
+            t = getattr(Author, SMARTSQL_ALIAS)
+            self.assertEqual(
+                t.get_fields(), 
+                ['autumn_tests_models_author.id',
+                 'autumn_tests_models_author.first_name',
+                 'autumn_tests_models_author.last_name',
+                 'autumn_tests_models_author.bio', ]
+            )
+
+            qs = t.qs
+            #import rpdb2; rpdb2.start_embedded_debugger('111')
+            self.assertEqual(qs.sqlrepr(), "SELECT autumn_tests_models_author.id, autumn_tests_models_author.first_name, autumn_tests_models_author.last_name, autumn_tests_models_author.bio FROM autumn_tests_models_author")
+            self.assertEqual(len(qs), 3)
+            for obj in qs:
+                self.assertTrue(isinstance(obj, Author))
+
+            qs = qs.where(t.id == b.author_id)
+            self.assertEqual(qs.sqlrepr(), "SELECT autumn_tests_models_author.id, autumn_tests_models_author.first_name, autumn_tests_models_author.last_name, autumn_tests_models_author.bio FROM autumn_tests_models_author WHERE (autumn_tests_models_author.id = %s)")
+            self.assertEqual(len(qs), 1)
+            self.assertTrue(isinstance(qs[0], Author))
+
     def testvalidators(self):
         ev = validators.Email()
         assert ev('test@example.com')
