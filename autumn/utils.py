@@ -1,8 +1,4 @@
 from __future__ import absolute_import, unicode_literals
-# autumn.util.py
-
-
-from threading import local as threading_local
 
 # Autumn ORM
 from autumn.models import Model
@@ -44,28 +40,6 @@ def create_table_if_needed(db, table_name, s_create_sql):
     """
     if not table_exists(db, table_name):
         create_table(db, s_create_sql)
-
-
-class AutoConn(object):
-    """
-    A container that will automatically create a database connection object
-    for each thread that accesses it.  Useful with SQLite, because the Python
-    modules for SQLite require a different connection object for each thread.
-    """
-    def __init__(self, db_name, container=None):
-        self.b_debug = False
-        self.b_commit = True
-        self.db_name = db_name
-        self.container = threading_local()
-    def __getattr__(self, name):
-        try:
-            if "conn" == name:
-                return self.container.conn
-        except BaseException:
-            self.container.conn = Database()
-            self.container.conn.connect('sqlite3', self.db_name)
-            return self.container.conn
-        raise AttributeError
 
 
 # examples of usage:
