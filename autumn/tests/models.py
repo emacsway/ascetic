@@ -1,6 +1,6 @@
 from __future__ import absolute_import, unicode_literals
 from autumn.db.connection import connections
-from autumn.model import Model
+from autumn.models import Model
 from autumn.db.relations import ForeignKey, OneToMany
 from autumn import validators
 import datetime

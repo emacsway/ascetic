@@ -8,7 +8,7 @@ if __name__ == '__main__':
     )))
 import unittest
 import datetime
-from autumn.model import Model
+from autumn.models import Model
 from autumn.tests.models import Book, Author
 from autumn.db.query import Query
 from autumn.db import escape

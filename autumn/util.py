@@ -5,7 +5,7 @@ from __future__ import absolute_import, unicode_literals
 from threading import local as threading_local
 
 # Autumn ORM
-from autumn.model import Model
+from autumn.models import Model
 from autumn.db.relations import ForeignKey, OneToMany
 from autumn.db.query import Query
 from autumn.db.connection import Database

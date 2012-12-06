@@ -82,7 +82,7 @@ class Query(object):
     '''
     
     def __init__(self, query_type='SELECT *', conditions={}, model=None, using=None):
-        from autumn.model import Model
+        from autumn.models import Model
         self._type = query_type
         self._conditions = conditions
         self._order = ''

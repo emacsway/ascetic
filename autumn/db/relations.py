@@ -1,6 +1,6 @@
 from __future__ import absolute_import, unicode_literals
 from autumn.db.query import Query
-from autumn.model import cache
+from autumn.models import cache
 
 try:
     str = unicode  # Python 2.* compatible
