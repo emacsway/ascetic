@@ -61,7 +61,7 @@ class ModelBase(type):
             new_class.Meta.pk = 'id'
         
         # Create function to loop over iterable validations
-        for k, v in getattr(new_class.Meta, 'validations', {}).items():
+        for k, v in list(getattr(new_class.Meta, 'validations', {}).items()):
             if isinstance(v, (list, tuple)):
                 new_class.Meta.validations[k] = ValidatorChain(*v)
         
@@ -167,7 +167,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         self.__dict__[self.Meta.pk] = None
         self._new_record = True
         [setattr(self, self._fields[i], arg) for i, arg in enumerate(args)]
-        [setattr(self, k, v) for k, v in kwargs.items()]
+        [setattr(self, k, v) for k, v in list(kwargs.items())]
         self._changed = set()
         
     def __setattr__(self, name, value):
@@ -219,7 +219,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         
     def _get_defaults(self):
         'Sets attribute defaults based on ``defaults`` dict'
-        for k, v in getattr(self.Meta, 'defaults', {}).items():
+        for k, v in list(getattr(self.Meta, 'defaults', {}).items()):
             if not getattr(self, k, None):
                 if isinstance(v, collections.Callable):
                     v = v()
@@ -242,7 +242,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
     
     def _validate(self):
         'Tests all ``validations``, raises ``Model.ValidationError``'
-        for k, v in getattr(self.Meta, 'validations', {}).items():
+        for k, v in list(getattr(self.Meta, 'validations', {}).items()):
             assert isinstance(v, collections.Callable), 'The validator must be callable'
             value = getattr(self, k)
             if not v(value):

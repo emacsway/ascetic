@@ -222,7 +222,7 @@ class Query(object):
     def raw_sql(cls, sql, params=(), using=None):
         db = cls.get_db(using)
         if db.debug:
-            print (sql, params)
+            print(sql, params)
         cursor = cls.get_cursor(using)
         try:
             cursor.execute(sql, params)
