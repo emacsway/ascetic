@@ -16,56 +16,33 @@ class classproperty(object):
 
 class Facade(object):
     """Facade for smartsql integration"""
-    _model = None
-    _table = None
-    _query_set = None
 
     def __init__(self, model):
         """Constructor"""
-        self._model = model
-        self._table = Table(self._model.Meta.table)
-        self._table.facade = self
-        self._query_set = QS(self.table).fields(self.get_fields())
-        self._query_set.facade = self
-
-    @property
-    def model(self):
-        """Returns table instance."""
-        return self._model
-
-    @property
-    def table(self):
-        """Returns table instance."""
-        return self._table
+        self.model = model
+        self.table = Table(self.model.Meta.table)
+        self.table.facade = self
+        self.query_set = QS(self.table).fields(self.get_fields())
+        self.query_set.facade = self
 
     def get_fields(self, prefix=None):
         """Returns field list."""
         if prefix is None:
-            prefix = self._table
+            prefix = self.table
         result = []
-        for f in self._model.Meta.fields:
+        for f in self.model.Meta.fields:
             result.append(smartsql.Field(f, prefix))
         return result
 
-    def set_query_set(self, query_set):
-        """Sets query set."""
-        self._query_set = query_set
-        return self
-
-    def get_query_set(self):
-        """Returns query set."""
-        return self._query_set
-
     @property
     def qs(self):
-        """Sets query set."""
-        return self.get_query_set()
+        """Returns query set."""
+        return self.query_set
 
-    # Aliases
     @property
     def t(self):
         """Returns table instance."""
-        return self._table
+        return self.table
 
 
 class QS(smartsql.QS):
