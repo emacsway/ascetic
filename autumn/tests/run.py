@@ -150,7 +150,6 @@ class TestModels(unittest.TestCase):
             )
 
             qs = t.qs
-            #import rpdb2; rpdb2.start_embedded_debugger('111')
             self.assertEqual(qs.sqlrepr(), "SELECT autumn_tests_models_author.id, autumn_tests_models_author.first_name, autumn_tests_models_author.last_name, autumn_tests_models_author.bio FROM autumn_tests_models_author")
             self.assertEqual(len(qs), 3)
             for obj in qs:
