@@ -70,9 +70,16 @@ class QS(smartsql.QS):
 
     def execute(self):
         """Implementation of query execution"""
-        return Query(model=self.facade.model).raw(
-            smartsql.sqlrepr(self), smartsql.sqlparams(self)
-        )
+        if self._action in ('select', 'count', ):
+            return Query(model=self.facade.model).raw(
+                smartsql.sqlrepr(self), smartsql.sqlparams(self)
+            )
+        else:
+            return Query.raw_sql(
+                smartsql.sqlrepr(self),
+                smartsql.sqlparams(self),
+                self.facade.model.db
+            )
 
     def result(self):
         """Result"""
