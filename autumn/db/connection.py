@@ -1,7 +1,7 @@
 from __future__ import absolute_import, unicode_literals
 import copy
 from threading import local
-from ..settings import DATABASES
+from autumn.settings import DATABASES
 
 connections = {}
 
