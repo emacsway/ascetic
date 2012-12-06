@@ -1,4 +1,5 @@
 from __future__ import absolute_import, unicode_literals
+import copy
 from autumn.db import escape
 from autumn.db.connection import connections
 
@@ -115,18 +116,23 @@ class Query(object):
                 self._limit = k.start, (k.stop - k.start)
             elif k.stop is not None:
                 self._limit = 0, k.stop
+            else:
+                return self.clone()
         
-        return self.get_data()
+        return self
         
     def __len__(self):
         return self.count()
-        return len(self.get_data())
+        #return len(self.get_data())
         
     def __iter__(self):
         return iter(self.get_data())
         
     def __repr__(self):
         return repr(self.get_data())
+
+    def clone(self):
+        return copy.deepcopy(self)
 
     def raw(self, sql, params=None):
         self._sql = sql,
@@ -136,7 +142,7 @@ class Query(object):
     def count(self):
         return Query.raw_sql(
             "SELECT COUNT(1) as c FROM ({0}) as t".format(
-                self.query_template(limit=False)
+                self.query_template()
             ),
             self.extract_params(), self.using
         ).fetchone()[0]

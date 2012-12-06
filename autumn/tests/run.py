@@ -92,7 +92,8 @@ class TestModels(unittest.TestCase):
         self.assertEqual(a.id, b.author_id)
         
         a = Author.get(id=b.id)[:]
-        self.assert_(isinstance(a, list))
+        #self.assert_(isinstance(a, list))
+        self.assert_(isinstance(a, Query))
         
         # Test update
         new_last_name = 'Vonnegut, Jr.'
