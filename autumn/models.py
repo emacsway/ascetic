@@ -265,7 +265,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         if _obj_pk is not None:
             return cls.get(**{cls.Meta.pk: _obj_pk})[0]
 
-        return Query(model=cls, conditions=kwargs)
+        return Query(model=cls).filter(**kwargs)
         
         
     class ValidationError(Exception):

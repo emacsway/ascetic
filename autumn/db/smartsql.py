@@ -6,6 +6,7 @@ from __future__ import absolute_import, unicode_literals
 from sqlbuilder import smartsql
 from autumn import settings
 from autumn.db.query import Query
+from autumn.db import relations
 from autumn.models import Model
 from autumn.db.connection import connections
 
@@ -103,6 +104,32 @@ class Table(smartsql.Table):
         for f in self.model._fields:
             result.append(smartsql.Field(f, prefix))
         return result
+
+
+class RelationQSMixIn(object):
+
+    def get_qs(self):
+        return self.qs and self.qs.clone() or getattr(self.model, SMARTSQL_ALIAS).qs
+
+    def filter(self, *a, **kw):
+        qs = self.get_qs()
+        t = getattr(self.model, SMARTSQL_ALIAS)
+        for fn, param in kw.items():
+            f = getattr(t, fn)
+            qs = qs.where(f == param)
+        return qs
+
+
+class Relation(RelationQSMixIn, relations.Relation):
+    pass
+
+
+class ForeignKey(RelationQSMixIn, relations.ForeignKey):
+    pass
+
+
+class OneToMany(RelationQSMixIn, relations.OneToMany):
+    pass
 
 
 @classproperty

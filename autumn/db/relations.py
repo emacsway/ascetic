@@ -12,15 +12,26 @@ except NameError:
     integer_types = (int,)
 
 
-class Relation(object):
+class RelationQSMixIn(object):
+
+    def get_qs(self):
+        return self.qs and self.qs.clone() or Query(model=self.model)
+
+    def filter(self, *a, **kw):
+        return self.get_qs().filter(*a, **kw)
+
+
+class Relation(RelationQSMixIn):
     
-    def __init__(self, model, field=None):            
+    def __init__(self, model, field=None, qs=None):            
         self.model = model
         self.field = field
+        self.qs = qs
     
     def _set_up(self, instance, owner):
         if isinstance(self.model, string_types):
             self.model = cache.get(self.model)
+
 
 class ForeignKey(Relation):
         
@@ -30,8 +41,8 @@ class ForeignKey(Relation):
             return self.model
         if not self.field:
             self.field = '{0}_id'.format(self.model.Meta.table.split("_").pop())
-        conditions = {self.model.Meta.pk: getattr(instance, self.field)}
-        return Query(model=self.model, conditions=conditions)[0]
+        return self.filter(**{self.model.Meta.pk: getattr(instance, self.field)})[0]
+
 
 class OneToMany(Relation):
     
@@ -41,5 +52,4 @@ class OneToMany(Relation):
             return self.model
         if not self.field:
             self.field = '{0}_id'.format(instance.Meta.table.split("_").pop())
-        conditions = {self.field: getattr(instance, instance.Meta.pk)}
-        return Query(model=self.model, conditions=conditions)
+        return self.filter(**{self.field: getattr(instance, instance.Meta.pk)})

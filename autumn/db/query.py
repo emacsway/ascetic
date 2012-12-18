@@ -1,4 +1,5 @@
 from __future__ import absolute_import, unicode_literals
+import re
 import copy
 from autumn.db import escape
 from autumn.db.connection import connections
@@ -33,6 +34,7 @@ class Query(object):
     the ``filter`` method::
         
         q.filter(name='John', age=30)
+        q.filter('name = %s AND age=%s', 'John', 30)
         
     We can also chain the ``filter`` method::
     
@@ -81,10 +83,11 @@ class Query(object):
     
     '''
     
-    def __init__(self, query_type='SELECT *', conditions={}, model=None, using=None):
+    def __init__(self, query_type='SELECT *', model=None, using=None):
         from autumn.models import Model
         self._type = query_type
-        self._conditions = conditions
+        self._from = None
+        self._conditions = []
         self._order = ''
         self._limit = ()
         self._cache = None
@@ -98,6 +101,8 @@ class Query(object):
         elif model:
             self.using = model.using
         self.placeholder = connections[self.using].placeholder
+        if self._model:
+            self._from = self._model.Meta.table_safe
 
     def __getitem__(self, k):
         if self._cache != None:
@@ -144,30 +149,53 @@ class Query(object):
             "SELECT COUNT(1) as c FROM ({0}) as t".format(
                 self.query_template()
             ),
-            self.extract_params(), self.using
+            self.params(), self.using
         ).fetchone()[0]
-        
-    def filter(self, **kwargs):
-        self._conditions.update(kwargs)
+
+    def from_(self, expr):
+        self._from = expr
         return self
-        
+
+    def filter(self, *args, **kwargs):
+        connector = kwargs.pop('_connector', 'AND')
+        if args:
+            self._conditions.append((connector, args[0], args[1:]))
+        for k, v in kwargs.items():
+            self._conditions.append((connector, k, v))
+        return self
+
+    def or_filter(self, *args, **kwargs):
+        kwargs['_connector'] = 'OR'
+        return self.filter(*args, **kwargs)
+
     def order_by(self, field, direction='ASC'):
         self._order = 'ORDER BY {0} {1}'.format(escape(field), direction)
         return self
         
-    def extract_condition_keys(self):
-        if len(self._conditions):
-            return 'WHERE {0}'.format(
-                ' AND '.join(
-                    "{0}={1}".format(escape(k), self.placeholder)
-                    for k in self._conditions
-                )
-            )
+    def render_conditions(self, completed=True):
+        parts = []
+        for connector, expr, params in self._conditions:
+            if isinstance(expr, Query):  # Nested conditions
+                expr = expr.render_conditions(completed=False)
+            if not re.search(r'[ =!<>]', expr, re.S):
+                expr = "{0} = {1}".format(escape(expr), self.placeholder)
+            if parts:
+                expr = '{0} ({1}) '.format(connector, expr)
+            parts.append(expr)
+        if parts and completed:
+            parts.insert(0, 'WHERE')
+        return ' '.join(parts)
         
-    def extract_params(self):
+    def params(self):
         if self._sql:
             return self._params
-        return list(self._conditions.values())
+        result = []
+        for connector, expr, params in self._conditions:
+            if isinstance(expr, Query):  # Nested conditions
+                result.append(expr.params())
+            else:
+                result.append(params)
+        return result
         
     def query_template(self, limit=True):
         if self._sql:
@@ -178,7 +206,7 @@ class Query(object):
         return '{0} FROM {1} {2} {3} {4}'.format(
             self._type,
             self._model.Meta.table_safe,
-            self.extract_condition_keys() or '',
+            self.render_conditions() or '',
             self._order,
             limit and self.extract_limit() or '',
         )
@@ -206,7 +234,7 @@ class Query(object):
                 yield data
             
     def execute_query(self):
-        return Query.raw_sql(self.query_template(), self.extract_params(), self.using)
+        return Query.raw_sql(self.query_template(), self.params(), self.using)
         
     @classmethod
     def get_db(cls, using=None):
@@ -224,6 +252,8 @@ class Query(object):
         if db.debug:
             print(sql, params)
         cursor = cls.get_cursor(using)
+        if db.placeholder != '%s':
+            sql = sql.replace('%s', db.placeholder)
         try:
             cursor.execute(sql, params)
             if db.ctx.b_commit:
@@ -251,12 +281,9 @@ class Query(object):
             raise
         return cursor
 
-
-
-# begin() and commit() for SQL transaction control
-# This has only been tested with SQLite3 with default isolation level.
-# http://www.python.org/doc/2.5/lib/sqlite3-Controlling-Transactions.html
-
+    # begin() and commit() for SQL transaction control
+    # This has only been tested with SQLite3 with default isolation level.
+    # http://www.python.org/doc/2.5/lib/sqlite3-Controlling-Transactions.html
     @classmethod
     def begin(cls, using=None):
         """
