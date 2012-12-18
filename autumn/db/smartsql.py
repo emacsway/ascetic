@@ -109,7 +109,7 @@ class Table(smartsql.Table):
 class RelationQSMixIn(object):
 
     def get_qs(self):
-        return self.qs and self.qs.clone() or getattr(self.model, SMARTSQL_ALIAS).qs
+        return self.qs and self.qs.clone() or getattr(self.model, SMARTSQL_ALIAS).qs.clone()
 
     def filter(self, *a, **kw):
         qs = self.get_qs()
