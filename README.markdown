@@ -81,3 +81,14 @@ Creation
 ### Deleting
 
     a.delete()
+
+### [SQLBuilder](https://bitbucket.org/evotech/sqlbuilder) integration
+
+    ta = Author.ss
+    tb = Book.ss
+    qs = tb.qs
+    object_list = qs.tables(
+        qs.tables() & ta.on(tb.author_id == ta.id)
+    ).where(
+        (ta.first_name != 'James') & (ta.first_name != 'Joyce')
+    )[:10]
