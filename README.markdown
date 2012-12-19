@@ -90,5 +90,5 @@ Creation
     object_list = qs.tables(
         qs.tables() & ta.on(tb.author_id == ta.id)
     ).where(
-        (ta.first_name != 'James') & (ta.first_name != 'Joyce')
+        (ta.first_name != 'James') & (ta.last_name != 'Joyce')
     )[:10]
