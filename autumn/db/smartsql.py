@@ -105,6 +105,15 @@ class Table(smartsql.Table):
             result.append(smartsql.Field(f, prefix))
         return result
 
+    def __getattr__(self, name):
+        """Added some specific functional."""
+        if name[0] == '_':
+            raise AttributeError
+        parts = name.split(smartsql.LOOKUP_SEP, 1)
+        result = {'field': parts[0], }
+        settings.send_signal(signal='field_conversion', sender=self, result=result, field=parts[0], model=self.model)
+        parts[0] = result['field']
+        return super(Table, self).__getattr__(smartsql.LOOKUP_SEP.join(parts))
 
 class RelationQSMixIn(object):
 
