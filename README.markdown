@@ -31,14 +31,14 @@ Using these tables:
         PRIMARY KEY (id)
     );
 
+Put in your PYTHONPATH file autumn_settings.py with your settings.
+See file autumn/settings.py for more details.
+
 We setup our objects like so:
 
-    from autumn.db.connection import db
     from autumn.model import Model
     from autumn.db.relations import ForeignKey, OneToMany
     import datetime
-
-    db.connect('mysql', user='root', db='mydatabase')
 
     class Author(Model):
         books = OneToMany('Book')
@@ -92,3 +92,14 @@ Creation
     ).where(
         (ta.first_name != 'James') & (ta.last_name != 'Joyce')
     )[:10]
+
+### Signals support
+
+* pre_init
+* post_init
+* pre_save
+* post_save
+* pre_delete
+* post_delete
+* class_prepared
+

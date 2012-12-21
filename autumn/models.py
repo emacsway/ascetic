@@ -4,6 +4,7 @@ from .db.query import Query
 from .db import escape
 from .db.connection import connections
 from .validators import ValidatorChain
+from . import settings
 import collections
 
 try:
@@ -75,6 +76,7 @@ class ModelBase(type):
         new_class._fields = new_class.Meta.fields = [f[0] for f in q.description]
         
         cache.add(new_class)
+        settings.send_signal(signal='class_prepared', sender=new_class, using=new_class.using)
         return new_class
 
 class Model(ModelBase(bytes("NewBase"), (object, ), {})):
@@ -164,11 +166,13 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
 
     def __init__(self, *args, **kwargs):
         'Allows setting of fields using kwargs'
+        self._send_signal(signal='pre_init', args=args, kwargs=kwargs)
         self.__dict__[self.Meta.pk] = None
         self._new_record = True
         [setattr(self, self._fields[i], arg) for i, arg in enumerate(args)]
         [setattr(self, k, v) for k, v in list(kwargs.items())]
         self._changed = set()
+        self._send_signal(signal='post_init')
         
     def __setattr__(self, name, value):
         'Records when fields have changed'
@@ -227,9 +231,11 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         
     def delete(self):
         'Deletes record from database'
+        self._send_signal(signal='pre_delete')
         query = 'DELETE FROM {0} WHERE {1} = {2}'.format(self.Meta.table_safe, self.Meta.pk, self.placeholder)
         params = [getattr(self, self.Meta.pk)]
         Query.raw_sql(query, params, self.using)
+        self._send_signal(signal='post_delete')
         return True
         
     def is_valid(self):
@@ -252,13 +258,27 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         'Sets defaults, validates and inserts into or updates database'
         self._get_defaults()
         self._validate()
+        created = self._new_record
+        update_fields = self._changed
+        self._send_signal(signal='pre_save', update_fields=update_fields)
         if self._new_record:
             self._new_save()
             self._new_record = False
-            return True
+            result = True
         else:
-            return self._update()
-            
+            result = self._update()
+        self._send_signal(signal='post_save', created=created, update_fields=update_fields)
+        return result
+
+    def _send_signal(self, *a, **kw):
+        """Sends signal"""
+        kw.update({
+            'sender': type(self),
+            'instance': self,
+            'using': self.using,
+        })
+        return settings.send_signal(*a, **kw)
+
     @classmethod
     def get(cls, _obj_pk=None, **kwargs):
         'Returns Query object'
