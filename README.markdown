@@ -105,5 +105,5 @@ Creation
 
 ###  Gratitude
 
-Forked from https://github.com/lucky/autumn
-Thanks to Jared Kuolt (lucky)
+Forked from [https://github.com/lucky/autumn](https://github.com/lucky/autumn)  
+Thanks to [Jared Kuolt (lucky)](https://github.com/lucky)
