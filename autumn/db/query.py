@@ -161,7 +161,7 @@ class Query(object):
         if args:
             self._conditions.append((connector, args[0], args[1:]))
         for k, v in kwargs.items():
-            self._conditions.append((connector, k, v))
+            self._conditions.append((connector, k, [v,]))
         return self
 
     def or_filter(self, *args, **kwargs):
@@ -178,9 +178,21 @@ class Query(object):
             if isinstance(expr, Query):  # Nested conditions
                 expr = expr.render_conditions(completed=False)
             if not re.search(r'[ =!<>]', expr, re.S):
-                expr = "{0} = {1}".format(escape(expr), self.placeholder)
+                op = isinstance(params[0], (list, tuple)) and 'IN' or '='
+                expr = "{0} {1} {2}".format(escape(expr), op, self.placeholder)
             if parts:
                 expr = '{0} ({1}) '.format(connector, expr)
+
+            expr_parts = expr.split('%s')
+            expr_plhs = ['%s', ] *  (len(expr_parts) - 1) + ['', ]
+            for i, param in enumerate(params[:]):
+                if isinstance(param, (list, tuple)):
+                    expr_plhs[i] = '({0})'.format(', '.join(['%s', ] * len(param)))
+            expr_final = []
+            for pair in zip(expr_parts, expr_plhs):
+                expr_final += pair
+            expr = ''.join(expr_final)
+
             parts.append(expr)
         if parts and completed:
             parts.insert(0, 'WHERE')
@@ -192,9 +204,12 @@ class Query(object):
         result = []
         for connector, expr, params in self._conditions:
             if isinstance(expr, Query):  # Nested conditions
-                result.append(expr.params())
+                result += expr.params()
             else:
-                result.append(params)
+                result += params
+        for i, param in enumerate(result[:]):
+            if isinstance(param, (list, tuple)):
+                result[i: i + 1] = param
         return result
         
     def query_template(self, limit=True):
