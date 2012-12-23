@@ -14,6 +14,28 @@ except NameError:
     integer_types = (int,)
 
 
+PLACEHOLDER = '%s'
+LOOKUP_SEP = '__'
+OPERATORS = {
+    'eq': '{field} = {val}',
+    'neq': '{field} != {val}',
+    'lt': '{field} < {val}',
+    'lte': '{field} <= {val}',
+    'gt': '{field} > {val}',
+    'gte': '{field} >= {val}',
+    'in': '{field} IN {val}',
+    'not_in': '{field} IN {val}',
+    'exact': '{field} LIKE {val}',
+    'iexact': 'LOWER({field}) LIKE LOWER({val})',
+    'startswith': '{field} LIKE CONCAT({val}, "%")',
+    'istartswith': 'LOWER({field}) LIKE LOWER(CONCAT({val}, "%"))',
+    'endswith': '{field} LIKE CONCAT("%", {val})',
+    'iendswith': 'LOWER({field}) LIKE LOWER(CONCAT("%", {val}))',
+    'contains': '{field} LIKE CONCAT("%", {val}, "%")',
+    'icontains': 'LOWER({field}) LIKE LOWER(CONCAT("%", {val}, "%"))',
+}
+
+
 class Query(object):
     '''
     Gives quick access to database by setting attributes (query conditions, et
@@ -82,8 +104,6 @@ class Query(object):
         cursor = Query.raw_swl(query, params)
     
     '''
-
-    placeholder = '%s'
 
     def __init__(self, fields='*', model=None, using=None):
         from autumn.models import Model
@@ -158,18 +178,29 @@ class Query(object):
         self._from = expr
         return self
 
-    def filter(self, *args, **kwargs):
-        self = self.clone()
-        connector = kwargs.pop('_connector', 'AND')
+    def _add_condition(self, conditions, connector, inversion, *args, **kwargs):
         if args:
-            self._conditions.append((connector, args[0], list(args[1:])))
+            conditions.append((connector, inversion, args[0], list(args[1:])))
         for k, v in kwargs.items():
-            self._conditions.append((connector, k, [v,]))
+            conditions.append((connector, inversion, k, [v,]))
         return self
 
+    def filter(self, *args, **kwargs):
+        self = self.clone()
+        return self._add_condition(self._conditions, 'AND', False, *args, **kwargs)
+
     def or_filter(self, *args, **kwargs):
-        kwargs['_connector'] = 'OR'
-        return self.filter(*args, **kwargs)
+        self = self.clone()
+        return self._add_condition(self._conditions, 'OR', False, *args, **kwargs)
+        return self
+
+    def exclude(self, *args, **kwargs):
+        self = self.clone()
+        return self._add_condition(self._conditions, 'AND', True, *args, **kwargs)
+
+    def or_exclude(self, *args, **kwargs):
+        self = self.clone()
+        return self._add_condition(self._conditions, 'OR', True, *args, **kwargs)
 
     def order_by(self, *fields, **kwargs):
         self = self.clone()
@@ -181,23 +212,33 @@ class Query(object):
             self._order_by.append([field, direction])
         return self
 
-    def render_conditions(self):
+    def _render_conditions(self, conditions):
         parts = []
-        for connector, expr, params in self._conditions:
+        for connector, inversion, expr, params in conditions:
             if isinstance(expr, Query):  # Nested conditions
+                expr.using = self.using
                 expr = expr.render()
             if not re.search(r'[ =!<>]', expr, re.S):
-                op = isinstance(params[0], (list, tuple)) and 'IN' or '='
-                expr = "{0} {1} {2}".format(escape(expr), op, self.placeholder)
+                ops = getattr(Query.get_db(self.using), 'operators', OPERATORS)
+                tpl = ops[isinstance(params[0], (list, tuple)) and 'in' or 'eq']
+                if LOOKUP_SEP in expr:
+                    expr_parts = expr.split(LOOKUP_SEP)
+                    if expr_parts[-1] not in []:  # Reserved for related lookups
+                        tpl = ops[expr_parts.pop()]
+                    expr = LOOKUP_SEP.join(expr_parts)
+                expr = tpl.replace('%', '%%').format(field=escape(expr), val=PLACEHOLDER)
+            if inversion:
+                expr = '{0} ({1}) '.format('NOT', expr)
             if parts:
                 expr = '{0} ({1}) '.format(connector, expr)
 
-            expr_parts = expr.split(self.placeholder)
-            expr_plhs = [self.placeholder, ] *  (len(expr_parts) - 1) + ['', ]
+            expr_parts = expr.split(PLACEHOLDER)
+            expr_plhs = [PLACEHOLDER, ] *  (len(expr_parts) - 1) + ['', ]
             for i, param in enumerate(params[:]):
                 if isinstance(param, (list, tuple)):
-                    expr_plhs[i] = '({0})'.format(', '.join([self.placeholder, ] * len(param)))
+                    expr_plhs[i] = '({0})'.format(', '.join([PLACEHOLDER, ] * len(param)))
                 if isinstance(param, Query):  # SubQuery
+                    param.using = self.using
                     expr_plhs[i] = '({0})'.format(param.render())
             expr_final = []
             for pair in zip(expr_parts, expr_plhs):
@@ -206,6 +247,9 @@ class Query(object):
 
             parts.append(expr)
         return ' '.join(parts)
+
+    def render_conditions(self):
+        return self._render_conditions(self._conditions)
 
     def render_order_by(self):
         return ', '.join([' '.join(i) for i in self._order_by])
@@ -240,7 +284,7 @@ class Query(object):
         if self._sql:
             return self._params
         result = []
-        for connector, expr, params in self._conditions:
+        for connector, inversion, expr, params in self._conditions:
             if isinstance(expr, Query):  # Nested conditions
                 result += expr.params()
             else:
@@ -289,8 +333,8 @@ class Query(object):
         if db.debug:
             print(sql, params)
         cursor = cls.get_cursor(using)
-        if db.placeholder != cls.placeholder:
-            sql = sql.replace(cls.placeholder, db.placeholder)
+        if db.placeholder != PLACEHOLDER:
+            sql = sql.replace(PLACEHOLDER, db.placeholder)
         try:
             cursor.execute(sql, params)
             if db.ctx.b_commit:

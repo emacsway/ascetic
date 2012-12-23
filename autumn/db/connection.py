@@ -13,6 +13,7 @@ class Database(object):
     def __init__(self, **kwargs):
         self.engine = kwargs.pop('engine')
         self.debug = kwargs.pop('debug', False)
+        self.initial_sql = kwargs.pop('initial_sql', '')
         self._conf = kwargs
         self.ctx = local()
         self.ctx.b_commit = True
@@ -29,6 +30,8 @@ class Database(object):
 
     def reconnect(self):
         self.ctx.conn = self._connect(**self._conf)
+        if self.initial_sql:
+            self.conn.cursor().execute(self.initial_sql)
         return self.ctx.conn
 
     def query(self, sql, params=()):

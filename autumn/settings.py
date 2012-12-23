@@ -5,6 +5,7 @@ DATABASES = {
         'db': 'devel_autumn',
         'passwd': 'devel',
         'debug': True,
+        'initial_sql': 'SET NAMES UTF8;',
     }
 }
 
