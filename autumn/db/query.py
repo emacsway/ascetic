@@ -34,6 +34,14 @@ OPERATORS = {
     'contains': '{field} LIKE CONCAT("%", {val}, "%")',
     'icontains': 'LOWER({field}) LIKE LOWER(CONCAT("%", {val}, "%"))',
 }
+DIALECTS = {
+    'sqlite3': 'sqlite',
+    'mysql': 'mysql',
+    'postgresql': 'postgres',
+    'postgresql_psycopg2': 'postgres',
+    'postgis': 'postgres',
+    'oracle': 'oracle',
+}
 
 
 class Query(object):
@@ -105,9 +113,10 @@ class Query(object):
     
     '''
 
-    def __init__(self, fields='*', model=None, using=None):
+    def __init__(self, fields=None, model=None, using=None):
         from autumn.models import Model
-        self._fields = fields
+        self._distinct = False
+        self._fields = fields or ['*']
         self._from = None
         self._conditions = []
         self._order_by = []
@@ -160,6 +169,15 @@ class Query(object):
     def clone(self):
         return copy.deepcopy(self)
 
+    def dialect(self):
+        engine = Query.get_db(self.using).engine
+        return DIALECTS.get(engine, engine)
+
+    def get_operator(self, key):
+        ops = copy.copy(OPERATORS)
+        ops.update(getattr(Query.get_db(self.using), 'operators', {}))
+        return ops.get(key, None)
+
     def raw(self, sql, params=None):
         self._sql = sql
         self._params = params or []
@@ -172,6 +190,13 @@ class Query(object):
             ),
             self.params(), self.using
         ).fetchone()[0]
+
+    def distinct(self, val=None):
+        if val is not None:
+            self = self.clone()
+            self._distinct = val
+            return self
+        return self._distinct
 
     def from_(self, expr):
         self = self.clone()
@@ -219,13 +244,11 @@ class Query(object):
                 expr.using = self.using
                 expr = expr.render()
             if not re.search(r'[ =!<>]', expr, re.S):
-                ops = OPERATORS
-                ops.update(getattr(Query.get_db(self.using), 'operators', {}))
-                tpl = ops[isinstance(params[0], (list, tuple)) and 'in' or 'eq']
+                tpl = self.get_operator(isinstance(params[0], (list, tuple)) and 'in' or 'eq')
                 if LOOKUP_SEP in expr:
                     expr_parts = expr.split(LOOKUP_SEP)
-                    if expr_parts[-1] in ops:  # TODO: check for expr_parts[-1] is not field name
-                        tpl = ops[expr_parts.pop()]
+                    if self.get_operator(expr_parts[-1]) is not None:  # TODO: check for expr_parts[-1] is not field name
+                        tpl = self.get_operator(expr_parts.pop())
                     expr = '.'.join(map(escape, expr_parts))
                 else:
                     expr = escape(expr)
@@ -270,7 +293,10 @@ class Query(object):
 
         elif self._from:
             parts = []
-            parts += ['SELECT', self._fields]
+            parts += ['SELECT']
+            if self._distinct:
+                parts += ['DISTINCT']
+            parts += [', '.join(self._fields)]
             parts += ['FROM', self._from]
             if self._conditions:
                 parts += ['WHERE', self.render_conditions()]

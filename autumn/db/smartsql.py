@@ -56,7 +56,7 @@ class QS(smartsql.QS):
 
     def dialect(self):
         engine = connections[self.model.using].engine
-        SMARTSQL_DIALECTS[engine]
+        return SMARTSQL_DIALECTS.get(engine, engine)
 
     def sqlrepr(self):
         return smartsql.sqlrepr(self, self.dialect())
