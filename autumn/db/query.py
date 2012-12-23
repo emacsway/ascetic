@@ -82,13 +82,15 @@ class Query(object):
         cursor = Query.raw_swl(query, params)
     
     '''
-    
-    def __init__(self, query_type='SELECT *', model=None, using=None):
+
+    placeholder = '%s'
+
+    def __init__(self, fields='*', model=None, using=None):
         from autumn.models import Model
-        self._type = query_type
+        self._fields = fields
         self._from = None
         self._conditions = []
-        self._order = ''
+        self._order_by = []
         self._limit = ()
         self._cache = None
         self._sql = None
@@ -100,7 +102,6 @@ class Query(object):
             self.using = using
         elif model:
             self.using = model.using
-        self.placeholder = connections[self.using].placeholder
         if self._model:
             self._from = self._model.Meta.table_safe
 
@@ -147,19 +148,21 @@ class Query(object):
     def count(self):
         return Query.raw_sql(
             "SELECT COUNT(1) as c FROM ({0}) as t".format(
-                self.query_template()
+                self.render(order_by=False)
             ),
             self.params(), self.using
         ).fetchone()[0]
 
     def from_(self, expr):
+        self = self.clone()
         self._from = expr
         return self
 
     def filter(self, *args, **kwargs):
+        self = self.clone()
         connector = kwargs.pop('_connector', 'AND')
         if args:
-            self._conditions.append((connector, args[0], args[1:]))
+            self._conditions.append((connector, args[0], list(args[1:])))
         for k, v in kwargs.items():
             self._conditions.append((connector, k, [v,]))
         return self
@@ -168,35 +171,70 @@ class Query(object):
         kwargs['_connector'] = 'OR'
         return self.filter(*args, **kwargs)
 
-    def order_by(self, field, direction='ASC'):
-        self._order = 'ORDER BY {0} {1}'.format(escape(field), direction)
+    def order_by(self, *fields, **kwargs):
+        self = self.clone()
+        for field in fields:
+            direction = 'desc' in kwargs and 'DESC' or 'ASC'
+            if field[0] == '-':
+                direction = 'DESC'
+                field = field[1:]
+            self._order_by.append([field, direction])
         return self
-        
-    def render_conditions(self, completed=True):
+
+    def render_conditions(self):
         parts = []
         for connector, expr, params in self._conditions:
             if isinstance(expr, Query):  # Nested conditions
-                expr = expr.render_conditions(completed=False)
+                expr = expr.render()
             if not re.search(r'[ =!<>]', expr, re.S):
                 op = isinstance(params[0], (list, tuple)) and 'IN' or '='
                 expr = "{0} {1} {2}".format(escape(expr), op, self.placeholder)
             if parts:
                 expr = '{0} ({1}) '.format(connector, expr)
 
-            expr_parts = expr.split('%s')
-            expr_plhs = ['%s', ] *  (len(expr_parts) - 1) + ['', ]
+            expr_parts = expr.split(self.placeholder)
+            expr_plhs = [self.placeholder, ] *  (len(expr_parts) - 1) + ['', ]
             for i, param in enumerate(params[:]):
                 if isinstance(param, (list, tuple)):
-                    expr_plhs[i] = '({0})'.format(', '.join(['%s', ] * len(param)))
+                    expr_plhs[i] = '({0})'.format(', '.join([self.placeholder, ] * len(param)))
+                if isinstance(param, Query):  # SubQuery
+                    expr_plhs[i] = '({0})'.format(param.render())
             expr_final = []
             for pair in zip(expr_parts, expr_plhs):
                 expr_final += pair
             expr = ''.join(expr_final)
 
             parts.append(expr)
-        if parts and completed:
-            parts.insert(0, 'WHERE')
         return ' '.join(parts)
+
+    def render_order_by(self):
+        return ', '.join([' '.join(i) for i in self._order_by])
+        
+    def render_limit(self):
+        if len(self._limit):
+            return ', '.join(str(i) for i in self._limit)
+        
+    def render(self, order_by=True, limit=True):
+        if self._sql:
+            parts = [self._sql]
+            if limit and self._limit:
+                parts += ['LIMIT', self.render_limit()]
+            return ' '.join(parts)
+
+        elif self._from:
+            parts = []
+            parts += ['SELECT', self._fields]
+            parts += ['FROM', self._from]
+            if self._conditions:
+                parts += ['WHERE', self.render_conditions()]
+            if order_by and self._order_by:
+                parts += ['ORDER BY', self.render_order_by()]
+            if limit and self._limit:
+                parts += ['LIMIT', self.render_limit()]
+            return ' '.join(parts)
+
+        elif self._conditions:
+            return self.render_conditions()
         
     def params(self):
         if self._sql:
@@ -206,29 +244,13 @@ class Query(object):
             if isinstance(expr, Query):  # Nested conditions
                 result += expr.params()
             else:
+                for i, param in enumerate(params[:]):
+                    if isinstance(param, Query):  # SubQuery
+                        params[i: i + 1] = param.params()
+                    elif isinstance(param, (list, tuple)):
+                        params[i: i + 1] = param
                 result += params
-        for i, param in enumerate(result[:]):
-            if isinstance(param, (list, tuple)):
-                result[i: i + 1] = param
         return result
-        
-    def query_template(self, limit=True):
-        if self._sql:
-            return '{0} {1}'.format(
-                self._sql,
-                limit and self.extract_limit() or ''
-            )
-        return '{0} FROM {1} {2} {3} {4}'.format(
-            self._type,
-            self._model.Meta.table_safe,
-            self.render_conditions() or '',
-            self._order,
-            limit and self.extract_limit() or '',
-        )
-        
-    def extract_limit(self):
-        if len(self._limit):
-            return 'LIMIT {0}'.format(', '.join(str(l) for l in self._limit))
         
     def get_data(self):
         if self._cache is None:
@@ -249,7 +271,7 @@ class Query(object):
                 yield data
             
     def execute_query(self):
-        return Query.raw_sql(self.query_template(), self.params(), self.using)
+        return Query.raw_sql(self.render(), self.params(), self.using)
         
     @classmethod
     def get_db(cls, using=None):
@@ -267,8 +289,8 @@ class Query(object):
         if db.debug:
             print(sql, params)
         cursor = cls.get_cursor(using)
-        if db.placeholder != '%s':
-            sql = sql.replace('%s', db.placeholder)
+        if db.placeholder != cls.placeholder:
+            sql = sql.replace(cls.placeholder, db.placeholder)
         try:
             cursor.execute(sql, params)
             if db.ctx.b_commit:
