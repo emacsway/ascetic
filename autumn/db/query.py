@@ -219,14 +219,17 @@ class Query(object):
                 expr.using = self.using
                 expr = expr.render()
             if not re.search(r'[ =!<>]', expr, re.S):
-                ops = getattr(Query.get_db(self.using), 'operators', OPERATORS)
+                ops = OPERATORS
+                ops.update(getattr(Query.get_db(self.using), 'operators', {}))
                 tpl = ops[isinstance(params[0], (list, tuple)) and 'in' or 'eq']
                 if LOOKUP_SEP in expr:
                     expr_parts = expr.split(LOOKUP_SEP)
-                    if expr_parts[-1] not in []:  # Reserved for related lookups
+                    if expr_parts[-1] in ops:  # TODO: check for expr_parts[-1] is not field name
                         tpl = ops[expr_parts.pop()]
-                    expr = LOOKUP_SEP.join(expr_parts)
-                expr = tpl.replace('%', '%%').format(field=escape(expr), val=PLACEHOLDER)
+                    expr = '.'.join(map(escape, expr_parts))
+                else:
+                    expr = escape(expr)
+                expr = tpl.replace('%', '%%').format(field=expr, val=PLACEHOLDER)
             if inversion:
                 expr = '{0} ({1}) '.format('NOT', expr)
             if parts:
