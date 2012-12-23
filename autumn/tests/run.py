@@ -9,7 +9,7 @@ if __name__ == '__main__':
 import unittest
 import datetime
 from autumn import validators
-from autumn.db import escape
+from autumn.db import quote_name
 from autumn.db.connection import connections
 from autumn.db.query import Query
 from autumn.models import Model
@@ -59,7 +59,7 @@ class TestModels(unittest.TestCase):
             """
         }
         for table in ('autumn_tests_models_author', 'books'):
-            Query.raw_sql('DELETE FROM {0}'.format(escape(table)))
+            Query.raw_sql('DELETE FROM {0}'.format(quote_name(table)))
         
         # Test Creation
         james = Author(first_name='James', last_name='Joyce')

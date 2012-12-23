@@ -1,7 +1,7 @@
 from __future__ import absolute_import, unicode_literals
 import re
 import copy
-from autumn.db import escape
+from autumn.db import quote_name
 from autumn.db.connection import connections
 
 try:
@@ -42,6 +42,14 @@ DIALECTS = {
     'postgis': 'postgres',
     'oracle': 'oracle',
 }
+
+
+def render(expr):
+    return isinstance(expr, Query) and expr.render() or expr
+
+
+def params(expr):
+    return isinstance(expr, Query) and expr.params() or []
 
 
 class Query(object):
@@ -104,7 +112,7 @@ class Query(object):
         
         count = Query(model=MyModel).filter=(name='John').count()
         
-    Query(model=MyModel).raw(sql, params) uses ``raw`` SQL.
+    Query(model=MyModel).raw(sql, *params) uses ``raw`` SQL.
             
     Class Methods
     -------------
@@ -115,7 +123,7 @@ class Query(object):
         params = (1,) # params must be a tuple or list
         
         # Now we have the database cursor to use as we wish
-        cursor = Query.raw_swl(query, params)
+        cursor = Query.raw_sql(query, params)
     
     '''
 
@@ -128,12 +136,14 @@ class Query(object):
         self._join_tables = []
         self._conditions = []
         self._order_by = []
+        self._group_by = []
         self._limit = ()
         self._cache = None
         self._sql = None
         self._params = []
         self.using = using
-        self = self._set_table(model)
+        if model:
+            self._set_table(model)
 
     def __getitem__(self, k):
         if self._cache != None:
@@ -167,6 +177,12 @@ class Query(object):
     def __repr__(self):
         return repr(self.get_data())
 
+    def quote_name(self, name):
+        return quote_name(name, self.using)
+
+    def qn(self, name):  # just a short alias
+        return self.quote_name(name)
+
     def clone(self):
         return copy.deepcopy(self)
 
@@ -179,7 +195,7 @@ class Query(object):
         ops.update(getattr(Query.get_db(self.using), 'operators', {}))
         return ops.get(key, None)
 
-    def raw(self, sql, params=None):
+    def raw(self, sql, *params):
         self._sql = sql
         self._params = params or []
         return self
@@ -198,6 +214,18 @@ class Query(object):
             self._distinct = val
             return self
         return self._distinct
+
+    def fields(self, *args, **kwargs):
+        if args:
+            self = self.clone()
+            args = list(args)
+            if 'reset' in kwargs:
+                self._fields = []
+            if isinstance(args[0], (list, tuple)):
+                self._fields = args.pop(0)
+            self._fields += args
+            return self
+        return self._fields
 
     def as_(self, alias=None):
         if alias is not None:
@@ -260,6 +288,18 @@ class Query(object):
         self = self.clone()
         return self._add_condition(self._conditions, 'OR', True, *args, **kwargs)
 
+    def group_by(self, *args, **kwargs):
+        if args:
+            self = self.clone()
+            args = list(args)
+            if 'reset' in kwargs:
+                self._group_by = []
+            if isinstance(args[0], (list, tuple)):
+                self._group_by = args.pop(0)
+            self._group_by += args
+            return self
+        return self._group_by
+
     def order_by(self, *fields, **kwargs):
         self = self.clone()
         for field in fields:
@@ -282,9 +322,9 @@ class Query(object):
                     expr_parts = expr.split(LOOKUP_SEP)
                     if self.get_operator(expr_parts[-1]) is not None:  # TODO: check for expr_parts[-1] is not field name
                         tpl = self.get_operator(expr_parts.pop())
-                    expr = '.'.join(map(escape, expr_parts))
+                    expr = '.'.join(map(self.quote_name, expr_parts))
                 else:
-                    expr = escape(expr)
+                    expr = self.quote_name(expr)
                 expr = tpl.replace('%', '%%').format(field=expr, val=PLACEHOLDER)
             if inversion:
                 expr = '{0} ({1}) '.format('NOT', expr)
@@ -311,7 +351,7 @@ class Query(object):
         return self._render_conditions(self._conditions)
 
     def render_order_by(self):
-        return ', '.join([' '.join(i) for i in self._order_by])
+        return ', '.join([' '.join([render(i[0]), i[1]]) for i in self._order_by])
         
     def render_limit(self):
         if len(self._limit):
@@ -334,7 +374,7 @@ class Query(object):
             if self._conditions:
                 parts += ['ON', self.render_conditions()]
             if self._join_tables:
-                parts += ['({0})'.format(' '.join([t.render() for t in self._join_tables]))]  # Nestet JOIN
+                parts += ['({0})'.format(' '.join([i.render() for i in self._join_tables]))]  # Nestet JOIN
             return ' '.join(parts)
 
         elif self._table:
@@ -342,13 +382,15 @@ class Query(object):
             parts += ['SELECT']
             if self._distinct:
                 parts += ['DISTINCT']
-            parts += [', '.join(self._fields)]
+            parts += [', '.join(map(render, self._fields))]
             parts += ['FROM', self._table]
             if self._alias:
                 parts += ['AS', self._alias]
             parts += [t.render() for t in self._join_tables]
             if self._conditions:
                 parts += ['WHERE', self.render_conditions()]
+            if self._group_by:
+                parts += ['GROUP BY', ', '.join(map(render, self._group_by))]
             if order_by and self._order_by:
                 parts += ['ORDER BY', self.render_order_by()]
             if limit and self._limit:
@@ -362,18 +404,24 @@ class Query(object):
         if self._sql:
             return self._params
         result = []
-        for t in self._join_tables:
-            result += t.params()
-        for connector, inversion, expr, params in self._conditions:
+        for i in self._fields:
+            result += params(i)
+        for i in self._join_tables:
+            result += i.params()
+        for connector, inversion, expr, expr_params in self._conditions:
             if isinstance(expr, Query):  # Nested conditions
-                result += expr.params()
+                result += expr_params.params()
             else:
-                for i, param in enumerate(params[:]):
-                    if isinstance(param, Query):  # SubQuery
-                        params[i: i + 1] = param.params()
-                    elif isinstance(param, (list, tuple)):
-                        params[i: i + 1] = param
-                result += params
+                result += expr_params
+        for i in self._group_by:
+            result += params(i)
+        for i in self._order_by:
+            result += params(i[0])
+        for i, param in enumerate(result[:]):
+            if isinstance(param, Query):  # SubQuery
+                result[i: i + 1] = param.params()
+            elif isinstance(param, (list, tuple)):
+                result[i: i + 1] = param
         return result
         
     def get_data(self):

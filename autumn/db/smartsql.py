@@ -69,7 +69,7 @@ class QS(smartsql.QS):
         if self._action in ('select', 'count', ):
             return Query(model=self.model).raw(
                 self.sqlrepr(),
-                self.sqlparams()
+                *self.sqlparams()
             )
         else:
             return Query.raw_sql(
