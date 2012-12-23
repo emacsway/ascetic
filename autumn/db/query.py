@@ -73,7 +73,13 @@ class Query(object):
     In both cases the ``WHERE`` clause will become::
     
         WHERE `name` = 'John' AND `age` = 30
-    
+
+    Support JOIN:
+
+        Author.get().as_('a').join(
+            'INNER JOIN', Book.get().as_('b').filter('a.id = b.author_id')
+        ).filter(a__id__in=(3,5)).order_by('-a.id')
+
     You can also order using ``order_by`` to sort the results::
     
         # The second arg is optional and will default to ``ASC``
@@ -114,25 +120,20 @@ class Query(object):
     '''
 
     def __init__(self, fields=None, model=None, using=None):
-        from autumn.models import Model
         self._distinct = False
         self._fields = fields or ['*']
-        self._from = None
+        self._table = None
+        self._alias = None
+        self._table_join = None
+        self._join_tables = []
         self._conditions = []
         self._order_by = []
         self._limit = ()
         self._cache = None
         self._sql = None
         self._params = []
-        if model and not issubclass(model, Model):
-            raise Exception('Query objects must be created with a model class.')
-        self._model = model
-        if using:
-            self.using = using
-        elif model:
-            self.using = model.using
-        if self._model:
-            self._from = self._model.Meta.table_safe
+        self.using = using
+        self = self._set_table(model)
 
     def __getitem__(self, k):
         if self._cache != None:
@@ -198,9 +199,41 @@ class Query(object):
             return self
         return self._distinct
 
-    def from_(self, expr):
+    def as_(self, alias=None):
+        if alias is not None:
+            self = self.clone()
+            self._alias = alias
+            return self
+        return self._alias
+
+    def _set_table(self, table=None, alias=None, **kwargs):
+        from autumn.models import Model
+        if kwargs:
+            alias, table = kwargs.items()[0]
+        if issubclass(table, Model):
+            self._model = table
+            self._table = table.Meta.table_safe
+            if not self.using:
+                self.using = table.using
+        elif isinstance(table, string_types):
+            self._model = None
+            self._table = table
+        else:
+            raise Exception('Table slould be instance of Model or str.')
+        if alias:
+            self._alias = alias
+        return self
+
+    def table(self, table=None, alias=None, **kwargs):
         self = self.clone()
-        self._from = expr
+        return self._set_table(table, alias, **kwargs)
+        
+
+    def join(self, join_type, expr):
+        self = self.clone()
+        expr.using = self.using
+        expr._table_join = join_type
+        self._join_tables.append(expr)
         return self
 
     def _add_condition(self, conditions, connector, inversion, *args, **kwargs):
@@ -291,13 +324,29 @@ class Query(object):
                 parts += ['LIMIT', self.render_limit()]
             return ' '.join(parts)
 
-        elif self._from:
+        elif self._table_join:
+            parts = []
+            parts += [self._table_join]
+            if self._table:
+                parts += [self._table]
+            if self._alias:
+                parts += ['AS', self._alias]
+            if self._conditions:
+                parts += ['ON', self.render_conditions()]
+            if self._join_tables:
+                parts += ['({0})'.format(' '.join([t.render() for t in self._join_tables]))]  # Nestet JOIN
+            return ' '.join(parts)
+
+        elif self._table:
             parts = []
             parts += ['SELECT']
             if self._distinct:
                 parts += ['DISTINCT']
             parts += [', '.join(self._fields)]
-            parts += ['FROM', self._from]
+            parts += ['FROM', self._table]
+            if self._alias:
+                parts += ['AS', self._alias]
+            parts += [t.render() for t in self._join_tables]
             if self._conditions:
                 parts += ['WHERE', self.render_conditions()]
             if order_by and self._order_by:
@@ -313,6 +362,8 @@ class Query(object):
         if self._sql:
             return self._params
         result = []
+        for t in self._join_tables:
+            result += t.params()
         for connector, inversion, expr, params in self._conditions:
             if isinstance(expr, Query):  # Nested conditions
                 result += expr.params()
@@ -414,3 +465,5 @@ class Query(object):
         finally:
             cls.get_db(using).ctx.b_commit = True
         return cursor
+
+Q = Query
