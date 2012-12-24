@@ -77,12 +77,12 @@ class Query(object):
 
     Support JOIN:
 
-        Author.get().as_('a').join(
-            'INNER JOIN', Book.get().as_('b').filter('a.id = b.author_id')
+        Author.get().table_as('a').join(
+            'INNER JOIN', Book.get().table_as('b').filter('a.id = b.author_id')
         ).filter(a__id__in=(3,5)).order_by('-a.id')
         or:
-        Author.get().as_('a').join(
-            'INNER JOIN', Book.get().as_('b').filter(a__id=Q().name('b.author_id'))
+        Author.get().table_as('a').join(
+            'INNER JOIN', Book.get().table_as('b').filter(a__id=Q().name('b.author_id'))
         ).filter(a__id__in=(3,5)).order_by('-a.id')
 
     You can also order using ``order_by`` to sort the results::
@@ -130,7 +130,7 @@ class Query(object):
         self._fields = fields or ['*']
         self._table = None
         self._alias = None
-        self._table_join = None
+        self._join_type = None
         self._join_tables = []
         self._conditions = []
         self._order_by = []
@@ -185,6 +185,9 @@ class Query(object):
     def clone(self):
         return copy.deepcopy(self)
 
+    def reset(self):
+        return Query(model=self._model, using=self.using)
+
     def dialect(self):
         engine = Query.get_db(self.using).engine
         return DIALECTS.get(engine, engine)
@@ -195,13 +198,13 @@ class Query(object):
         return ops.get(key, None)
 
     def raw(self, sql, *params):
-        self = self.clone()
+        self = self.reset()
         self._sql = sql
         self._params = params or []
         return self
 
     def name(self, name):
-        self = self.clone()
+        self = self.reset()
         self._name = name
         return self
 
@@ -245,25 +248,30 @@ class Query(object):
             alias, table = kwargs.items()[0]
         if issubclass(table, Model):
             self._model = table
-            self._table = table.Meta.table
+            self._table = Query().name(table.Meta.table)
             if not self.using:
                 self.using = table.using
         elif isinstance(table, string_types):
             self._model = None
-            self._table = table
+            self._table = Query().name(table)
         else:
             raise Exception('Table slould be instance of Model or str.')
         if alias:
-            self._alias = alias
+            self._table = self._table.as_(alias)
         return self
 
     def table(self, table=None, alias=None, **kwargs):
         self = self.clone()
         return self._set_table(table, alias, **kwargs)
 
+    def table_as(self, alias):
+        self = self.clone()
+        self._table = self._table.as_(alias)
+        return self
+
     def join(self, join_type, expr):
         self = self.clone()
-        expr._table_join = join_type
+        expr._join_type = join_type
         self._join_tables.append(expr)
         return self
 
@@ -324,10 +332,7 @@ class Query(object):
             if isinstance(param, (list, tuple)):
                 expr_plhs[i] = '({0})'.format(', '.join([PLACEHOLDER, ] * len(param)))
             if isinstance(param, Query):  # SubQuery
-                sub = self.chrender(param)
-                if not param._name:
-                    sub = '({0})'.format()
-                expr_plhs[i] = sub
+                expr_plhs[i] = self.chrender(param)
         expr_final = []
         for pair in zip(expr_parts, expr_plhs):
             expr_final += pair
@@ -349,7 +354,10 @@ class Query(object):
         """Renders child"""
         if isinstance(expr, Query):
             expr.using = self.using    
-            return expr.render()
+            r = expr.render()
+            if expr._alias is None and expr._name is None and expr._join_type is None:
+                r = '({0})'.format(r)
+            return r
         return expr
 
     def chparams(self, expr):
@@ -370,10 +378,8 @@ class Query(object):
                     expr_parts = expr.split(LOOKUP_SEP)
                     if self.get_operator(expr_parts[-1]) is not None:  # TODO: check for expr_parts[-1] is not field name
                         tpl = self.get_operator(expr_parts.pop())
-                    expr = '.'.join(map(self.quote_name, expr_parts))
-                else:
-                    expr = self.qn(expr)
-                expr = tpl.replace('%', '%%').format(field=expr, val=PLACEHOLDER)
+                    expr = '.'.join(expr_parts)
+                expr = tpl.replace('%', '%%').format(field=self.qn(expr), val=PLACEHOLDER)
             if inversion:
                 expr = '{0} ({1}) '.format('NOT', expr)
             if parts:
@@ -394,13 +400,9 @@ class Query(object):
     def render(self, order_by=True, limit=True):
         result = None
         if self._name:
-            name = self._name
-            if not '.' in name and self._model and name in self._model._fields:
-                if self._alias:
-                    name = '.'.join((self._alias, name))
-                elif self._table:
-                    name = '.'.join((self._table, name))
-            return self.qn(name)
+            # alias of table can be changed during Query building.
+            # Do not add prefix for columns here
+            result = self.qn(self._name)
 
         elif self._sql:
             parts = [self._sql]
@@ -408,28 +410,24 @@ class Query(object):
                 parts += ['LIMIT', self.render_limit()]
             result = ' '.join(parts)
 
-        elif self._table_join:
+        elif self._join_type:
             parts = []
-            parts += [self._table_join]
-            if self._table:
-                parts += [self.qn(self._table)]
-            if self._alias:
-                parts += ['AS', self.qn(self._alias)]
+            parts += [self._join_type]
+            if self._table is not None:
+                parts += [self.chrender(self._table)]
             if self._conditions:
                 parts += ['ON', self.render_conditions()]
             if self._join_tables:
                 parts += ['({0})'.format(' '.join([i.self.chrender() for i in self._join_tables]))]  # Nestet JOIN
             result = ' '.join(parts)
 
-        elif self._table:
+        elif self._table is not None:
             parts = []
             parts += ['SELECT']
             if self._distinct:
                 parts += ['DISTINCT']
             parts += [', '.join(map(self.chrender, self._fields))]
-            parts += ['FROM', self.qn(self._table)]
-            if self._alias:
-                parts += ['AS', self.qn(self._alias)]
+            parts += ['FROM', self.chrender(self._table)]
             parts += [self.chrender(t) for t in self._join_tables]
             if self._conditions:
                 parts += ['WHERE', self.render_conditions()]
@@ -443,25 +441,47 @@ class Query(object):
 
         elif self._conditions:
             result = self.render_conditions()
-        return self.flatten_expr(result, self._raw_params())
+
+        result = self.flatten_expr(result, self._raw_params())
+
+        if self._alias:
+            if ' ' in result:
+                result = '({0})'.format(result)
+            result = ' '.join([result, 'AS', self.qn(self._alias)])
+        return result
 
     def _raw_params(self):
-        if self._sql:
-            return self._params
         result = []
-        for i in self._fields:
-            result += self.chparams(i)
-        for i in self._join_tables:
-            result += self.chparams(i)
-        for connector, inversion, expr, expr_params in self._conditions:
-            if isinstance(expr, Query):  # Nested conditions
-                result += self.chparams(expr)
-            else:
-                result += expr_params
-        for i in self._group_by:
-            result += self.chparams(i)
-        for i in self._order_by:
-            result += self.chparams(i[0])
+        if self._name:
+            result = []
+
+        elif self._sql:
+            result = self._params
+
+        elif self._join_type:
+            result += self.chparams(self._table)
+            for connector, inversion, expr, expr_params in self._conditions:
+                result += self.chparams(expr) if isinstance(expr, Query) else expr_params
+            for i in self._join_tables:
+                result += self.chparams(i)
+
+        elif self._table is not None:
+            for i in self._fields:
+                result += self.chparams(i)
+            result += self.chparams(self._table)
+            for i in self._join_tables:
+                result += self.chparams(i)
+            for connector, inversion, expr, expr_params in self._conditions:
+                result += self.chparams(expr) if isinstance(expr, Query) else expr_params
+            for i in self._group_by:
+                result += self.chparams(i)
+            for i in self._order_by:
+                result += self.chparams(i[0])
+
+        elif self._conditions:
+            for connector, inversion, expr, expr_params in self._conditions:
+                    result += self.chparams(expr) if isinstance(expr, Query) else expr_params
+
         return result
 
     def params(self):

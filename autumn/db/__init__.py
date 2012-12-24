@@ -4,7 +4,7 @@ from autumn.db.connection import connections
 
 
 def quote_name(name, using='default'):
-    
+    """Quotes DB name"""
     if '.' in name:
         return '.'.join(map(partial(quote_name, using=using), name.split('.')))
     call = getattr(connections[using], 'quote_name', None)
