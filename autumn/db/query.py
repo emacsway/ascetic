@@ -196,6 +196,7 @@ class Query(object):
         return ops.get(key, None)
 
     def raw(self, sql, *params):
+        self = self.clone()
         self._sql = sql
         self._params = params or []
         return self
@@ -255,7 +256,6 @@ class Query(object):
     def table(self, table=None, alias=None, **kwargs):
         self = self.clone()
         return self._set_table(table, alias, **kwargs)
-        
 
     def join(self, join_type, expr):
         self = self.clone()
