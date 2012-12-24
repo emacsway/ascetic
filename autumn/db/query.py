@@ -44,14 +44,6 @@ DIALECTS = {
 }
 
 
-def render(expr):
-    return isinstance(expr, Query) and expr.render() or expr
-
-
-def params(expr):
-    return isinstance(expr, Query) and expr.params() or []
-
-
 class Query(object):
     '''
     Gives quick access to database by setting attributes (query conditions, et
@@ -259,7 +251,6 @@ class Query(object):
 
     def join(self, join_type, expr):
         self = self.clone()
-        expr.using = self.using
         expr._table_join = join_type
         self._join_tables.append(expr)
         return self
@@ -300,6 +291,10 @@ class Query(object):
             return self
         return self._group_by
 
+    # TODO: for having use sub-instance of Query(), similar joins, and proxy
+    # having, or_having, having_excl, or_having_excl to self._having.filter(),
+    # self._having.or_filter...
+
     def order_by(self, *fields, **kwargs):
         self = self.clone()
         for field in fields:
@@ -310,12 +305,50 @@ class Query(object):
             self._order_by.append([field, direction])
         return self
 
+    def flatten_expr(self, expr, params):
+        expr_parts = expr.split(PLACEHOLDER)
+        expr_plhs = [PLACEHOLDER, ] *  (len(expr_parts) - 1) + ['', ]
+        for i, param in enumerate(params[:]):
+            if isinstance(param, (list, tuple)):
+                expr_plhs[i] = '({0})'.format(', '.join([PLACEHOLDER, ] * len(param)))
+            if isinstance(param, Query):  # SubQuery
+                expr_plhs[i] = '({0})'.format(self.chrender(param))
+        expr_final = []
+        for pair in zip(expr_parts, expr_plhs):
+            expr_final += pair
+        expr = ''.join(expr_final)
+        return expr
+
+    def flatten_params(self, params):
+        flat = []
+        for param in params:
+            if isinstance(param, Query):  # SubQuery
+                flat += self.chparams(param)
+            elif isinstance(param, (list, tuple)):
+                flat += param
+            else:
+                flat.append(param)
+        return flat
+
+    def chrender(self, expr):
+        """Renders child"""
+        if isinstance(expr, Query):
+            expr.using = self.using    
+            return expr.render()
+        return expr
+
+    def chparams(self, expr):
+        """Returns parameters for child"""
+        if isinstance(expr, Query):
+            expr.using = self.using    
+            return expr.params()
+        return []
+
     def _render_conditions(self, conditions):
         parts = []
         for connector, inversion, expr, params in conditions:
             if isinstance(expr, Query):  # Nested conditions
-                expr.using = self.using
-                expr = expr.render()
+                expr = self.chrender(expr)
             if not re.search(r'[ =!<>]', expr, re.S):
                 tpl = self.get_operator(isinstance(params[0], (list, tuple)) and 'in' or 'eq')
                 if LOOKUP_SEP in expr:
@@ -330,20 +363,6 @@ class Query(object):
                 expr = '{0} ({1}) '.format('NOT', expr)
             if parts:
                 expr = '{0} ({1}) '.format(connector, expr)
-
-            expr_parts = expr.split(PLACEHOLDER)
-            expr_plhs = [PLACEHOLDER, ] *  (len(expr_parts) - 1) + ['', ]
-            for i, param in enumerate(params[:]):
-                if isinstance(param, (list, tuple)):
-                    expr_plhs[i] = '({0})'.format(', '.join([PLACEHOLDER, ] * len(param)))
-                if isinstance(param, Query):  # SubQuery
-                    param.using = self.using
-                    expr_plhs[i] = '({0})'.format(param.render())
-            expr_final = []
-            for pair in zip(expr_parts, expr_plhs):
-                expr_final += pair
-            expr = ''.join(expr_final)
-
             parts.append(expr)
         return ' '.join(parts)
 
@@ -351,18 +370,19 @@ class Query(object):
         return self._render_conditions(self._conditions)
 
     def render_order_by(self):
-        return ', '.join([' '.join([render(i[0]), i[1]]) for i in self._order_by])
+        return ', '.join([' '.join([self.chrender(i[0]), i[1]]) for i in self._order_by])
         
     def render_limit(self):
         if len(self._limit):
             return ', '.join(str(i) for i in self._limit)
         
     def render(self, order_by=True, limit=True):
+        result = None
         if self._sql:
             parts = [self._sql]
             if limit and self._limit:
                 parts += ['LIMIT', self.render_limit()]
-            return ' '.join(parts)
+            result = ' '.join(parts)
 
         elif self._table_join:
             parts = []
@@ -374,56 +394,55 @@ class Query(object):
             if self._conditions:
                 parts += ['ON', self.render_conditions()]
             if self._join_tables:
-                parts += ['({0})'.format(' '.join([i.render() for i in self._join_tables]))]  # Nestet JOIN
-            return ' '.join(parts)
+                parts += ['({0})'.format(' '.join([i.self.chrender() for i in self._join_tables]))]  # Nestet JOIN
+            result = ' '.join(parts)
 
         elif self._table:
             parts = []
             parts += ['SELECT']
             if self._distinct:
                 parts += ['DISTINCT']
-            parts += [', '.join(map(render, self._fields))]
+            parts += [', '.join(map(self.chrender, self._fields))]
             parts += ['FROM', self._table]
             if self._alias:
                 parts += ['AS', self._alias]
-            parts += [t.render() for t in self._join_tables]
+            parts += [self.chrender(t) for t in self._join_tables]
             if self._conditions:
                 parts += ['WHERE', self.render_conditions()]
             if self._group_by:
-                parts += ['GROUP BY', ', '.join(map(render, self._group_by))]
+                parts += ['GROUP BY', ', '.join(map(self.chrender, self._group_by))]
             if order_by and self._order_by:
                 parts += ['ORDER BY', self.render_order_by()]
             if limit and self._limit:
                 parts += ['LIMIT', self.render_limit()]
-            return ' '.join(parts)
+            result = ' '.join(parts)
 
         elif self._conditions:
-            return self.render_conditions()
-        
-    def params(self):
+            result = self.render_conditions()
+        return self.flatten_expr(result, self._raw_params())
+
+    def _raw_params(self):
         if self._sql:
             return self._params
         result = []
         for i in self._fields:
-            result += params(i)
+            result += self.chparams(i)
         for i in self._join_tables:
-            result += i.params()
+            result += self.chparams(i)
         for connector, inversion, expr, expr_params in self._conditions:
             if isinstance(expr, Query):  # Nested conditions
-                result += expr_params.params()
+                result += self.chparams(expr)
             else:
                 result += expr_params
         for i in self._group_by:
-            result += params(i)
+            result += self.chparams(i)
         for i in self._order_by:
-            result += params(i[0])
-        for i, param in enumerate(result[:]):
-            if isinstance(param, Query):  # SubQuery
-                result[i: i + 1] = param.params()
-            elif isinstance(param, (list, tuple)):
-                result[i: i + 1] = param
+            result += self.chparams(i[0])
         return result
-        
+
+    def params(self):
+        return self.flatten_params(self._raw_params())
+
     def get_data(self):
         if self._cache is None:
             self._cache = list(self.iterator())
