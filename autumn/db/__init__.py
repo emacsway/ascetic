@@ -10,4 +10,4 @@ def quote_name(name, using='default'):
     call = getattr(connections[using], 'quote_name', None)
     if call:
         return call(name)
-    return '`{0}`'.format(name.replace('`', '``'))
+    return '`{0}`'.format(name.replace('`', ''))

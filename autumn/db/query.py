@@ -33,6 +33,7 @@ OPERATORS = {
     'iendswith': 'LOWER({field}) LIKE LOWER(CONCAT("%", {val}))',
     'contains': '{field} LIKE CONCAT("%", {val}, "%")',
     'icontains': 'LOWER({field}) LIKE LOWER(CONCAT("%", {val}, "%"))',
+    # TODO: 'range': '{field} BETWEEN {val0} AND {val1}',
 }
 DIALECTS = {
     'sqlite3': 'sqlite',
@@ -78,6 +79,10 @@ class Query(object):
 
         Author.get().as_('a').join(
             'INNER JOIN', Book.get().as_('b').filter('a.id = b.author_id')
+        ).filter(a__id__in=(3,5)).order_by('-a.id')
+        or:
+        Author.get().as_('a').join(
+            'INNER JOIN', Book.get().as_('b').filter(a__id=Q().name('b.author_id'))
         ).filter(a__id__in=(3,5)).order_by('-a.id')
 
     You can also order using ``order_by`` to sort the results::
@@ -131,6 +136,7 @@ class Query(object):
         self._group_by = []
         self._limit = ()
         self._cache = None
+        self._name = None
         self._sql = None
         self._params = []
         self.using = using
@@ -193,6 +199,11 @@ class Query(object):
         self._params = params or []
         return self
 
+    def name(self, name):
+        self = self.clone()
+        self._name = name
+        return self
+
     def count(self):
         return Query.raw_sql(
             "SELECT COUNT(1) as c FROM ({0}) as t".format(
@@ -233,7 +244,7 @@ class Query(object):
             alias, table = kwargs.items()[0]
         if issubclass(table, Model):
             self._model = table
-            self._table = table.Meta.table_safe
+            self._table = table.Meta.table
             if not self.using:
                 self.using = table.using
         elif isinstance(table, string_types):
@@ -312,7 +323,10 @@ class Query(object):
             if isinstance(param, (list, tuple)):
                 expr_plhs[i] = '({0})'.format(', '.join([PLACEHOLDER, ] * len(param)))
             if isinstance(param, Query):  # SubQuery
-                expr_plhs[i] = '({0})'.format(self.chrender(param))
+                sub = self.chrender(param)
+                if not param._name:
+                    sub = '({0})'.format()
+                expr_plhs[i] = sub
         expr_final = []
         for pair in zip(expr_parts, expr_plhs):
             expr_final += pair
@@ -357,7 +371,7 @@ class Query(object):
                         tpl = self.get_operator(expr_parts.pop())
                     expr = '.'.join(map(self.quote_name, expr_parts))
                 else:
-                    expr = self.quote_name(expr)
+                    expr = self.qn(expr)
                 expr = tpl.replace('%', '%%').format(field=expr, val=PLACEHOLDER)
             if inversion:
                 expr = '{0} ({1}) '.format('NOT', expr)
@@ -378,7 +392,16 @@ class Query(object):
         
     def render(self, order_by=True, limit=True):
         result = None
-        if self._sql:
+        if self._name:
+            name = self._name
+            if not '.' in name and self._model and name in self._model._fields:
+                if self._alias:
+                    name = '.'.join((self._alias, name))
+                elif self._table:
+                    name = '.'.join((self._table, name))
+            return self.qn(name)
+
+        elif self._sql:
             parts = [self._sql]
             if limit and self._limit:
                 parts += ['LIMIT', self.render_limit()]
@@ -388,9 +411,9 @@ class Query(object):
             parts = []
             parts += [self._table_join]
             if self._table:
-                parts += [self._table]
+                parts += [self.qn(self._table)]
             if self._alias:
-                parts += ['AS', self._alias]
+                parts += ['AS', self.qn(self._alias)]
             if self._conditions:
                 parts += ['ON', self.render_conditions()]
             if self._join_tables:
@@ -403,9 +426,9 @@ class Query(object):
             if self._distinct:
                 parts += ['DISTINCT']
             parts += [', '.join(map(self.chrender, self._fields))]
-            parts += ['FROM', self._table]
+            parts += ['FROM', self.qn(self._table)]
             if self._alias:
-                parts += ['AS', self._alias]
+                parts += ['AS', self.qn(self._alias)]
             parts += [self.chrender(t) for t in self._join_tables]
             if self._conditions:
                 parts += ['WHERE', self.render_conditions()]
