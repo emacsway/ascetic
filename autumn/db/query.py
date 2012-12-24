@@ -125,6 +125,7 @@ class Query(object):
     '''
 
     def __init__(self, fields=None, model=None, using=None):
+        self._model = None
         self._distinct = False
         self._fields = fields or ['*']
         self._table = None
