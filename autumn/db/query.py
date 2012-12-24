@@ -350,12 +350,12 @@ class Query(object):
                 flat.append(param)
         return flat
 
-    def chrender(self, expr):
+    def chrender(self, expr, parentheses=True):
         """Renders child"""
         if isinstance(expr, Query):
             expr.using = self.using    
             r = expr.render()
-            if expr._alias is None and expr._name is None and expr._join_type is None:
+            if parentheses and expr._alias is None and expr._name is None and expr._join_type is None:
                 r = '({0})'.format(r)
             return r
         return expr
