@@ -24,7 +24,7 @@ OPERATORS = {
     'gt': '{field} > {val}',
     'gte': '{field} >= {val}',
     'in': '{field} IN {val}',
-    'not_in': '{field} IN {val}',
+    'nin': '{field} NOT IN {val}',
     'exact': '{field} LIKE {val}',
     'iexact': 'LOWER({field}) LIKE LOWER({val})',
     'startswith': '{field} LIKE CONCAT({val}, "%")',
