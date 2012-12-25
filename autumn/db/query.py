@@ -46,85 +46,8 @@ DIALECTS = {
 }
 
 
-class Query(object):
-    '''
-    Gives quick access to database by setting attributes (query conditions, et
-    cetera), or by the sql methods.
-    
-    Instance Methods
-    ----------------
-    
-    Creating a Query object requires a Model class at the bare minimum. The 
-    doesn't run until results are pulled using a slice, ``list()`` or iterated
-    over.
-    
-    For example::
-    
-        q = Query(model=MyModel)
-        
-    This sets up a basic query without conditions. We can set conditions using
-    the ``filter`` method::
-        
-        q.filter(name='John', age=30)
-        q.filter('name = %s AND age=%s', 'John', 30)
-        
-    We can also chain the ``filter`` method::
-    
-        q.filter(name='John').filter(age=30)
-        
-    In both cases the ``WHERE`` clause will become::
-    
-        WHERE `name` = 'John' AND `age` = 30
-
-    Support JOIN:
-
-        Author.get().table_as('a').join(
-            'INNER JOIN', Book.get().table_as('b').filter('a.id = b.author_id')
-        ).filter(a__id__in=(3,5)).order_by('-a.id')
-        or:
-        Author.get().table_as('a').join(
-            'INNER JOIN', Book.get().table_as('b').filter(a__id=n('b.author_id'))
-        ).filter(a__id__in=(3,5)).order_by('-a.id')
-
-    You can also order using ``order_by`` to sort the results::
-    
-        # The second arg is optional and will default to ``ASC``
-        q.order_by('column', 'DESC')
-    
-    You can limit result sets by slicing the Query instance as if it were a 
-    list. Query is smart enough to translate that into the proper ``LIMIT`` 
-    clause when the query hasn't yet been run::
-    
-        q = Query(model=MyModel).filter(name='John')[:10]   # LIMIT 0, 10
-        q = Query(model=MyModel).filter(name='John')[10:20] # LIMIT 10, 10
-        q = Query(model=MyModel).filter(name='John')[0]    # LIMIT 0, 1
-    
-    Simple iteration::
-    
-        for obj in Query(model=MyModel).filter(name='John'):
-            # Do something here
-            
-    Counting results is easy with the ``count`` method. If used on a ``Query``
-    instance that has not yet retrieve results, it will perform a ``SELECT
-    COUNT(*)`` instead of a ``SELECT *``. ``count`` returns an integer::
-        
-        count = Query(model=MyModel).filter=(name='John').count()
-        
-    Query(model=MyModel).raw(sql, *params) uses ``raw`` SQL.
-            
-    Class Methods
-    -------------
-    
-    ``Query.raw_sql(sql, params)`` returns a database cursor. Usage::
-    
-        query = 'SELECT * FROM `users` WHERE id = ?'
-        params = (1,) # params must be a tuple or list
-        
-        # Now we have the database cursor to use as we wish
-        cursor = Query.raw_sql(query, params)
-    
-    '''
-
+class QueryBase(object):
+    """Abstract SQL Builder, can be used without ORM."""
     def __init__(self, fields=None, model=None, using=None):
         self._model = None
         self._distinct = False
@@ -149,7 +72,7 @@ class Query(object):
     def __getitem__(self, k):
         if self._cache != None:
             return self._cache[k]
-        
+
         if isinstance(k, integer_types):
             self._limit = (k,1)
             lst = self.get_data()
@@ -165,21 +88,24 @@ class Query(object):
                 self._limit = 0, k.stop
             else:
                 return self.clone()
-        
+
         return self
-        
+
     def __len__(self):
         return self.count()
         #return len(self.get_data())
-        
+
     def __iter__(self):
         return iter(self.get_data())
-        
+
     def __repr__(self):
         return repr(self.get_data())
 
+    def get_data(self):
+        return []
+
     def quote_name(self, name):
-        return quote_name(name, self.using)
+        return name
 
     def qn(self, name):  # just a short alias
         return self.quote_name(name)
@@ -188,19 +114,16 @@ class Query(object):
         return copy.deepcopy(self)
 
     def reset(self):
-        return Query(model=self._model, using=self.using)
+        return type(self)(model=self._model, using=self.using)
 
     def dialect(self):
-        engine = Query.get_db(self.using).engine
-        return DIALECTS.get(engine, engine)
+        return 'postgres'
 
     def get_operator(self, key):
-        ops = copy.copy(OPERATORS)
-        ops.update(getattr(Query.get_db(self.using), 'operators', {}))
-        return ops.get(key, None)
+        return OPERATORS.get(key, None)
 
     def raw(self, sql, *params):
-        if isinstance(sql, Query):
+        if isinstance(sql, QueryBase):
             return sql
         self = self.reset()
         self._sql = sql
@@ -208,7 +131,7 @@ class Query(object):
         return self
 
     def name(self, name):
-        if isinstance(name, Query):
+        if isinstance(name, QueryBase):
             return name
         self = self.reset()
         self._name = name
@@ -218,12 +141,10 @@ class Query(object):
         return self.name(name)
 
     def count(self):
-        return Query.raw_sql(
-            "SELECT COUNT(1) as c FROM ({0}) as t".format(
-                self.render(order_by=False)
-            ),
-            self.params(), self.using
-        ).fetchone()[0]
+        return self.reset().raw(
+            "SELECT COUNT(1) as c FROM %s as t",
+            self.order_by(reset=True)
+        )
 
     def distinct(self, val=None):
         if val is not None:
@@ -255,17 +176,11 @@ class Query(object):
         return self._alias
 
     def _set_table(self, table=None, alias=None, **kwargs):
-        from autumn.models import Model
         if kwargs:
             alias, table = kwargs.items()[0]
-        if issubclass(table, Model):
-            self._model = table
-            self._table = Query().name(table.Meta.table)
-            if not self.using:
-                self.using = table.using
-        elif isinstance(table, string_types):
+        if isinstance(string_types):
             self._model = None
-            self._table = Query().name(table)
+            self._table = type(self)().name(table)
         else:
             raise Exception('Table slould be instance of Model or str.')
         if alias:
@@ -324,7 +239,7 @@ class Query(object):
         return self._group_by
 
     def having(self, expr=None):
-        """Having. expr should be an instanse of Query."""
+        """Having. expr should be an instanse of QueryBase."""
         if expr is not None:
             self = self.clone()
             self._having = expr
@@ -333,6 +248,9 @@ class Query(object):
 
     def order_by(self, *fields, **kwargs):
         self = self.clone()
+        if kwargs.get('reset', None) is True:
+            del kwargs['reset']
+            self._order_by = []
         for field in fields:
             direction = 'desc' in kwargs and 'DESC' or 'ASC'
             if field[0] == '-':
@@ -347,7 +265,7 @@ class Query(object):
         for i, param in enumerate(params[:]):
             if isinstance(param, (list, tuple)):
                 expr_plhs[i] = '({0})'.format(', '.join([PLACEHOLDER, ] * len(param)))
-            if isinstance(param, Query):  # SubQuery
+            if isinstance(param, QueryBase):  # SubQuery
                 expr_plhs[i] = self.chrender(param)
         expr_final = []
         for pair in zip(expr_parts, expr_plhs):
@@ -358,7 +276,7 @@ class Query(object):
     def flatten_params(self, params):
         flat = []
         for param in params:
-            if isinstance(param, Query):  # SubQuery
+            if isinstance(param, QueryBase):  # SubQuery
                 flat += self.chparams(param)
             elif isinstance(param, (list, tuple)):
                 flat += param
@@ -375,7 +293,7 @@ class Query(object):
 
     def chrender(self, expr, parentheses=True):
         """Renders child"""
-        if isinstance(expr, Query):
+        if isinstance(expr, QueryBase):
             expr.using = self.using
             expr.parent = self
             r = expr.render()
@@ -386,7 +304,7 @@ class Query(object):
 
     def chparams(self, expr):
         """Returns parameters for child"""
-        if isinstance(expr, Query):
+        if isinstance(expr, QueryBase):
             expr.using = self.using
             expr.parent = self
             return expr.params()
@@ -395,7 +313,7 @@ class Query(object):
     def _render_conditions(self, conditions):
         parts = []
         for connector, inversion, expr, params in conditions:
-            if isinstance(expr, Query):  # Nested conditions
+            if isinstance(expr, QueryBase):  # Nested conditions
                 expr = self.chrender(expr)
             if not re.search(r'[ =!<>]', expr, re.S):
                 tpl = self.get_operator(isinstance(params[0], (list, tuple)) and 'in' or 'eq')
@@ -417,11 +335,11 @@ class Query(object):
 
     def render_order_by(self):
         return ', '.join([' '.join([self.chrender(i[0]), i[1]]) for i in self._order_by])
-        
+
     def render_limit(self):
         if len(self._limit):
             return ', '.join(str(i) for i in self._limit)
-        
+
     def render(self, order_by=True, limit=True):
         result = None
         if self._name:
@@ -488,7 +406,7 @@ class Query(object):
         elif self._join_type:
             result += self.chparams(self._table)
             for connector, inversion, expr, expr_params in self._conditions:
-                result += self.chparams(expr) if isinstance(expr, Query) else expr_params
+                result += self.chparams(expr) if isinstance(expr, QueryBase) else expr_params
             for i in self._join_tables:
                 result += self.chparams(i)
 
@@ -499,7 +417,7 @@ class Query(object):
             for i in self._join_tables:
                 result += self.chparams(i)
             for connector, inversion, expr, expr_params in self._conditions:
-                result += self.chparams(expr) if isinstance(expr, Query) else expr_params
+                result += self.chparams(expr) if isinstance(expr, QueryBase) else expr_params
             for i in self._group_by:
                 result += self.chparams(i)
             if self._having is not None:
@@ -509,18 +427,132 @@ class Query(object):
 
         elif self._conditions:
             for connector, inversion, expr, expr_params in self._conditions:
-                    result += self.chparams(expr) if isinstance(expr, Query) else expr_params
+                    result += self.chparams(expr) if isinstance(expr, QueryBase) else expr_params
 
         return result
 
     def params(self):
         return self.flatten_params(self._raw_params())
 
+
+class Query(QueryBase):
+    '''
+    Gives quick access to database by setting attributes (query conditions, et
+    cetera), or by the sql methods.
+    
+    Instance Methods
+    ----------------
+    
+    Creating a Query object requires a Model class at the bare minimum. The 
+    doesn't run until results are pulled using a slice, ``list()`` or iterated
+    over.
+    
+    For example::
+    
+        q = Query(model=MyModel)
+
+    This sets up a basic query without conditions. We can set conditions using
+    the ``filter`` method::
+
+        q.filter(name='John', age=30)
+        q.filter('name = %s AND age=%s', 'John', 30)
+
+    We can also chain the ``filter`` method::
+    
+        q.filter(name='John').filter(age=30)
+
+    In both cases the ``WHERE`` clause will become::
+    
+        WHERE `name` = 'John' AND `age` = 30
+
+    Support JOIN:
+
+        Author.get().table_as('a').join(
+            'INNER JOIN', Book.get().table_as('b').filter('a.id = b.author_id')
+        ).filter(a__id__in=(3,5)).order_by('-a.id')
+        or:
+        Author.get().table_as('a').join(
+            'INNER JOIN', Book.get().table_as('b').filter(a__id=n('b.author_id'))
+        ).filter(a__id__in=(3,5)).order_by('-a.id')
+
+    You can also order using ``order_by`` to sort the results::
+    
+        # The second arg is optional and will default to ``ASC``
+        q.order_by('column', 'DESC')
+    
+    You can limit result sets by slicing the Query instance as if it were a 
+    list. Query is smart enough to translate that into the proper ``LIMIT`` 
+    clause when the query hasn't yet been run::
+    
+        q = Query(model=MyModel).filter(name='John')[:10]   # LIMIT 0, 10
+        q = Query(model=MyModel).filter(name='John')[10:20] # LIMIT 10, 10
+        q = Query(model=MyModel).filter(name='John')[0]    # LIMIT 0, 1
+    
+    Simple iteration::
+    
+        for obj in Query(model=MyModel).filter(name='John'):
+            # Do something here
+    
+    Counting results is easy with the ``count`` method. If used on a ``Query``
+    instance that has not yet retrieve results, it will perform a ``SELECT
+    COUNT(*)`` instead of a ``SELECT *``. ``count`` returns an integer::
+
+        count = Query(model=MyModel).filter=(name='John').count()
+
+    Query(model=MyModel).raw(sql, *params) uses ``raw`` SQL.
+    
+    Class Methods
+    -------------
+    
+    ``Query.raw_sql(sql, params)`` returns a database cursor. Usage::
+    
+        query = 'SELECT * FROM `users` WHERE id = ?'
+        params = (1,) # params must be a tuple or list
+
+        # Now we have the database cursor to use as we wish
+        cursor = Query.raw_sql(query, params)
+    
+    '''
+
+    def quote_name(self, name):
+        return quote_name(name, self.using)
+
+    def _set_table(self, table=None, alias=None, **kwargs):
+        from autumn.models import Model
+        if kwargs:
+            alias, table = kwargs.items()[0]
+        if issubclass(table, Model):
+            self._model = table
+            self._table = type(self)().name(table.Meta.table)
+            if not self.using:
+                self.using = table.using
+        elif isinstance(table, string_types):
+            self._model = None
+            self._table = type(self)().name(table)
+        else:
+            raise Exception('Table slould be instance of Model or str.')
+        if alias:
+            self._table = self._table.as_(alias)
+        return self
+
+    def count(self):
+        self = super(Query, self).count()
+        return type(self).raw_sql(self.render(), self.params(), self.using).fetchone()[0]
+
+    def dialect(self):
+        engine = type(self).get_db(self.using).engine
+        return DIALECTS.get(engine, engine)
+
+    def get_operator(self, key):
+        ops = copy.copy(OPERATORS)
+        ops.update(getattr(type(self).get_db(self.using), 'operators', {}))
+        return ops.get(key, None)
+
     def get_data(self):
         if self._cache is None:
             self._cache = list(self.iterator())
         return self._cache
-        
+
     def iterator(self):
         cursor = self.execute_query()
         fields = [f[0] for f in cursor.description]
@@ -533,20 +565,20 @@ class Query(object):
                 yield obj
             else:
                 yield data
-            
+    
     def execute_query(self):
-        return Query.raw_sql(self.render(), self.params(), self.using)
-        
+        return type(self).raw_sql(self.render(), self.params(), self.using)
+
     @classmethod
     def get_db(cls, using=None):
         if not using:
             using = getattr(cls, 'using', 'default')
         return connections[using]
-        
+
     @classmethod
     def get_cursor(cls, using=None):
         return cls.get_db(using).cursor()
-            
+    
     @classmethod
     def raw_sql(cls, sql, params=(), using=None):
         db = cls.get_db(using)
