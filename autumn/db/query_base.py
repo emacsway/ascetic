@@ -167,7 +167,7 @@ class Query(object):
     def _set_table(self, table=None, alias=None, **kwargs):
         if kwargs:
             alias, table = kwargs.items()[0]
-        if isinstance(string_types):
+        if isinstance(table, string_types):
             self._model = None
             self._table = type(self)().name(table)
         else:
