@@ -363,10 +363,18 @@ class Query(object):
                 flat.append(param)
         return flat
 
+    @property
+    def top_parent(self):
+        current = self
+        while getattr(curent, 'parent', None) is not None:
+            curent = curent.parent
+        return current
+
     def chrender(self, expr, parentheses=True):
         """Renders child"""
         if isinstance(expr, Query):
-            expr.using = self.using    
+            expr.using = self.using
+            expr.parent = self
             r = expr.render()
             if parentheses and expr._alias is None and expr._name is None and expr._join_type is None:
                 r = '({0})'.format(r)
@@ -376,7 +384,8 @@ class Query(object):
     def chparams(self, expr):
         """Returns parameters for child"""
         if isinstance(expr, Query):
-            expr.using = self.using    
+            expr.using = self.using
+            expr.parent = self
             return expr.params()
         return []
 
