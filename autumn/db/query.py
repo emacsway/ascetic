@@ -136,6 +136,7 @@ class Query(object):
         self._conditions = []
         self._order_by = []
         self._group_by = []
+        self._having = None
         self._limit = ()
         self._cache = None
         self._name = None
@@ -319,9 +320,13 @@ class Query(object):
             return self
         return self._group_by
 
-    # TODO: for having use sub-instance of Query(), similar joins, and proxy
-    # having, or_having, having_excl, or_having_excl to self._having.filter(),
-    # self._having.or_filter...
+    def having(self, expr=None):
+        """Having. expr should be an instanse of Query."""
+        if expr is not None:
+            self = self.clone()
+            self._having = expr
+            return self
+        return self._having
 
     def order_by(self, *fields, **kwargs):
         self = self.clone()
@@ -441,6 +446,8 @@ class Query(object):
                 parts += ['WHERE', self.render_conditions()]
             if self._group_by:
                 parts += ['GROUP BY', ', '.join(map(self.chrender, self._group_by))]
+            if self._having is not None:
+                parts += ['HAVING', self.chrender(self._having, False)]
             if order_by and self._order_by:
                 parts += ['ORDER BY', self.render_order_by()]
             if limit and self._limit:
@@ -483,6 +490,8 @@ class Query(object):
                 result += self.chparams(expr) if isinstance(expr, Query) else expr_params
             for i in self._group_by:
                 result += self.chparams(i)
+            if self._having is not None:
+                result += self.chparams(self._having)
             for i in self._order_by:
                 result += self.chparams(i[0])
 
