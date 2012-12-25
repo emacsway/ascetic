@@ -34,6 +34,7 @@ OPERATORS = {
     'contains': '{field} LIKE CONCAT("%", {val}, "%")',
     'icontains': 'LOWER({field}) LIKE LOWER(CONCAT("%", {val}, "%"))',
     # TODO: 'range': '{field} BETWEEN {val0} AND {val1}',
+    # TODO: 'isnull': '{field} IS{inv} NULL',
 }
 DIALECTS = {
     'sqlite3': 'sqlite',
@@ -198,12 +199,16 @@ class Query(object):
         return ops.get(key, None)
 
     def raw(self, sql, *params):
+        if isinstance(sql, Query):
+            return sql
         self = self.reset()
         self._sql = sql
         self._params = params or []
         return self
 
     def name(self, name):
+        if isinstance(name, Query):
+            return name
         self = self.reset()
         self._name = name
         return self
@@ -227,11 +232,14 @@ class Query(object):
         if args:
             self = self.clone()
             args = list(args)
-            if 'reset' in kwargs:
+            if kwargs.get('reset', None) is True:
+                del kwargs['reset']
                 self._fields = []
             if isinstance(args[0], (list, tuple)):
-                self._fields = args.pop(0)
-            self._fields += args
+                self._fields = map(self.name, args.pop(0))
+            self._fields += map(self.name, args)
+            for k, v in kwargs.items():
+                self._fields.append(self.name(v).as_(k))
             return self
         return self._fields
 
