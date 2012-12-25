@@ -611,7 +611,7 @@ class MetaN(type):
     def __getattr__(cls, key):
         if key[0] == '_':
             raise AttributeError
-        return n(key.replace('__', '.'))
+        return n(key.replace(LOOKUP_SEP, '.'))
 
 
 class N(MetaN(bytes("NewBase"), (object, ), {})):
