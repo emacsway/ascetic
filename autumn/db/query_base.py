@@ -94,11 +94,9 @@ class Query(object):
     def get_data(self):
         return []
 
-    def quote_name(self, name):
+    def qn(self, name):
+        """quotes name"""
         return name
-
-    def qn(self, name):  # just a short alias
-        return self.quote_name(name)
 
     def clone(self):
         return copy.deepcopy(self)
@@ -120,15 +118,13 @@ class Query(object):
         self._params = params or []
         return self
 
-    def name(self, name):
+    def n(self, name):
+        """makes DB name"""
         if isinstance(name, Query):
             return name
         self = type(self)()
         self._name = name
         return self
-
-    def n(self, name):  # just a short alias
-        return self.name(name)
 
     def count(self):
         return self.reset().raw(

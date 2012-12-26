@@ -102,7 +102,7 @@ class Query(QueryBase):
 
     '''
 
-    def quote_name(self, name):
+    def qn(self, name):
         return quote_name(name, self.using)
 
     def _set_table(self, table=None, alias=None, **kwargs):
@@ -111,12 +111,12 @@ class Query(QueryBase):
             alias, table = kwargs.items()[0]
         if issubclass(table, Model):
             self._model = table
-            self._table = type(self)().name(table.Meta.table)
+            self._table = type(self)().n(table.Meta.table)
             if not self.using:
                 self.using = table.using
         elif isinstance(table, string_types):
             self._model = None
-            self._table = type(self)().name(table)
+            self._table = type(self)().n(table)
         else:
             raise Exception('Table slould be instance of Model or str.')
         if alias:
