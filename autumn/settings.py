@@ -20,7 +20,8 @@ def send_signal(*a, **kw):
     https://github.com/olivierverdier/dispatch
     and others.
     """
-    print('send signal', a, kw)
+    from autumn import signals
+    return getattr(signals, kw.pop('signal')).send(*a, **kw)
 
 try:
     from autumn_settings import *
