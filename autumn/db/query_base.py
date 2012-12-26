@@ -151,10 +151,10 @@ class Query(object):
                 del kwargs['reset']
                 self._fields = []
             if isinstance(args[0], (list, tuple)):
-                self._fields = map(self.name, args.pop(0))
-            self._fields += map(self.name, args)
+                self._fields = map(self.n, args.pop(0))
+            self._fields += map(self.n, args)
             for k, v in kwargs.items():
-                self._fields.append(self.name(v).as_(k))
+                self._fields.append(self.n(v).as_(k))
             return self
         return self._fields
 
@@ -170,7 +170,7 @@ class Query(object):
             alias, table = kwargs.items()[0]
         if isinstance(table, string_types):
             self._model = None
-            self._table = type(self)().name(table)
+            self._table = type(self)().n(table)
         else:
             raise Exception('Table slould be instance of Model or str.')
         if alias:
@@ -193,7 +193,7 @@ class Query(object):
         return self
 
     def _add_condition(self, conditions, connector, inversion, *args, **kwargs):
-        if args:
+        if args:  # TODO: cotvert string to self.raw() here?
             conditions.append((connector, inversion, args[0], list(args[1:])))
         for k, v in kwargs.items():
             conditions.append((connector, inversion, k, [v, ]))
@@ -223,8 +223,8 @@ class Query(object):
             if 'reset' in kwargs:
                 self._group_by = []
             if isinstance(args[0], (list, tuple)):
-                self._group_by = args.pop(0)
-            self._group_by += args
+                self._group_by = map(self.n, args.pop(0))
+            self._group_by += map(self.n, args)
             return self
         return self._group_by
 
@@ -246,7 +246,7 @@ class Query(object):
             if field[0] == '-':
                 direction = 'DESC'
                 field = field[1:]
-            self._order_by.append([field, direction])
+            self._order_by.append([self.n(field), direction])
         return self
 
     def flatten_expr(self, expr, params):
