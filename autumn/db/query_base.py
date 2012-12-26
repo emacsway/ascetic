@@ -3,6 +3,11 @@ import re
 import copy
 
 try:
+    from autumn import settings
+except ImportError:
+    settings = None
+
+try:
     str = unicode  # Python 2.* compatible
     str_types = ()
     string_types = (basestring,)
@@ -329,13 +334,16 @@ class Query(object):
         if '.' not in f:
             while cur is not None:
                 if cur._table is not None and cur._f_in_model(f):
-                    # We can check here f in self._model.Meta.fields
-                    # result = {'field': f}
-                    # settings.send_signal(signal='field_conversion', sender=self, result=result, field=f, model=self.model)
-                    # f = result['field']
                     f = '.'.join([cur._table._alias or cur._table._name, f])
                     break
                 cur = cur.parent
+        if settings:
+            result = {'field': f}
+            # In signal handler we can obtain Query() instance and take
+            # model from it by field prefix (table name or alias).
+            # We can localize fieldname and return it to result
+            settings.send_signal(signal='field_conversion', sender=self, result=result, field=f)
+            f = result['field']
         return self.qn(f)
 
     def render(self, order_by=True, limit=True, **kwargs):
