@@ -123,6 +123,13 @@ class Query(QueryBase):
             self._table = self._table.as_(alias)
         return self
 
+    def _f_in_model(self, f):
+        if not self._model:
+            return True
+        if f in self._model.Meta.fields:
+            return True
+        return False
+
     def count(self):
         self = super(Query, self).count()
         return type(self).raw_sql(self.render(), self.params(), self.using).fetchone()[0]

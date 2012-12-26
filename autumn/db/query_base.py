@@ -36,7 +36,11 @@ OPERATORS = {
 
 
 class Query(object):
-    """Abstract SQL Builder, can be used without ORM."""
+    """Abstract SQL Builder, can be used without ORM.
+
+    You should mark non-field names as qs.n('name_here').
+    All strings will be converted to DB field.
+    """
     def __init__(self, model=None, using=None):
         self._model = None
         self._distinct = False
@@ -51,6 +55,7 @@ class Query(object):
         self._having = None
         self._limit = ()
         self._cache = None
+        self._field = None
         self._name = None
         self._sql = None
         self._params = []
@@ -102,7 +107,7 @@ class Query(object):
         return copy.deepcopy(self)
 
     def reset(self):
-        return type(self)(model=self._model, using=self.using)
+        return type(self)(self._model, self.using)
 
     def dialect(self):
         return 'postgres'
@@ -114,22 +119,24 @@ class Query(object):
         if isinstance(sql, Query):
             return sql
         self = self.reset()
-        self._sql = sql
-        self._params = params or []
+        self._sql, self._params = sql, params or []
         return self
 
-    def n(self, name):
-        """makes DB name"""
+    def n(self, name, attr='_name'):
+        """Makes DB name"""
         if isinstance(name, Query):
             return name
         self = type(self)()
-        self._name = name
+        setattr(self, attr, name)
         return self
+
+    def f(self, name):
+        """Makes DB field"""
+        return self.n(name, '_field')
 
     def count(self):
         return self.reset().raw(
-            "SELECT COUNT(1) as c FROM %s as t",
-            self.order_by(reset=True)
+            "SELECT COUNT(1) as c FROM %s as t", self.order_by(reset=True)
         )
 
     def distinct(self, val=None):
@@ -141,16 +148,15 @@ class Query(object):
 
     def fields(self, *args, **kwargs):
         if args:
-            self = self.clone()
-            args = list(args)
+            self, args = self.clone(), list(args)
             if kwargs.get('reset', None) is True:
                 del kwargs['reset']
                 self._fields = []
             if isinstance(args[0], (list, tuple)):
-                self._fields = map(self.n, args.pop(0))
-            self._fields += map(self.n, args)
+                self._fields = map(self.f, args.pop(0))
+            self._fields += map(self.f, args)
             for k, v in kwargs.items():
-                self._fields.append(self.n(v).as_(k))
+                self._fields.append(self.f(v).as_(k))
             return self
         return self._fields
 
@@ -174,8 +180,7 @@ class Query(object):
         return self
 
     def table(self, table=None, alias=None, **kwargs):
-        self = self.clone()
-        return self._set_table(table, alias, **kwargs)
+        return self.clone()._set_table(table, alias, **kwargs)
 
     def table_as(self, alias):
         self = self.clone()
@@ -214,13 +219,12 @@ class Query(object):
 
     def group_by(self, *args, **kwargs):
         if args:
-            self = self.clone()
-            args = list(args)
+            self, args = self.clone(), list(args)
             if 'reset' in kwargs:
                 self._group_by = []
             if isinstance(args[0], (list, tuple)):
-                self._group_by = map(self.n, args.pop(0))
-            self._group_by += map(self.n, args)
+                self._group_by = map(self.f, args.pop(0))
+            self._group_by += map(self.f, args)
             return self
         return self._group_by
 
@@ -242,7 +246,7 @@ class Query(object):
             if field[0] == '-':
                 direction = 'DESC'
                 field = field[1:]
-            self._order_by.append([self.n(field), direction])
+            self._order_by.append([self.f(field), direction])
         return self
 
     def flatten_expr(self, expr, params):
@@ -270,20 +274,12 @@ class Query(object):
                 flat.append(param)
         return flat
 
-    @property
-    def top_parent(self):
-        current = self
-        while current.parent is not None:
-            current = current.parent
-        return current
-
     def chrender(self, expr, parentheses=True):
         """Renders child"""
         if isinstance(expr, Query):
-            expr.using = self.using
-            expr.parent = self
+            expr.parent, expr.using = self, self.using
             r = expr.render()
-            if parentheses and expr._alias is None and expr._name is None and expr._join_type is None:
+            if parentheses and not expr._alias and not expr._field  and not expr._name and not expr._join_type:
                 r = '({0})'.format(r)
             return r
         return expr
@@ -291,8 +287,7 @@ class Query(object):
     def chparams(self, expr):
         """Returns parameters for child"""
         if isinstance(expr, Query):
-            expr.using = self.using
-            expr.parent = self
+            expr.parent, expr.using = self, self.using
             return expr.params()
         return []
 
@@ -326,18 +321,29 @@ class Query(object):
         if len(self._limit):
             return ', '.join(str(i) for i in self._limit)
 
-    def chrender_field(self, f):
-        if f._name and '.' not in f._name:
-            f._name = '.'.join([
-                self._table._alias or self._table._name, f._name
-            ])
-        return self.chrender(f)
+    def _f_in_model(self, f):
+        return True
+
+    def render_field(self):
+        f, cur = self._field, self
+        if '.' not in f:
+            while cur is not None:
+                if cur._table is not None and cur._f_in_model(f):
+                    # We can check here f in self._model.Meta.fields
+                    # result = {'field': f}
+                    # settings.send_signal(signal='field_conversion', sender=self, result=result, field=f, model=self.model)
+                    # f = result['field']
+                    f = '.'.join([cur._table._alias or cur._table._name, f])
+                    break
+                cur = cur.parent
+        return self.qn(f)
 
     def render(self, order_by=True, limit=True, **kwargs):
         result = None
-        if self._name:
-            # alias of table can be changed during Query building.
-            # Do not add prefix for columns here
+        if self._field:
+            result = self.render_field()
+
+        elif self._name:
             result = self.qn(self._name)
 
         elif self._sql:
@@ -362,9 +368,9 @@ class Query(object):
             parts += ['SELECT']
             if self._distinct:
                 parts += ['DISTINCT']
-            fields = map(self.chrender_field, self._fields)
+            fields = map(self.chrender, self._fields)
             for t in self._join_tables:
-                fields += map(t.chrender_field, t._fields)
+                fields += map(t.chrender, t._fields)
             if not fields:
                 fields = ['*']
             parts += [', '.join(fields)]
@@ -395,10 +401,7 @@ class Query(object):
 
     def _raw_params(self):
         result = []
-        if self._name:
-            result = []
-
-        elif self._sql:
+        if self._sql:
             result = self._params
 
         elif self._join_type:
