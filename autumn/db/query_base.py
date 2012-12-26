@@ -37,10 +37,10 @@ OPERATORS = {
 
 class Query(object):
     """Abstract SQL Builder, can be used without ORM."""
-    def __init__(self, fields=None, model=None, using=None):
+    def __init__(self, model=None, using=None):
         self._model = None
         self._distinct = False
-        self._fields = fields or ['*']
+        self._fields = []
         self._table = None
         self._alias = None
         self._join_type = None
@@ -54,6 +54,7 @@ class Query(object):
         self._name = None
         self._sql = None
         self._params = []
+        self.parent = None
         self.using = using
         if model:
             self._set_table(model)
@@ -122,7 +123,7 @@ class Query(object):
     def name(self, name):
         if isinstance(name, Query):
             return name
-        self = self.reset()
+        self = type(self)()
         self._name = name
         return self
 
@@ -276,7 +277,7 @@ class Query(object):
     @property
     def top_parent(self):
         current = self
-        while getattr(current, 'parent', None) is not None:
+        while current.parent is not None:
             current = current.parent
         return current
 
@@ -329,7 +330,14 @@ class Query(object):
         if len(self._limit):
             return ', '.join(str(i) for i in self._limit)
 
-    def render(self, order_by=True, limit=True):
+    def chrender_field(self, f):
+        if f._name and '.' not in f._name:
+            f._name = '.'.join([
+                self._table._alias or self._table._name, f._name
+            ])
+        return self.chrender(f)
+
+    def render(self, order_by=True, limit=True, **kwargs):
         result = None
         if self._name:
             # alias of table can be changed during Query building.
@@ -358,7 +366,12 @@ class Query(object):
             parts += ['SELECT']
             if self._distinct:
                 parts += ['DISTINCT']
-            parts += [', '.join(map(self.chrender, self._fields))]
+            fields = map(self.chrender_field, self._fields)
+            for t in self._join_tables:
+                fields += map(t.chrender_field, t._fields)
+            if not fields:
+                fields = ['*']
+            parts += [', '.join(fields)]
             parts += ['FROM', self.chrender(self._table)]
             parts += [self.chrender(t) for t in self._join_tables]
             if self._conditions:
@@ -402,6 +415,9 @@ class Query(object):
         elif self._table is not None:
             for i in self._fields:
                 result += self.chparams(i)
+            for t in self._join_tables:
+                for i in t._fields:
+                    result += self.chparams(i)
             result += self.chparams(self._table)
             for i in self._join_tables:
                 result += self.chparams(i)

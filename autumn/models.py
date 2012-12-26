@@ -74,10 +74,14 @@ class ModelBase(type):
         new_class.Meta.table_safe = quote_name(new_class.Meta.table, using)
         q = Query.raw_sql('SELECT * FROM {0} LIMIT 1'.format(new_class.Meta.table_safe), using=using)
         new_class._fields = new_class.Meta.fields = [f[0] for f in q.description]
-        
+        if not hasattr(new_class, 'qs'):
+            new_class.qs = Query()
+        new_class.qs.using = using
+        new_class.qs = new_class.qs.table(new_class).fields(*new_class._fields)
         cache.add(new_class)
         settings.send_signal(signal='class_prepared', sender=new_class, using=new_class.using)
         return new_class
+
 
 class Model(ModelBase(bytes("NewBase"), (object, ), {})):
     '''
@@ -159,10 +163,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         # Set the order by clause
         m = MyModel.get(field=1).order_by('field', 'DESC')
         # Removing the second argument defaults the order to ASC
-        
     '''
-    
-    debug = False
 
     def __init__(self, *args, **kwargs):
         'Allows setting of fields using kwargs'
@@ -285,7 +286,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         if _obj_pk is not None:
             return cls.get(**{cls.Meta.pk: _obj_pk})[0]
 
-        return Query(model=cls).filter(**kwargs)
+        return cls.qs.filter(**kwargs)
         
         
     class ValidationError(Exception):
