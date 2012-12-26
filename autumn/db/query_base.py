@@ -417,7 +417,7 @@ class Query(object):
                 result += self.chparams(i)
             for t in self._join_tables:
                 for i in t._fields:
-                    result += self.chparams(i)
+                    result += t.chparams(i)
             result += self.chparams(self._table)
             for i in self._join_tables:
                 result += self.chparams(i)
