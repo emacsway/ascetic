@@ -35,8 +35,8 @@ OPERATORS = {
     'iendswith': 'LOWER({field}) LIKE LOWER(CONCAT("%", {val}))',
     'contains': '{field} LIKE CONCAT("%", {val}, "%")',
     'icontains': 'LOWER({field}) LIKE LOWER(CONCAT("%", {val}, "%"))',
-    # TODO: 'range': '{field} BETWEEN {val0} AND {val1}',
-    # TODO: 'isnull': '{field} IS{inv} NULL',
+    'range': '{field} BETWEEN {val} AND {val}',
+    'isnull': '{field} IS {val} NULL',
 }
 
 
@@ -64,6 +64,7 @@ class Query(object):
         self._name = None
         self._sql = None
         self._params = []
+        self._inline = False
         self.parent = None
         self.using = using
         if model:
@@ -114,6 +115,13 @@ class Query(object):
     def reset(self):
         return type(self)(self._model, self.using)
 
+    def inline(self, key=None):
+        if key is not None:
+            self = self.clone()
+            self._inline = key
+            return self
+        return self._inline
+
     def dialect(self):
         return 'postgres'
 
@@ -124,7 +132,7 @@ class Query(object):
         if isinstance(sql, Query):
             return sql
         self = self.reset()
-        self._sql, self._params = sql, params or []
+        self._sql, self._params = sql, params
         return self
 
     def n(self, name, attr='_name'):
@@ -133,7 +141,7 @@ class Query(object):
             return name
         self = type(self)()
         setattr(self, attr, name)
-        return self
+        return self.inline(True)
 
     def f(self, name):
         """Makes DB field"""
@@ -169,7 +177,7 @@ class Query(object):
         if alias is not None:
             self = self.clone()
             self._alias = alias
-            return self
+            return self.inline(True)
         return self._alias
 
     def _set_table(self, table=None, alias=None, **kwargs):
@@ -195,14 +203,21 @@ class Query(object):
     def join(self, join_type, expr):
         self = self.clone()
         expr._join_type = join_type
-        self._join_tables.append(expr)
+        self._join_tables.append(expr.inline(True))
         return self
 
     def _add_condition(self, conditions, connector, inversion, *args, **kwargs):
         if args:  # TODO: cotvert string to self.raw() here?
             conditions.append((connector, inversion, args[0], list(args[1:])))
         for k, v in kwargs.items():
-            conditions.append((connector, inversion, k, [v, ]))
+            op = k.split(LOOKUP_SEP).pop()
+            if op == 'isnull':
+                vs = [self.raw('' if v else 'NOT').inline(True)]
+            elif op == 'range':
+                vs = v
+            else:
+                vs = [v]
+            conditions.append((connector, inversion, k, vs))
         return self
 
     def filter(self, *args, **kwargs):
@@ -237,7 +252,7 @@ class Query(object):
         """Having. expr should be an instanse of Query."""
         if expr is not None:
             self = self.clone()
-            self._having = expr
+            self._having = expr.inline(True)
             return self
         return self._having
 
@@ -279,12 +294,12 @@ class Query(object):
                 flat.append(param)
         return flat
 
-    def chrender(self, expr, parentheses=True):
+    def chrender(self, expr, inline=False):
         """Renders child"""
         if isinstance(expr, Query):
             expr.parent, expr.using = self, self.using
             r = expr.render()
-            if parentheses and not expr._alias and not expr._field  and not expr._name and not expr._join_type:
+            if not (inline or expr.inline()):
                 r = '({0})'.format(r)
             return r
         return expr
@@ -354,7 +369,7 @@ class Query(object):
         elif self._name:
             result = self.qn(self._name)
 
-        elif self._sql:
+        elif self._sql is not None:
             parts = [self._sql]
             if limit and self._limit:
                 parts += ['LIMIT', self.render_limit()]
@@ -389,7 +404,7 @@ class Query(object):
             if self._group_by:
                 parts += ['GROUP BY', ', '.join(map(self.chrender, self._group_by))]
             if self._having is not None:
-                parts += ['HAVING', self.chrender(self._having, False)]
+                parts += ['HAVING', self.chrender(self._having)]
             if order_by and self._order_by:
                 parts += ['ORDER BY', self.render_order_by()]
             if limit and self._limit:
@@ -402,7 +417,7 @@ class Query(object):
         result = self.flatten_expr(result, self._raw_params())
 
         if self._alias:
-            if ' ' in result:
+            if ' ' in result or ',' in result:
                 result = '({0})'.format(result)
             result = ' '.join([result, 'AS', self.qn(self._alias)])
         return result
