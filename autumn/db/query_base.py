@@ -60,6 +60,21 @@ OPERATOR_DIALECTS = {
         'icontains': '{field} LIKE CONCAT("%", {val}, "%")',
     },
 }
+TRANSLATIONS = {
+    'qn': '"',
+    'qv': "'",
+    'eqv': "'",
+}
+TRANSLATION_DIALECTS = {
+    'sqlite': {
+        'qn': '`',
+        'eqv': "\\",
+    },
+    'mysql': {
+        'qn': '`',
+        'eqv': "\\",
+    },
+}
 
 
 class Query(object):
@@ -130,7 +145,9 @@ class Query(object):
 
     def qn(self, name):
         """quotes name"""
-        return name
+        if '.' in name:
+            return '.'.join(map(self.qn, name.split('.')))
+        return '{qn}{v}{qn}'.format(v=name.replace(self.tr('qn'), ''), qn=self.tr('qn'))
 
     def clone(self):
         return copy.deepcopy(self)
@@ -148,10 +165,17 @@ class Query(object):
     def dialect(self):
         return self._dialect
 
-    def get_operator(self, key):
-        ops = copy.copy(OPERATORS)
-        ops.update(OPERATOR_DIALECTS.get(self.dialect(), {}))
-        return ops.get(key, None)
+    def op(self, key):
+        """Returns operator template."""
+        d = copy.copy(OPERATORS)
+        d.update(OPERATOR_DIALECTS.get(self.dialect(), {}))
+        return d.get(key, None)
+
+    def tr(self, key):
+        """Returns translation for dialect."""
+        d = copy.copy(TRANSLATIONS)
+        d.update(TRANSLATION_DIALECTS.get(self.dialect(), {}))
+        return d.get(key, None)
 
     def raw(self, sql, *params):
         if isinstance(sql, Query):
@@ -342,11 +366,11 @@ class Query(object):
             if isinstance(expr, Query):  # Nested conditions
                 expr = self.chrender(expr)
             if not re.search(r'[ =!<>]', expr, re.S):
-                tpl = self.get_operator(isinstance(params[0], (list, tuple)) and 'in' or 'eq')
+                tpl = self.op(isinstance(params[0], (list, tuple)) and 'in' or 'eq')
                 if LOOKUP_SEP in expr:
                     expr_parts = expr.split(LOOKUP_SEP)
-                    if self.get_operator(expr_parts[-1]) is not None:  # TODO: check for expr_parts[-1] is not field name
-                        tpl = self.get_operator(expr_parts.pop())
+                    if self.op(expr_parts[-1]) is not None:  # TODO: check for expr_parts[-1] is not field name
+                        tpl = self.op(expr_parts.pop())
                     expr = '.'.join(expr_parts)
                 expr = tpl.replace('%', '%%').format(field=self.qn(expr), val=PLACEHOLDER)
             if inversion:

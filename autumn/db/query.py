@@ -1,6 +1,5 @@
 from __future__ import absolute_import, unicode_literals
 import copy
-from autumn.db import quote_name
 from autumn.db.connection import connections
 from autumn.db.query_base import Query as QueryBase, OPERATORS, PLACEHOLDER, LOOKUP_SEP
 
@@ -101,10 +100,6 @@ class Query(QueryBase):
         cursor = Query.raw_sql(query, params)
 
     '''
-
-    def qn(self, name):
-        return quote_name(name, self.using)
-
     def _set_table(self, table=None, alias=None, **kwargs):
         from autumn.models import Model
         if kwargs:

@@ -1,13 +1,7 @@
 from __future__ import absolute_import, unicode_literals
-from functools import partial
-from autumn.db.connection import connections
 
 
-def quote_name(name, using='default'):
+def qn(name, using='default'):
     """Quotes DB name"""
-    if '.' in name:
-        return '.'.join(map(partial(quote_name, using=using), name.split('.')))
-    call = getattr(connections[using], 'quote_name', None)
-    if call:
-        return call(name)
-    return '`{0}`'.format(name.replace('`', ''))
+    from .query import Query
+    return Query(using=using).qn(name)

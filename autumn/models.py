@@ -1,7 +1,7 @@
 from __future__ import absolute_import, unicode_literals
 import re
 from .db.query import Query
-from .db import quote_name
+from .db import qn
 from .db.connection import connections
 from .validators import ValidatorChain
 from . import settings
@@ -71,7 +71,7 @@ class ModelBase(type):
             new_class.using = 'default'
         using = new_class.using
         new_class.placeholder = connections[using].placeholder
-        new_class.Meta.table_safe = quote_name(new_class.Meta.table, using)
+        new_class.Meta.table_safe = qn(new_class.Meta.table, using)
         q = Query.raw_sql('SELECT * FROM {0} LIMIT 1'.format(new_class.Meta.table_safe), using=using)
         new_class._fields = new_class.Meta.fields = [f[0] for f in q.description]
         if not hasattr(new_class, 'qs'):
@@ -192,8 +192,8 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
     def _update(self):
         'Uses SQL UPDATE to update record'
         query = 'UPDATE {0} SET '.format(self.Meta.table_safe)
-        query += ', '.join(['{0} = {1}'.format(quote_name(f, self.using), self.placeholder) for f in self._changed])
-        query += ' WHERE {0} = {1} '.format(quote_name(self.Meta.pk, self.using), self.placeholder)
+        query += ', '.join(['{0} = {1}'.format(qn(f, self.using), self.placeholder) for f in self._changed])
+        query += ' WHERE {0} = {1} '.format(qn(self.Meta.pk, self.using), self.placeholder)
         
         params = [getattr(self, f) for f in self._changed]
         params.append(self._get_pk())
@@ -206,7 +206,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         # if pk field is None, we want to auto-create it from lastrowid
         auto_pk = 1 and (self._get_pk() is None) or 0
         fields=[
-            quote_name(f, self.using) for f in self._fields 
+            qn(f, self.using) for f in self._fields 
             if f != self.Meta.pk or not auto_pk
         ]
         query = 'INSERT INTO {0} ({1}) VALUES ({2})'.format(
