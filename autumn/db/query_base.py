@@ -26,17 +26,39 @@ OPERATORS = {
     'gt': '{field} > {val}',
     'gte': '{field} >= {val}',
     'in': '{field} IN {val}',
-    'nin': '{field} NOT IN {val}',
+    'notin': '{field} NOT IN {val}',
     'exact': '{field} LIKE {val}',
-    'iexact': 'LOWER({field}) LIKE LOWER({val})',
+    'iexact': '{field} ILIKE {val}',
     'startswith': '{field} LIKE CONCAT({val}, "%")',
-    'istartswith': 'LOWER({field}) LIKE LOWER(CONCAT({val}, "%"))',
+    'istartswith': '{field} ILIKE CONCAT({val}, "%")',
     'endswith': '{field} LIKE CONCAT("%", {val})',
-    'iendswith': 'LOWER({field}) LIKE LOWER(CONCAT("%", {val}))',
+    'iendswith': '{field} ILIKE CONCAT("%", {val})',
     'contains': '{field} LIKE CONCAT("%", {val}, "%")',
-    'icontains': 'LOWER({field}) LIKE LOWER(CONCAT("%", {val}, "%"))',
+    'icontains': '{field} ILIKE CONCAT("%", {val}, "%")',
     'range': '{field} BETWEEN {val} AND {val}',
     'isnull': '{field} IS {val} NULL',
+}
+OPERATOR_DIALECTS = {
+    'sqlite': {
+        'exact': '{field} GLOB {val}',
+        'iexact': '{field} LIKE {val}',
+        'startswith': '{field} GLOB CONCAT({val}, "%")',
+        'istartswith': '{field} LIKE CONCAT({val}, "%")',
+        'endswith': '{field} GLOB CONCAT("%", {val})',
+        'iendswith': '{field} LIKE CONCAT("%", {val})',
+        'contains': '{field} GLOB CONCAT("%", {val}, "%")',
+        'icontains': '{field} LIKE CONCAT("%", {val}, "%")',
+    },
+    'mysql': {
+        'exact': '{field} LIKE BINARY {val}',
+        'iexact': '{field} LIKE {val}',
+        'startswith': '{field} LIKE BINARY CONCAT({val}, "%")',
+        'istartswith': '{field} LIKE CONCAT({val}, "%")',
+        'endswith': '{field} LIKE BINARY CONCAT("%", {val})',
+        'iendswith': '{field} LIKE CONCAT("%", {val})',
+        'contains': '{field} LIKE BINARY CONCAT("%", {val}, "%")',
+        'icontains': '{field} LIKE CONCAT("%", {val}, "%")',
+    },
 }
 
 
@@ -65,6 +87,7 @@ class Query(object):
         self._sql = None
         self._params = []
         self._inline = False
+        self._dialect = 'postgres'
         self.parent = None
         self.using = using
         if model:
@@ -123,10 +146,12 @@ class Query(object):
         return self._inline
 
     def dialect(self):
-        return 'postgres'
+        return self._dialect
 
     def get_operator(self, key):
-        return OPERATORS.get(key, None)
+        ops = copy.copy(OPERATORS)
+        ops.update(OPERATOR_DIALECTS.get(self.dialect(), {}))
+        return ops.get(key, None)
 
     def raw(self, sql, *params):
         if isinstance(sql, Query):

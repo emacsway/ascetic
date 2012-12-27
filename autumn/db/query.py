@@ -138,11 +138,6 @@ class Query(QueryBase):
         engine = type(self).get_db(self.using).engine
         return DIALECTS.get(engine, engine)
 
-    def get_operator(self, key):
-        ops = copy.copy(OPERATORS)
-        ops.update(getattr(type(self).get_db(self.using), 'operators', {}))
-        return ops.get(key, None)
-
     def get_data(self):
         if self._cache is None:
             self._cache = list(self.iterator())
