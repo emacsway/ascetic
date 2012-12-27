@@ -73,11 +73,11 @@ class ModelBase(type):
         new_class.placeholder = connections[using].placeholder
         new_class.Meta.table_safe = qn(new_class.Meta.table, using)
         q = Query.raw_sql('SELECT * FROM {0} LIMIT 1'.format(new_class.Meta.table_safe), using=using)
-        new_class._fields = new_class.Meta.fields = [f[0] for f in q.description]
+        new_class.Meta.fields = [f[0] for f in q.description]
         if not hasattr(new_class, 'qs'):
             new_class.qs = Query()
         new_class.qs.using = using
-        new_class.qs = new_class.qs.table(new_class).fields(*new_class._fields)
+        new_class.qs = new_class.qs.table(new_class).fields(*new_class.Meta.fields)
         cache.add(new_class)
         settings.send_signal(signal='class_prepared', sender=new_class, using=new_class.using)
         return new_class
@@ -170,14 +170,14 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         self._send_signal(signal='pre_init', args=args, kwargs=kwargs)
         self.__dict__[self.Meta.pk] = None
         self._new_record = True
-        [setattr(self, self._fields[i], arg) for i, arg in enumerate(args)]
+        [setattr(self, self.Meta.fields[i], arg) for i, arg in enumerate(args)]
         [setattr(self, k, v) for k, v in list(kwargs.items())]
         self._changed = set()
         self._send_signal(signal='post_init')
         
     def __setattr__(self, name, value):
         'Records when fields have changed'
-        if name != '_changed' and name in self._fields and hasattr(self, '_changed'):
+        if name != '_changed' and name in self.Meta.fields and hasattr(self, '_changed'):
             self._changed.add(name)
         self.__dict__[name] = value
         
@@ -206,7 +206,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         # if pk field is None, we want to auto-create it from lastrowid
         auto_pk = 1 and (self._get_pk() is None) or 0
         fields=[
-            qn(f, self.using) for f in self._fields 
+            qn(f, self.using) for f in self.Meta.fields 
             if f != self.Meta.pk or not auto_pk
         ]
         query = 'INSERT INTO {0} ({1}) VALUES ({2})'.format(
@@ -214,7 +214,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
                ', '.join(fields),
                ', '.join([self.placeholder] * len(fields) )
         )
-        params = [getattr(self, f, None) for f in self._fields
+        params = [getattr(self, f, None) for f in self.Meta.fields
                if f != self.Meta.pk or not auto_pk]
         cursor = Query.raw_sql(query, params, self.using)
        
