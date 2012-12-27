@@ -138,7 +138,7 @@ class Query(object):
         return iter(self.get_data())
 
     def __repr__(self):
-        return repr(self.get_data())
+        return '{0} {1}'.format(self.render(), self.params())
 
     def get_data(self):
         return []

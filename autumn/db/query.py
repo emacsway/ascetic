@@ -59,7 +59,7 @@ class Query(QueryBase):
         ).filter(a__id__in=(3,5)).order_by('-a.id')
         or:
         Author.get().table_as('a').join(
-            'INNER JOIN', Book.get().table_as('b').filter(a__id=n('b.author_id'))
+            'INNER JOIN', Book.get().table_as('b').filter(a__id=q.f('b.author_id'))
         ).filter(a__id__in=(3,5)).order_by('-a.id')
 
     You can also order using ``order_by`` to sort the results::
@@ -223,17 +223,5 @@ class Query(QueryBase):
             cls.get_db(using).ctx.b_commit = True
         return cursor
 
-
-class MetaN(type):
-    def __getattr__(cls, key):
-        if key[0] == '_':
-            raise AttributeError
-        return n(key.replace(LOOKUP_SEP, '.'))
-
-
-class N(MetaN(bytes("NewBase"), (object, ), {})):
-    pass
-
 Q = Query
 q = Query()
-n = q.n
