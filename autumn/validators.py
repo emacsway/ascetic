@@ -13,13 +13,16 @@ except NameError:
 
 class Validator(object):
     pass
-        
+
+
 class Regex(Validator):        
     def __call__(self, value):
         return bool(self.regex.match(value))
-        
+
+
 class Email(Regex):
     regex = re.compile(r'^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.(?:[A-Z]{2}|com|org|net|gov|mil|biz|info|mobi|name|aero|jobs|museum)$', re.I)
+
 
 class Length(Validator):
     def __init__(self, min_length=1, max_length=None):
@@ -33,6 +36,7 @@ class Length(Validator):
         return (l >= self.min_length) and \
                (self.max_length is None or l <= self.max_length)
 
+
 class Number(Validator):
     def __init__(self, minimum=None, maximum=None):
         if None not in (minimum, maximum):
@@ -44,7 +48,8 @@ class Number(Validator):
         return isinstance(number, integer_types + (float, complex,)) and \
                (self.minimum is None or number >= self.minimum) and \
                (self.maximum is None or number <= self.maximum)
-               
+
+
 class ValidatorChain(object):
     def __init__(self, *validators):
         self.validators = validators

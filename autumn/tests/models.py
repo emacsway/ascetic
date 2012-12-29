@@ -19,4 +19,4 @@ class Book(Model):
     author = ForeignKey(Author)
 
     class Meta:
-        table = 'books'
+        db_table = 'books'

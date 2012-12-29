@@ -51,7 +51,7 @@ We setup our objects like so:
         author = ForeignKey(Author)
 
         class Meta:
-            table = 'books'
+            db_table = 'books'
 
 Now we can create, retrieve, update and delete entries in our database.
 Creation

@@ -106,7 +106,7 @@ class Query(QueryBase):
             alias, table = kwargs.items()[0]
         if issubclass(table, Model):
             self._model = table
-            self._table = type(self)().n(table.Meta.table)
+            self._table = type(self)().n(table._meta.db_table)
             if not self.using:
                 self.using = table.using
         elif isinstance(table, string_types):
@@ -121,7 +121,7 @@ class Query(QueryBase):
     def _f_in_model(self, f):
         if not self._model:
             return True
-        if f in self._model.Meta.fields:
+        if f in self._model._meta.fields:
             return True
         return False
 

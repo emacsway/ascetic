@@ -90,7 +90,7 @@ class Table(smartsql.Table):
 
     def __init__(self, model, *args, **kwargs):
         """Constructor"""
-        super(Table, self).__init__(model.Meta.table, *args, **kwargs)
+        super(Table, self).__init__(model._meta.db_table, *args, **kwargs)
         self.model = model
         self.qs = kwargs.pop('qs', QS(self).fields(self.get_fields()))
         self.qs.base_table = self
@@ -101,7 +101,7 @@ class Table(smartsql.Table):
         if prefix is None:
             prefix = self
         result = []
-        for f in self.model.Meta.fields:
+        for f in self.model._meta.fields:
             result.append(smartsql.Field(f, prefix))
         return result
 

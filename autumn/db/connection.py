@@ -50,6 +50,9 @@ class Database(object):
             return self.reconnect().cursor()
         return cursor
 
+    def last_insert_id(self, cursor):
+        return cursor.lastrowid
+
     @classmethod
     def factory(cls, **kwargs):
         relations = {
@@ -73,6 +76,17 @@ class MySQLDatabase(Database):
     def _connect(self, *args, **kwargs):
         import MySQLdb
         return MySQLdb.connect(**kwargs)
+
+
+class PostgreSQLDatabase(Database):
+
+    def _connect(self, *args, **kwargs):
+        import psycopg2
+        return psycopg2.connect(**kwargs)
+
+    def last_insert_id(self, cursor):
+        cursor.execute("SELECT lastval()")
+        return cursor.fetchone()[0]
 
 for name, conf in DATABASES.items():
     connections[name] = Database.factory(**conf)

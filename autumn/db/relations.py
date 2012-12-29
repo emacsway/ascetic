@@ -1,6 +1,6 @@
 from __future__ import absolute_import, unicode_literals
 from autumn.db.query import Query
-from autumn.models import cache
+from autumn.models import registry
 
 try:
     str = unicode  # Python 2.* compatible
@@ -30,7 +30,7 @@ class Relation(RelationQSMixIn):
     
     def _set_up(self, instance, owner):
         if isinstance(self.model, string_types):
-            self.model = cache.get(self.model)
+            self.model = registry.get(self.model)
 
 
 class ForeignKey(Relation):
@@ -40,8 +40,8 @@ class ForeignKey(Relation):
         if not instance:
             return self.model
         if not self.field:
-            self.field = '{0}_id'.format(self.model.Meta.table.split("_").pop())
-        return self.filter(**{self.model.Meta.pk: getattr(instance, self.field)})[0]
+            self.field = '{0}_id'.format(self.model._meta.db_table.split("_").pop())
+        return self.filter(**{self.model._meta.pk: getattr(instance, self.field)})[0]
 
 
 class OneToMany(Relation):
@@ -51,5 +51,5 @@ class OneToMany(Relation):
         if not instance:
             return self.model
         if not self.field:
-            self.field = '{0}_id'.format(instance.Meta.table.split("_").pop())
-        return self.filter(**{self.field: getattr(instance, instance.Meta.pk)})
+            self.field = '{0}_id'.format(instance._meta.db_table.split("_").pop())
+        return self.filter(**{self.field: getattr(instance, instance._meta.pk)})
