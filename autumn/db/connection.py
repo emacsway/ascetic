@@ -58,6 +58,7 @@ class Database(object):
         relations = {
             'sqlite3': SqliteDatabase,
             'mysql': MySQLDatabase,
+            'postgresql': PostgreSQLDatabase,
         }
         return relations.get(kwargs['engine'])(**kwargs)
 
