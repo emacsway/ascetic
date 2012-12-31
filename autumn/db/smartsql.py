@@ -132,7 +132,7 @@ class QS(smartsql.QS):
         return Query.begin(self.model.using)
 
     def commit(self):
-        return Query.commit(self.using)
+        return Query.commit(self.model.using)
 
 
 class Table(smartsql.Table):
