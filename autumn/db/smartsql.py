@@ -175,6 +175,6 @@ class RelationQSMixIn(object):
         qs = self.get_qs()
         t = self.model.ss
         for fn, param in kw.items():
-            f = getattr(t, fn)
+            f = smartsql.Field(fn, t)
             qs = qs.where(f == param)
         return qs

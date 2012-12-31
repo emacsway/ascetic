@@ -2,7 +2,7 @@ from __future__ import absolute_import, unicode_literals
 import re
 from .db.query import Query, PLACEHOLDER
 from .db import qn
-from .db.smartsql import classproperty, Table
+from .db.smartsql import classproperty, Table, smartsql
 from .validators import ValidatorChain
 from . import settings
 import collections
@@ -298,7 +298,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
 
         qs = cls.qs
         for k, v in kwargs.items():
-            qs = qs.where(getattr(cls.ss, k) == v)
+            qs = qs.where(smartsql.Field(k, cls.ss) == v)
         return qs
 
     class ValidationError(Exception):
