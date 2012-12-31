@@ -54,22 +54,26 @@ class QS(smartsql.QS):
 
     def __len__(self):
         """Returns length or list."""
-        return self.count()
+        self.fill_cache()
+        return len(self._cache)
 
     def count(self):
         """Returns length or list."""
         if self._cache:
             return len(self._cache)
         qs = self.order_by(reset=True)
-        sql = "SELECT COUNT(1) as c FROM ({0}) as t".format(
+        sql = "SELECT COUNT(1) as count_value FROM ({0}) as count_list".format(
             qs.sqlrepr()
         )
         return self._execute(sql, *qs.sqlparams()).fetchone()[0]
 
-    def __iter__(self):
-        """Returns iterator."""
+    def fill_cache(self):
         if self._cache is None:
             self._cache = list(self.iterator())
+
+    def __iter__(self):
+        """Returns iterator."""
+        self.fill_cache()
         return iter(self._cache)
 
     def iterator(self):
