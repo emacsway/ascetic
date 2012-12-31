@@ -1,5 +1,4 @@
 from __future__ import absolute_import, unicode_literals
-import copy
 from threading import local
 from autumn.settings import DATABASES
 
@@ -48,7 +47,6 @@ class Database(object):
             return self.conn.cursor()
         except:
             return self.reconnect().cursor()
-        return cursor
 
     def last_insert_id(self, cursor):
         return cursor.lastrowid

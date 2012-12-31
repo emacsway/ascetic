@@ -2,7 +2,7 @@ from __future__ import absolute_import, unicode_literals
 import re
 from .db.query import Query, PLACEHOLDER
 from .db import qn
-from .db.connection import connections
+from .db.smartsql import classproperty, Table
 from .validators import ValidatorChain
 from . import settings
 import collections
@@ -25,7 +25,7 @@ class ModelRegistry(object):
 
     def get(self, model_name):
         return self.models[model_name]
-   
+
 registry = ModelRegistry()
 
 
@@ -76,10 +76,6 @@ class ModelBase(type):
         if not hasattr(opts, 'pk'):
             opts.pk = 'id'
 
-        if not hasattr(new_cls, 'qs'):
-            new_cls.qs = Query()
-        new_cls.qs.using = new_cls.using
-        new_cls.qs = new_cls.qs.table(new_cls).fields(*opts.fields)
         registry.add(new_cls)
         settings.send_signal(signal='class_prepared', sender=new_cls, using=new_cls.using)
         return new_cls
@@ -121,10 +117,10 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         # Updates database record
         m.save()
 
-        # Deleting removes from the database 
+        # Deleting removes from the database
         m.delete()
 
-        # Purely saving with an improper value, checked against 
+        # Purely saving with an improper value, checked against
         # Model._meta.validations[field_name] will raise Model.ValidationError
         m = MyModel(field=0)
 
@@ -167,6 +163,8 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         # Removing the second argument defaults the order to ASC
     """
 
+    _ss = None
+
     def __init__(self, *args, **kwargs):
         'Allows setting of fields using kwargs'
         self._send_signal(signal='pre_init', args=args, kwargs=kwargs)
@@ -207,19 +205,19 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         # if pk field is set, we want to insert it too
         # if pk field is None, we want to auto-create it from lastrowid
         auto_pk = 1 and (self._get_pk() is None) or 0
-        fields=[
-            qn(f, self.using) for f in self._meta.fields 
+        fields = [
+            qn(f, self.using) for f in self._meta.fields
             if f != self._meta.pk or not auto_pk
         ]
         query = 'INSERT INTO {0} ({1}) VALUES ({2})'.format(
                self._meta.db_table_safe,
                ', '.join(fields),
-               ', '.join([PLACEHOLDER] * len(fields) )
+               ', '.join([PLACEHOLDER] * len(fields))
         )
         params = [getattr(self, f, None) for f in self._meta.fields
                if f != self._meta.pk or not auto_pk]
         cursor = Query.raw_sql(query, params, self.using)
-   
+
         if self._get_pk() is None:
             self._set_pk(Query.get_db(self.using).last_insert_id(cursor))
         return True
@@ -282,14 +280,26 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         })
         return settings.send_signal(*a, **kw)
 
+    @classproperty
+    def ss(cls):
+        if cls._ss is None:
+            cls._ss = Table(cls)
+        return cls._ss
+
+    @classproperty
+    def qs(cls):
+        return cls.ss.qs
+
     @classmethod
     def get(cls, _obj_pk=None, **kwargs):
-        'Returns Query object'
+        'Returns QS object'
         if _obj_pk is not None:
             return cls.get(**{cls._meta.pk: _obj_pk})[0]
 
-        return cls.qs.filter(**kwargs)
-
+        qs = cls.qs
+        for k, v in kwargs.items():
+            qs = qs.where(getattr(cls.ss, k) == v)
+        return qs
 
     class ValidationError(Exception):
         pass

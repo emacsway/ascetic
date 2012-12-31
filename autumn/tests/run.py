@@ -7,20 +7,19 @@ if __name__ == '__main__':
         os.path.dirname(os.path.abspath(__file__))
     )))
 import unittest
-import datetime
 from autumn import validators
 from autumn.db import qn
-from autumn.db.connection import connections
 from autumn.db.query import Query
+from autumn.db.smartsql import QS
 from autumn.models import Model
 from autumn.tests.models import Book, Author
 
 
 class TestModels(unittest.TestCase):
-        
+
     def testmodel(self):
         # Create tables
-        
+
         ### MYSQL ###
         create_sql = {
             'mysql': """
@@ -60,60 +59,60 @@ class TestModels(unittest.TestCase):
         }
         for table in ('autumn_tests_models_author', 'books'):
             Query.raw_sql('DELETE FROM {0}'.format(qn(table)))
-        
+
         # Test Creation
         james = Author(first_name='James', last_name='Joyce')
         james.save()
-        
+
         kurt = Author(first_name='Kurt', last_name='Vonnegut')
         kurt.save()
-        
+
         tom = Author(first_name='Tom', last_name='Robbins')
         tom.save()
-        
+
         Book(title='Ulysses', author_id=james.id).save()
         Book(title='Slaughter-House Five', author_id=kurt.id).save()
         Book(title='Jitterbug Perfume', author_id=tom.id).save()
         slww = Book(title='Still Life with Woodpecker', author_id=tom.id)
         slww.save()
-        
+
         # Test ForeignKey
         self.assertEqual(slww.author.first_name, 'Tom')
-        
+
         # Test OneToMany
         self.assertEqual(len(list(tom.books)), 2)
-        
+
         kid = kurt.id
         del(james, kurt, tom, slww)
-        
+
         # Test retrieval
         b = Book.get(title='Ulysses')[0]
-        
+
         a = Author.get(id=b.author_id)[0]
         self.assertEqual(a.id, b.author_id)
-        
+
         a = Author.get(id=b.id)[:]
         #self.assert_(isinstance(a, list))
-        self.assert_(isinstance(a, Query))
-        
+        self.assert_(isinstance(a, QS))
+
         # Test update
         new_last_name = 'Vonnegut, Jr.'
         a = Author.get(id=kid)[0]
         a.last_name = new_last_name
         a.save()
-        
+
         a = Author.get(kid)
         self.assertEqual(a.last_name, new_last_name)
-        
+
         # Test count
         self.assertEqual(Author.get().count(), 3)
-        
+
         self.assertEqual(len(Book.get()[1:4]), 3)
-        
+
         # Test delete
         a.delete()
         self.assertEqual(Author.get().count(), 2)
-        
+
         # Test validation
         a = Author(first_name='', last_name='Ted')
         try:
@@ -121,44 +120,38 @@ class TestModels(unittest.TestCase):
             raise Exception('Validation not caught')
         except Model.ValidationError:
             pass
-        
+
         # Test defaults
         a.first_name = 'Bill and'
         a.save()
         self.assertEqual(a.bio, 'No bio available')
-        
+
         try:
             Author(first_name='I am a', last_name='BadGuy!').save()
             raise Exception('Validation not caught')
         except Model.ValidationError:
             pass
 
-        # Test smartsql integration
-        try:
-            from autumn.db.smartsql import SMARTSQL_ALIAS, smartsql
-        except ImportError:
-            pass
-        else:
-            print '### Testing for smartsql integration'
-            t = getattr(Author, SMARTSQL_ALIAS)
-            self.assertEqual(
-                t.get_fields(), 
-                ['autumn_tests_models_author.id',
-                 'autumn_tests_models_author.first_name',
-                 'autumn_tests_models_author.last_name',
-                 'autumn_tests_models_author.bio', ]
-            )
+        print '### Testing for smartsql integration'
+        t = Author.ss
+        self.assertEqual(
+            t.get_fields(),
+            ['autumn_tests_models_author.id',
+             'autumn_tests_models_author.first_name',
+             'autumn_tests_models_author.last_name',
+             'autumn_tests_models_author.bio', ]
+        )
 
-            qs = t.qs
-            self.assertEqual(qs.sqlrepr(), "SELECT autumn_tests_models_author.id, autumn_tests_models_author.first_name, autumn_tests_models_author.last_name, autumn_tests_models_author.bio FROM autumn_tests_models_author")
-            self.assertEqual(len(qs), 3)
-            for obj in qs:
-                self.assertTrue(isinstance(obj, Author))
+        qs = t.qs
+        self.assertEqual(qs.sqlrepr(), "SELECT autumn_tests_models_author.id, autumn_tests_models_author.first_name, autumn_tests_models_author.last_name, autumn_tests_models_author.bio FROM autumn_tests_models_author")
+        self.assertEqual(len(qs), 3)
+        for obj in qs:
+            self.assertTrue(isinstance(obj, Author))
 
-            qs = qs.where(t.id == b.author_id)
-            self.assertEqual(qs.sqlrepr(), "SELECT autumn_tests_models_author.id, autumn_tests_models_author.first_name, autumn_tests_models_author.last_name, autumn_tests_models_author.bio FROM autumn_tests_models_author WHERE (autumn_tests_models_author.id = %s)")
-            self.assertEqual(len(qs), 1)
-            self.assertTrue(isinstance(qs[0], Author))
+        qs = qs.where(t.id == b.author_id)
+        self.assertEqual(qs.sqlrepr(), "SELECT autumn_tests_models_author.id, autumn_tests_models_author.first_name, autumn_tests_models_author.last_name, autumn_tests_models_author.bio FROM autumn_tests_models_author WHERE (autumn_tests_models_author.id = %s)")
+        self.assertEqual(len(qs), 1)
+        self.assertTrue(isinstance(qs[0], Author))
 
     def testvalidators(self):
         ev = validators.Email()
@@ -179,6 +172,6 @@ class TestModels(unittest.TestCase):
         assert vc('test@example.com')
         assert not vc('a@a.com')
         assert not vc('asdfasdfasdfasdfasdf')
-        
+
 if __name__ == '__main__':
     unittest.main()

@@ -86,12 +86,14 @@ Creation
 
     ta = Author.ss
     tb = Book.ss
-    qs = tb.qs
+    qs = Book.qs
     object_list = qs.tables(
         qs.tables() & ta.on(tb.author_id == ta.id)
     ).where(
         (ta.first_name != 'James') & (ta.last_name != 'Joyce')
     )[:10]
+
+More info [https://bitbucket.org/evotech/sqlbuilder](https://bitbucket.org/evotech/sqlbuilder)
 
 ### Signals support
 

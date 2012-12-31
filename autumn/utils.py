@@ -1,15 +1,13 @@
 from __future__ import absolute_import, unicode_literals
 
 # Autumn ORM
-from autumn.models import Model
-from autumn.db.relations import ForeignKey, OneToMany
 from autumn.db.query import Query
-from autumn.db.connection import Database
 
 
 """
 Convenience functions for the Autumn ORM.
 """
+
 
 def table_exists(db, table_name):
     """
