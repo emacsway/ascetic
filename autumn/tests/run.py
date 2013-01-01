@@ -76,7 +76,23 @@ class TestModels(unittest.TestCase):
         slww = Book(title='Still Life with Woodpecker', author_id=tom.id)
         slww.save()
 
+        # Test Model.pk getter and setter
+        pk = slww.pk
+        self.assertEqual(slww.pk, slww.id)
+        slww.pk = tom.id
+        self.assertEqual(slww.pk, tom.id)
+        slww.pk = pk
+        self.assertEqual(slww.pk, pk)
+
         # Test ForeignKey
+        self.assertEqual(slww.author.first_name, 'Tom')
+        slww.author = kurt
+        self.assertEqual(slww.author.first_name, 'Kurt')
+        del slww.author
+        self.assertEqual(slww.author, None)
+        slww.author = None
+        self.assertEqual(slww.author, None)
+        slww.author = tom.pk
         self.assertEqual(slww.author.first_name, 'Tom')
 
         # Test OneToMany

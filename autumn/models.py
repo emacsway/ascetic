@@ -177,6 +177,10 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
 
     def __setattr__(self, name, value):
         'Records when fields have changed'
+        cls_attr = getattr(type(self), name, None)
+        if cls_attr is not None:
+            if isinstance(cls_attr, property) or issubclass(cls_attr, Model):
+                return object.__setattr__(self, name, value)
         if name != '_changed' and name in self._meta.fields and hasattr(self, '_changed'):
             self._changed.add(name)
         self.__dict__[name] = value
@@ -188,6 +192,8 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
     def _set_pk(self, value):
         'Sets the primary key'
         return setattr(self, self._meta.pk, value)
+
+    pk = property(_get_pk, _set_pk)
 
     def _update(self):
         'Uses SQL UPDATE to update record'
