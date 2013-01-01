@@ -49,11 +49,12 @@ class ModelBase(type):
 
         new_cls = type.__new__(cls, name, bases, attrs)
 
-        opts = new_cls._meta = ModelOptions()
         if hasattr(new_cls, 'Meta'):
-            for k, v in vars(new_cls.Meta).items():
-                if not k.startswith('_'):
-                    setattr(opts, k, v)
+            class NewOptions(new_cls.Meta, ModelOptions):
+                pass
+        else:
+            NewOptions = ModelOptions
+        opts = new_cls._meta = NewOptions()
 
         if not getattr(opts, 'db_table', None):
             opts.db_table = "_".join([
