@@ -31,18 +31,34 @@ registry = ModelRegistry()
 
 class ModelOptions(object):
     """Model options"""
-    def __init__(self, **kw):
+
+    pk = 'id'
+    using = 'default'
+
+    def __init__(self, model, **kw):
+        """Instance constructor"""
         for k, v in kw:
             setattr(self, k, v)
 
+        self.model = model
+        if not getattr(self, 'db_table', None):
+            self.db_table = "_".join([
+                re.sub(r"[^a-z0-9]", "", i.lower())
+                for i in (self.model.__module__.split(".") + [self.model.__name__, ])
+            ])
+        self.db_table_safe = qn(self.db_table, self.using)
+
+        for k, v in list(getattr(self, 'validations', {}).items()):
+            if isinstance(v, (list, tuple)):
+                self.validations[k] = ValidatorChain(*v)
+
+        # See cursor.description http://www.python.org/dev/peps/pep-0249/
+        q = Query.raw_sql('SELECT * FROM {0} LIMIT 1'.format(self.db_table_safe), using=self.using)
+        self.fields = [f[0] for f in q.description]
+
 
 class ModelBase(type):
-    """Metaclass for Model
-
-    Sets up default table name and primary key
-    Adds fields from table as attributes
-    Creates ValidatorChains as necessary
-    """
+    """Metaclass for Model"""
     def __new__(cls, name, bases, attrs):
         if name in ('Model', 'NewBase', ):
             return super(ModelBase, cls).__new__(cls, name, bases, attrs)
@@ -54,31 +70,10 @@ class ModelBase(type):
                 pass
         else:
             NewOptions = ModelOptions
-        opts = new_cls._meta = NewOptions()
-
-        if not getattr(opts, 'db_table', None):
-            opts.db_table = "_".join([
-                re.sub(r"[^a-z0-9]", "", i.lower())
-                for i in (new_cls.__module__.split(".") + [name, ])
-            ])
-
-        for k, v in list(getattr(opts, 'validations', {}).items()):
-            if isinstance(v, (list, tuple)):
-                opts.validations[k] = ValidatorChain(*v)
-
-        # See cursor.description http://www.python.org/dev/peps/pep-0249/
-        if not hasattr(new_cls, "using"):
-            new_cls.using = 'default'
-        opts.db_table_safe = qn(opts.db_table, new_cls.using)
-
-        q = Query.raw_sql('SELECT * FROM {0} LIMIT 1'.format(opts.db_table_safe), using=new_cls.using)
-        opts.fields = [f[0] for f in q.description]
-
-        if not hasattr(opts, 'pk'):
-            opts.pk = 'id'
+        opts = new_cls._meta = NewOptions(new_cls)
 
         registry.add(new_cls)
-        settings.send_signal(signal='class_prepared', sender=new_cls, using=new_cls.using)
+        settings.send_signal(signal='class_prepared', sender=new_cls, using=new_cls._meta.using)
         return new_cls
 
 
@@ -154,13 +149,13 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
 
         # We can filter our Query
         m = MyModel.get(field=1)
-        m = m.filter(another_field=2)
+        m = m.where(MyModel.ss.another_field=2)
 
         # This is the same as
         m = MyModel.get(field=1, another_field=2)
 
         # Set the order by clause
-        m = MyModel.get(field=1).order_by('field', 'DESC')
+        m = MyModel.get(field=1).order_by('field', desc=True)
         # Removing the second argument defaults the order to ASC
     """
 
@@ -199,13 +194,13 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
     def _update(self):
         'Uses SQL UPDATE to update record'
         query = 'UPDATE {0} SET '.format(self._meta.db_table_safe)
-        query += ', '.join(['{0} = {1}'.format(qn(f, self.using), PLACEHOLDER) for f in self._changed])
-        query += ' WHERE {0} = {1} '.format(qn(self._meta.pk, self.using), PLACEHOLDER)
+        query += ', '.join(['{0} = {1}'.format(qn(f, self._meta.using), PLACEHOLDER) for f in self._changed])
+        query += ' WHERE {0} = {1} '.format(qn(self._meta.pk, self._meta.using), PLACEHOLDER)
 
         params = [getattr(self, f) for f in self._changed]
         params.append(self._get_pk())
 
-        cursor = Query.raw_sql(query, params, self.using)
+        cursor = Query.raw_sql(query, params, self._meta.using)
 
     def _new_save(self):
         'Uses SQL INSERT to create new record'
@@ -213,7 +208,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         # if pk field is None, we want to auto-create it from lastrowid
         auto_pk = 1 and (self._get_pk() is None) or 0
         fields = [
-            qn(f, self.using) for f in self._meta.fields
+            qn(f, self._meta.using) for f in self._meta.fields
             if f != self._meta.pk or not auto_pk
         ]
         query = 'INSERT INTO {0} ({1}) VALUES ({2})'.format(
@@ -223,10 +218,10 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         )
         params = [getattr(self, f, None) for f in self._meta.fields
                if f != self._meta.pk or not auto_pk]
-        cursor = Query.raw_sql(query, params, self.using)
+        cursor = Query.raw_sql(query, params, self._meta.using)
 
         if self._get_pk() is None:
-            self._set_pk(Query.get_db(self.using).last_insert_id(cursor))
+            self._set_pk(Query.get_db(self._meta.using).last_insert_id(cursor))
         return True
 
     def _get_defaults(self):
@@ -242,7 +237,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         self._send_signal(signal='pre_delete')
         query = 'DELETE FROM {0} WHERE {1} = {2}'.format(self._meta.db_table_safe, self._meta.pk, PLACEHOLDER)
         params = [getattr(self, self._meta.pk)]
-        Query.raw_sql(query, params, self.using)
+        Query.raw_sql(query, params, self._meta.using)
         self._send_signal(signal='post_delete')
         return True
 
@@ -283,7 +278,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         kw.update({
             'sender': type(self),
             'instance': self,
-            'using': self.using,
+            'using': self._meta.using,
         })
         return settings.send_signal(*a, **kw)
 

@@ -108,7 +108,7 @@ class QS(smartsql.QS):
         return super(QS, self).__getitem__(key)
 
     def dialect(self):
-        engine = connections[self.model.using].engine
+        engine = connections[self.model._meta.using].engine
         return SMARTSQL_DIALECTS.get(engine, engine)
 
     def sqlrepr(self):
@@ -125,7 +125,7 @@ class QS(smartsql.QS):
             return self._execute(self.sqlrepr(), *self.sqlparams())
 
     def _execute(self, sql, *params):
-        return Query.raw_sql(sql, params, self.model.using)
+        return Query.raw_sql(sql, params, self.model._meta.using)
 
     def result(self):
         """Result"""
@@ -134,10 +134,10 @@ class QS(smartsql.QS):
         return self.execute()
 
     def begin(self):
-        return Query.begin(self.model.using)
+        return Query.begin(self.model._meta.using)
 
     def commit(self):
-        return Query.commit(self.model.using)
+        return Query.commit(self.model._meta.using)
 
 
 class Table(smartsql.Table):
