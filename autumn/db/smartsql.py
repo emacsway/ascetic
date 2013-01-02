@@ -40,6 +40,7 @@ class QS(smartsql.QS):
     """Query Set adapted."""
 
     _cache = None
+    using = 'default'
 
     def raw(self, sql, *params):
         self = self.clone()
@@ -108,7 +109,7 @@ class QS(smartsql.QS):
         return super(QS, self).__getitem__(key)
 
     def dialect(self):
-        engine = connections[self.model._meta.using].engine
+        engine = connections[self.using].engine
         return SMARTSQL_DIALECTS.get(engine, engine)
 
     def sqlrepr(self):
@@ -125,7 +126,7 @@ class QS(smartsql.QS):
             return self._execute(self.sqlrepr(), *self.sqlparams())
 
     def _execute(self, sql, *params):
-        return Query.raw_sql(sql, params, self.model._meta.using)
+        return Query.raw_sql(sql, params, self.using)
 
     def result(self):
         """Result"""
@@ -134,10 +135,10 @@ class QS(smartsql.QS):
         return self.execute()
 
     def begin(self):
-        return Query.begin(self.model._meta.using)
+        return Query.begin(self.using)
 
     def commit(self):
-        return Query.commit(self.model._meta.using)
+        return Query.commit(self.using)
 
 
 class Table(smartsql.Table):
@@ -150,6 +151,7 @@ class Table(smartsql.Table):
         self.qs = kwargs.pop('qs', QS(self).fields(self.get_fields()))
         self.qs.base_table = self
         self.qs.model = self.model
+        self.qs.using = self.model._meta.using
 
     def get_fields(self, prefix=None):
         """Returns field list."""
