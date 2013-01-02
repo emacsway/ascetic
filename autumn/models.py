@@ -41,7 +41,7 @@ class ModelOptions(object):
             setattr(self, k, v)
 
         self.model = model
-        if not getattr(self, 'db_table', None):
+        if not hasattr(self, 'db_table'):
             self.db_table = "_".join([
                 re.sub(r"[^a-z0-9]", "", i.lower())
                 for i in (self.model.__module__.split(".") + [self.model.__name__, ])
@@ -305,10 +305,3 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
 
     class ValidationError(Exception):
         pass
-
-try:
-    from .db.smartsql import smartsql_init
-except ImportError:
-    pass
-else:
-    smartsql_init()
