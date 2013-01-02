@@ -149,7 +149,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
 
         # We can filter our Query
         m = MyModel.get(field=1)
-        m = m.where(MyModel.ss.another_field=2)
+        m = m.where(MyModel.ss.another_field == 2)
 
         # This is the same as
         m = MyModel.get(field=1, another_field=2)
