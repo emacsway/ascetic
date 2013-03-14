@@ -163,12 +163,16 @@ class Table(smartsql.Table):
 
     def __getattr__(self, name):
         """Added some specific functional."""
+        from .relations import ForeignKey
         if name[0] == '_':
             raise AttributeError
         parts = name.split(smartsql.LOOKUP_SEP, 1)
         result = {'field': parts[0], }
         settings.send_signal(signal='field_conversion', sender=self, result=result, field=parts[0], model=self.model)
         parts[0] = result['field']
+        if isinstance(self.model.__dict__.get(parts[0], None), ForeignKey):
+            getattr(self.model, parts[0])  # call ForeignKey.set_up()
+            parts[0] = self.model.__dict__.get(parts[0]).field
         return super(Table, self).__getattr__(smartsql.LOOKUP_SEP.join(parts))
 
 
