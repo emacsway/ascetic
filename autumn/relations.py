@@ -1,6 +1,6 @@
 from __future__ import absolute_import, unicode_literals
 from .smartsql import RelationQSMixIn, smartsql
-from ..models import registry, Model
+from .models import registry, Model
 
 try:
     str = unicode  # Python 2.* compatible

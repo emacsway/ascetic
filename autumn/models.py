@@ -1,8 +1,7 @@
 from __future__ import absolute_import, unicode_literals
 import re
-from .db.query import Query, PLACEHOLDER
-from .db import qn
-from .db.smartsql import classproperty, Table, smartsql
+from .query import Query, PLACEHOLDER
+from .smartsql import classproperty, Table, smartsql, qn
 from .validators import ValidatorChain
 from . import settings
 import collections

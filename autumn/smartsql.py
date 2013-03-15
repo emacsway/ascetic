@@ -4,7 +4,7 @@ sqlbuilder integration, https://bitbucket.org/evotech/sqlbuilder
 
 from __future__ import absolute_import, unicode_literals
 from sqlbuilder import smartsql
-from .. import settings
+from . import settings
 from .query import Query
 from .connection import connections
 
@@ -24,6 +24,11 @@ SMARTSQL_DIALECTS = {
     'postgis': 'postgres',
     'oracle': 'oracle',
 }
+
+
+def qn(name, using='default'):
+    """Quotes DB name"""
+    return name
 
 
 class classproperty(object):

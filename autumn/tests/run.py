@@ -6,11 +6,11 @@ if __name__ == '__main__':
     sys.path.insert(0, os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.abspath(__file__))
     )))
+
 import unittest
 from autumn import validators
-from autumn.db import qn
-from autumn.db.query import Query
-from autumn.db.smartsql import QS
+from autumn.query import Query
+from autumn.smartsql import QS, qn
 from autumn.models import Model
 from autumn.tests.models import Book, Author
 

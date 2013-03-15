@@ -2,6 +2,8 @@ from __future__ import absolute_import, unicode_literals
 from .connection import connections
 from sqlbuilder.smartsql import PLACEHOLDER
 
+# TODO: leagsy file, slould be deleted
+
 try:
     str = unicode  # Python 2.* compatible
     string_types = (basestring,)
