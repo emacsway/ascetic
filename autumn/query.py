@@ -1,5 +1,5 @@
 from __future__ import absolute_import, unicode_literals
-from .connection import connections
+from .connections import connections
 from sqlbuilder.smartsql import PLACEHOLDER
 
 # TODO: leagsy file, slould be deleted

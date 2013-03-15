@@ -6,7 +6,7 @@ from __future__ import absolute_import, unicode_literals
 from sqlbuilder import smartsql
 from . import settings
 from .query import Query
-from .connection import connections
+from .connections import connections
 
 try:
     str = unicode  # Python 2.* compatible
