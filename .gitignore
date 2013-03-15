@@ -1,6 +1,7 @@
 build/
 dist/
 .comments
+.gis
 sqlbuilder
 .ropeproject
 *.pyc
