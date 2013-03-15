@@ -1,11 +1,11 @@
 DATABASES = {
     "default": {
-        'engine': 'mysql',
-        'user': 'devel',
-        'db': 'devel_autumn',
-        'passwd': 'devel',
+        'engine': "mysql",
+        'user': "devel",
+        'db': "devel_autumn",
+        'passwd': "devel",
         'debug': True,
-        'initial_sql': 'SET NAMES UTF8;',
+        'initial_sql': "SET NAMES 'UTF8';",
     }
 }
 
