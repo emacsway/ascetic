@@ -1,21 +1,17 @@
 from __future__ import absolute_import, unicode_literals
-
-# Autumn ORM
-from autumn.db.query import Query
-
-
+from autumn.db.query import execute, executescript, begin, commit
 """
 Convenience functions for the Autumn ORM.
 """
 
 
-def table_exists(db, table_name):
+def table_exists(table_name, using=None):
     """
     Given an Autumn model, check to see if its table exists.
     """
     try:
-        s_sql = "SELECT * FROM {0} LIMIT 1;".format(table_name)
-        Query.raw_sql(s_sql, db=db)
+        sql = "SELECT * FROM {0} LIMIT 1;".format(table_name)
+        execute(sql, using=using)
     except Exception:
         return False
 
@@ -23,21 +19,21 @@ def table_exists(db, table_name):
     return True
 
 
-def create_table(db, s_create_sql):
+def create_table(create_sql, using=None):
     """
     Create a table for an Autumn class.
     """
-    Query.begin(db=db)
-    Query.raw_sqlscript(s_create_sql, db=db)
-    Query.commit(db=db)
+    begin(using=using)
+    executescript(create_sql, using=using)
+    commit(using=using)
 
 
-def create_table_if_needed(db, table_name, s_create_sql):
+def create_table_if_needed(table_name, create_sql, using=None):
     """
     Check to see if an Autumn class has its table created; create if needed.
     """
-    if not table_exists(db, table_name):
-        create_table(db, s_create_sql)
+    if not table_exists(table_name, using=using):
+        create_table(create_sql, using=using)
 
 
 # examples of usage:

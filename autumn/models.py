@@ -1,6 +1,6 @@
 from __future__ import absolute_import, unicode_literals
 import re
-from .query import Query, PLACEHOLDER
+from .query import execute, get_db, PLACEHOLDER
 from .smartsql import classproperty, Table, smartsql, qn
 from .validators import ValidatorChain
 from . import settings
@@ -51,7 +51,7 @@ class ModelOptions(object):
                 self.validations[k] = ValidatorChain(*v)
 
         # See cursor.description http://www.python.org/dev/peps/pep-0249/
-        q = Query.raw_sql('SELECT * FROM {0} LIMIT 1'.format(self.db_table_safe), using=self.using)
+        q = execute('SELECT * FROM {0} LIMIT 1'.format(self.db_table_safe), using=self.using)
         self.fields = [f[0] for f in q.description]
 
 
@@ -128,7 +128,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
             # Do something to fix it here
 
         # Retrieval is simple using Model.get
-        # Returns a Query object that can be sliced
+        # Returns a QS object that can be sliced
         MyModel.get()
 
         # Returns a MyModel object with an id of 7
@@ -145,7 +145,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         for m in MyModel.get():
             # do something here...
 
-        # We can filter our Query
+        # We can filter our QS
         m = MyModel.get(field=1)
         m = m.where(MyModel.ss.another_field == 2)
 
@@ -198,7 +198,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         params = [getattr(self, f) for f in self._changed]
         params.append(self._get_pk())
 
-        cursor = Query.raw_sql(query, params, self._meta.using)
+        cursor = execute(query, params, self._meta.using)
 
     def _new_save(self):
         'Uses SQL INSERT to create new record'
@@ -216,10 +216,10 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         )
         params = [getattr(self, f, None) for f in self._meta.fields
                if f != self._meta.pk or not auto_pk]
-        cursor = Query.raw_sql(query, params, self._meta.using)
+        cursor = execute(query, params, self._meta.using)
 
         if self._get_pk() is None:
-            self._set_pk(Query.get_db(self._meta.using).last_insert_id(cursor))
+            self._set_pk(get_db(self._meta.using).last_insert_id(cursor))
         return True
 
     def _get_defaults(self):
@@ -235,7 +235,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         self._send_signal(signal='pre_delete')
         query = 'DELETE FROM {0} WHERE {1} = {2}'.format(self._meta.db_table_safe, self._meta.pk, PLACEHOLDER)
         params = [getattr(self, self._meta.pk)]
-        Query.raw_sql(query, params, self._meta.using)
+        execute(query, params, self._meta.using)
         self._send_signal(signal='post_delete')
         return True
 

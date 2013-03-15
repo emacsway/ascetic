@@ -1,5 +1,5 @@
 from __future__ import absolute_import, unicode_literals
-from .smartsql import RelationQSMixIn, smartsql
+from .smartsql import RelationQSMixIn
 from .models import registry, Model
 
 try:

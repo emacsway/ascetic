@@ -1,9 +1,8 @@
 from __future__ import absolute_import, unicode_literals
-import re
 from threading import local
-from autumn.settings import DATABASES
+from autumn import settings
 
-connections = {}
+databases = {}
 
 
 class Database(object):
@@ -88,5 +87,5 @@ class PostgreSQLDatabase(Database):
         cursor.execute("SELECT lastval()")
         return cursor.fetchone()[0]
 
-for name, conf in DATABASES.items():
-    connections[name] = Database.factory(**conf)
+for name, conf in settings.DATABASES.items():
+    databases[name] = Database.factory(**conf)

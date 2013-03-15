@@ -1,8 +1,6 @@
 from __future__ import absolute_import, unicode_literals
-from .connections import connections
+from .connections import databases
 from sqlbuilder.smartsql import PLACEHOLDER
-
-# TODO: leagsy file, slould be deleted
 
 try:
     str = unicode  # Python 2.* compatible
@@ -13,73 +11,75 @@ except NameError:
     integer_types = (int,)
 
 
-class Query(object):
+def get_db(using=None):
+    using = using or 'default'
+    return databases[using]
 
-    @classmethod
-    def get_db(cls, using=None):
-        if not using:
-            using = getattr(cls, 'using', 'default')
-        return connections[using]
 
-    @classmethod
-    def get_cursor(cls, using=None):
-        return cls.get_db(using).cursor()
+def get_cursor(using=None):
+    return get_db(using).cursor()
 
-    @classmethod
-    def raw_sql(cls, sql, params=(), using=None):
-        db = cls.get_db(using)
+
+def _execute(attr, sql, params=(), using=None):
+    db = get_db(using)
+    if db.debug:
+        print(sql, params)
+    cursor = get_cursor(using)
+    if db.placeholder != PLACEHOLDER:
+        sql = sql.replace(PLACEHOLDER, db.placeholder)
+    try:
+        getattr(cursor, attr)(sql, params)
+        if db.ctx.b_commit:
+            db.conn.commit()
+    except BaseException as ex:
         if db.debug:
-            print(sql, params)
-        cursor = cls.get_cursor(using)
-        if db.placeholder != PLACEHOLDER:
-            sql = sql.replace(PLACEHOLDER, db.placeholder)
-        try:
-            cursor.execute(sql, params)
-            if db.ctx.b_commit:
-                db.conn.commit()
-        except BaseException as ex:
-            if db.debug:
-                print("raw_sql: exception: ", ex)
-                print("sql:", sql)
-                print("params:", params)
+            print("_execute: exception: ", ex)
+            print("sql:", sql)
+            print("params:", params)
             raise
-        return cursor
+    return cursor
 
-    @classmethod
-    def raw_sqlscript(cls, sql, using=None):
-        db = cls.get_db(using)
-        cursor = cls.get_cursor(using)
-        try:
-            cursor.executescript(sql)
-            if db.ctx.b_commit:
-                db.conn.commit()
-        except BaseException as ex:
-            if db.debug:
-                print("raw_sqlscript: exception: ", ex)
-                print("sql:", sql)
-            raise
-        return cursor
 
-    # begin() and commit() for SQL transaction control
-    # This has only been tested with SQLite3 with default isolation level.
-    # http://www.python.org/doc/2.5/lib/sqlite3-Controlling-Transactions.html
-    @classmethod
-    def begin(cls, using=None):
-        """
-        begin() and commit() let you explicitly specify an SQL transaction.
-        Be sure to call commit() after you call begin().
-        """
-        cls.get_db(using).ctx.b_commit = False
+def execute(sql, params=(), using=None):
+    return _execute('execute', sql, params, using)
 
-    @classmethod
-    def commit(cls, using=None):
-        """
-        begin() and commit() let you explicitly specify an SQL transaction.
-        Be sure to call commit() after you call begin().
-        """
-        cursor = None
-        try:
-            cls.get_db(using).conn.commit()
-        finally:
-            cls.get_db(using).ctx.b_commit = True
-        return cursor
+
+def executemany(sql, params=(), using=None):
+    return _execute('executemany', sql, params, using)
+
+
+def executescript(sql, params=(), using=None):
+    return _execute('executescript', sql, params, using)
+
+
+# begin() and commit() for SQL transaction control
+# This has only been tested with SQLite3 with default isolation level.
+# http://www.python.org/doc/2.5/lib/sqlite3-Controlling-Transactions.html
+def begin(using=None):
+    """
+    begin() and commit() let you explicitly specify an SQL transaction.
+    Be sure to call commit() after you call begin().
+    """
+    get_db(using).ctx.b_commit = False
+
+
+def commit(using=None):
+    """
+    begin() and commit() let you explicitly specify an SQL transaction.
+    Be sure to call commit() after you call begin().
+    """
+    try:
+        get_db(using).conn.commit()
+    finally:
+        get_db(using).ctx.b_commit = True
+
+
+def rollback(using=None):
+    """
+    begin() and rollback() let you explicitly specify an SQL transaction.
+    Be sure to call rollback() after you call begin().
+    """
+    try:
+        get_db(using).conn.rollback()
+    finally:
+        get_db(using).ctx.b_commit = True
