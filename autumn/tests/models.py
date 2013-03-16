@@ -10,7 +10,7 @@ class Author(Model):
     class Meta:
         defaults = {'bio': 'No bio available'}
         validations = {'first_name': validators.Length(),
-                       'last_name': (validators.Length(), lambda x: x != 'BadGuy!')}
+                       'last_name': (validators.Length(), lambda x: x != 'BadGuy!' or 'Bad last name', )}
 
 
 class Book(Model):

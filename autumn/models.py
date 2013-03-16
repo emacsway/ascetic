@@ -2,7 +2,6 @@ from __future__ import absolute_import, unicode_literals
 import re
 from .query import execute, get_db, PLACEHOLDER
 from .smartsql import classproperty, Table, smartsql, qn
-from .validators import ValidatorChain
 from . import settings
 import collections
 
@@ -47,8 +46,8 @@ class ModelOptions(object):
         self.db_table_safe = qn(self.db_table, self.using)
 
         for k, v in list(getattr(self, 'validations', {}).items()):
-            if isinstance(v, (list, tuple)):
-                self.validations[k] = ValidatorChain(*v)
+            if not isinstance(v, (list, tuple)):
+                self.validations[k] = (v, )
 
         # See cursor.description http://www.python.org/dev/peps/pep-0249/
         q = execute('SELECT * FROM {0} LIMIT 1'.format(self.db_table_safe), using=self.using)
@@ -76,91 +75,12 @@ class ModelBase(type):
 
 
 class Model(ModelBase(bytes("NewBase"), (object, ), {})):
-    """
-    Allows for automatic attributes based on table columns.
-
-    Syntax::
-
-        from autumn.model import Model
-        class MyModel(Model):
-            class Meta:
-                # If field is blank, this sets a default value on save
-                defaults = {'field': 1}
-
-                # Each validation must be callable
-                # You may also place validations in a list or tuple which is
-                # automatically converted int a ValidationChain
-                validations = {'field': lambda v: v > 0}
-
-                # Table name is lower-case model name by default
-                # Or we can set the table name
-                table = 'mytable'
-
-        # Create new instance using args based on the order of columns
-        m = MyModel(1, 'A string')
-
-        # Or using kwargs
-        m = MyModel(field=1, text='A string')
-
-        # Saving inserts into the database (assuming it validates [see below])
-        m.save()
-
-        # Updating attributes
-        m.field = 123
-
-        # Updates database record
-        m.save()
-
-        # Deleting removes from the database
-        m.delete()
-
-        # Purely saving with an improper value, checked against
-        # Model._meta.validations[field_name] will raise Model.ValidationError
-        m = MyModel(field=0)
-
-        # 'ValidationError: Improper value "0" for "field"'
-        m.save()
-
-        # Or before saving we can check if it's valid
-        if m.is_valid():
-            m.save()
-        else:
-            # Do something to fix it here
-
-        # Retrieval is simple using Model.get
-        # Returns a QS object that can be sliced
-        MyModel.get()
-
-        # Returns a MyModel object with an id of 7
-        m = MyModel.get(7)
-
-        # Limits the query results using SQL's LIMIT clause
-        # Returns a list of MyModel objects
-        m = MyModel.get()[:5]   # LIMIT 0, 5
-        m = MyModel.get()[10:15] # LIMIT 10, 5
-
-        # We can get all objects by slicing, using list, or iterating
-        m = MyModel.get()[:]
-        m = list(MyModel.get())
-        for m in MyModel.get():
-            # do something here...
-
-        # We can filter our QS
-        m = MyModel.get(field=1)
-        m = m.where(MyModel.ss.another_field == 2)
-
-        # This is the same as
-        m = MyModel.get(field=1, another_field=2)
-
-        # Set the order by clause
-        m = MyModel.get(field=1).order_by('field', desc=True)
-        # Removing the second argument defaults the order to ASC
-    """
+    """Model class"""
 
     _ss = None
 
     def __init__(self, *args, **kwargs):
-        'Allows setting of fields using kwargs'
+        """Allows setting of fields using kwargs"""
         self._send_signal(signal='pre_init', args=args, kwargs=kwargs)
         self.__dict__[self._meta.pk] = None
         self._new_record = True
@@ -168,9 +88,10 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         [setattr(self, k, v) for k, v in list(kwargs.items())]
         self._changed = set()
         self._send_signal(signal='post_init')
+        self._errors = {}
 
     def __setattr__(self, name, value):
-        'Records when fields have changed'
+        """Records when fields have changed"""
         cls_attr = getattr(type(self), name, None)
         if cls_attr is not None:
             if isinstance(cls_attr, property) or issubclass(cls_attr, Model):
@@ -180,17 +101,17 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         self.__dict__[name] = value
 
     def _get_pk(self):
-        'Sets the current value of the primary key'
+        """Sets the current value of the primary key"""
         return getattr(self, self._meta.pk, None)
 
     def _set_pk(self, value):
-        'Sets the primary key'
+        """Sets the primary key"""
         return setattr(self, self._meta.pk, value)
 
     pk = property(_get_pk, _set_pk)
 
     def _update(self):
-        'Uses SQL UPDATE to update record'
+        """Uses SQL UPDATE to update record"""
         query = 'UPDATE {0} SET '.format(self._meta.db_table_safe)
         query += ', '.join(['{0} = {1}'.format(qn(f, self._meta.using), PLACEHOLDER) for f in self._changed])
         query += ' WHERE {0} = {1} '.format(qn(self._meta.pk, self._meta.using), PLACEHOLDER)
@@ -201,7 +122,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         cursor = execute(query, params, self._meta.using)
 
     def _new_save(self):
-        'Uses SQL INSERT to create new record'
+        """Uses SQL INSERT to create new record"""
         # if pk field is set, we want to insert it too
         # if pk field is None, we want to auto-create it from lastrowid
         auto_pk = 1 and (self._get_pk() is None) or 0
@@ -223,7 +144,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         return True
 
     def _get_defaults(self):
-        'Sets attribute defaults based on ``defaults`` dict'
+        """Sets attribute defaults based on ``defaults`` dict"""
         for k, v in list(getattr(self._meta, 'defaults', {}).items()):
             if not getattr(self, k, None):
                 if isinstance(v, collections.Callable):
@@ -231,7 +152,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
                 setattr(self, k, v)
 
     def delete(self):
-        'Deletes record from database'
+        """Deletes record from database"""
         self._send_signal(signal='pre_delete')
         query = 'DELETE FROM {0} WHERE {1} = {2}'.format(self._meta.db_table_safe, self._meta.pk, PLACEHOLDER)
         params = [getattr(self, self._meta.pk)]
@@ -240,25 +161,34 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         return True
 
     def is_valid(self):
-        'Returns boolean on whether all ``validations`` pass'
-        try:
-            self._validate()
-            return True
-        except Model.ValidationError:
-            return False
+        """Returns boolean on whether all ``validations`` pass"""
+        self._validate()
+        return not self._errors
 
     def _validate(self):
-        'Tests all ``validations``, raises ``Model.ValidationError``'
-        for k, v in list(getattr(self._meta, 'validations', {}).items()):
-            assert isinstance(v, collections.Callable), 'The validator must be callable'
-            value = getattr(self, k)
-            if not v(value):
-                raise Model.ValidationError('Improper value "{0}" for "{1}"'.format(value, k))
+        """Tests all ``validations``"""
+        self._errors = {}
+        for key, validators in list(getattr(self._meta, 'validations', {}).items()):
+            for validator in validators:
+                assert isinstance(validator, collections.Callable), 'The validator must be callable'
+                value = getattr(self, key)
+                if key == '__model__':
+                    valid_or_msg = validator(self)
+                else:
+                    try:
+                        valid_or_msg = validator(self, key, value)
+                    except TypeError:
+                        valid_or_msg = validator(value)
+                if valid_or_msg is not True:
+                    self._errors.setdefault(key, []).append(
+                        valid_or_msg or 'Improper value "{0}" for "{1}"'.format(value, key)
+                    )
 
     def save(self):
-        'Sets defaults, validates and inserts into or updates database'
+        """Sets defaults, validates and inserts into or updates database"""
         self._get_defaults()
-        self._validate()
+        if not self.is_valid():
+            raise self.ValidationError("Invalid data!")
         created = self._new_record
         update_fields = self._changed
         self._send_signal(signal='pre_save', update_fields=update_fields)

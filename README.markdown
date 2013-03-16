@@ -6,6 +6,7 @@ It’s an alternative to [SQLObject](http://www.sqlobject.org/),
 [SQLAlchemy](http://www.sqlalchemy.org/), [Storm](https://storm.canonical.com/),
 etc. Perhaps the biggest difference is the automatic population of fields as
 attributes (see the example below).
+Autumn as small as possible.
 
 It is released under the MIT License (see LICENSE file for details).
 
@@ -46,7 +47,10 @@ We setup our objects like so:
 
         class Meta:
             defaults = {'bio': 'No bio available'}
-            validations = {'first_name': lambda self, v: len(v) > 1}
+            validations = {'first_name': (
+                lambda v: len(v) > 1 or "Too short first name",
+                lambda self, key, value: value != self.last_name or "Please, enter another first name",
+            )}
 
     class Book(Model):
         author = ForeignKey(Author)
