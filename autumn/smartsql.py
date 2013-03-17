@@ -178,6 +178,8 @@ class Table(smartsql.Table):
         result = {'field': parts[0], }
         settings.send_signal(signal='field_conversion', sender=self, result=result, field=parts[0], model=self.model)
         parts[0] = result['field']
+        if parts[0] == 'pk':
+            parts[0] = self.model._meta.pk
         if isinstance(self.model.__dict__.get(parts[0], None), ForeignKey):
             getattr(self.model, parts[0])  # call ForeignKey.set_up()
             parts[0] = self.model.__dict__.get(parts[0]).field

@@ -156,9 +156,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
     def delete(self):
         """Deletes record from database"""
         self._send_signal(signal='pre_delete')
-        query = 'DELETE FROM {0} WHERE {1} = {2}'.format(self._meta.db_table_safe, self._meta.pk, PLACEHOLDER)
-        params = [getattr(self, self._meta.pk)]
-        get_db(self._meta.using).execute(query, params)
+        type(self).qs.where(type(self).ss.pk == self.pk).delete()
         self._send_signal(signal='post_delete')
         return True
 
