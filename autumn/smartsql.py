@@ -27,7 +27,8 @@ SMARTSQL_DIALECTS = {
 
 def qn(name, using='default'):
     """Quotes DB name"""
-    return name
+    engine = get_db(using).engine
+    return smartsql.qn(name, SMARTSQL_DIALECTS.get(engine, engine))
 
 
 class classproperty(object):

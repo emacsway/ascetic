@@ -1,5 +1,5 @@
 DATABASES = {
-    "default": {
+    'default': {
         'engine': "mysql",
         'user': "devel",
         'db': "devel_autumn",

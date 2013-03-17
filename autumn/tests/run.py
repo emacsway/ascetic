@@ -17,6 +17,8 @@ from autumn.tests.models import Book, Author
 
 class TestModels(unittest.TestCase):
 
+    maxDiff = None
+
     def testmodel(self):
         # Create tables
 
@@ -159,13 +161,13 @@ class TestModels(unittest.TestCase):
         )
 
         qs = t.qs
-        self.assertEqual(qs.sqlrepr(), "SELECT autumn_tests_models_author.id, autumn_tests_models_author.first_name, autumn_tests_models_author.last_name, autumn_tests_models_author.bio FROM autumn_tests_models_author")
+        self.assertEqual(qs.sqlrepr(), "SELECT `autumn_tests_models_author`.`id`, `autumn_tests_models_author`.`first_name`, `autumn_tests_models_author`.`last_name`, `autumn_tests_models_author`.`bio` FROM `autumn_tests_models_author`")
         self.assertEqual(len(qs), 3)
         for obj in qs:
             self.assertTrue(isinstance(obj, Author))
 
         qs = qs.where(t.id == b.author_id)
-        self.assertEqual(qs.sqlrepr(), "SELECT autumn_tests_models_author.id, autumn_tests_models_author.first_name, autumn_tests_models_author.last_name, autumn_tests_models_author.bio FROM autumn_tests_models_author WHERE (autumn_tests_models_author.id = %s)")
+        self.assertEqual(qs.sqlrepr(), "SELECT `autumn_tests_models_author`.`id`, `autumn_tests_models_author`.`first_name`, `autumn_tests_models_author`.`last_name`, `autumn_tests_models_author`.`bio` FROM `autumn_tests_models_author` WHERE (`autumn_tests_models_author`.`id` = %s)")
         self.assertEqual(len(qs), 1)
         self.assertTrue(isinstance(qs[0], Author))
 
