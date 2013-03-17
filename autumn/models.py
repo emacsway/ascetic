@@ -2,7 +2,7 @@ from __future__ import absolute_import, unicode_literals
 import re
 import collections
 from . import settings
-from .connections import get_db, PLACEHOLDER
+from .connections import get_db
 from .smartsql import classproperty, Table, smartsql, qn
 
 try:
@@ -43,7 +43,6 @@ class ModelOptions(object):
                 re.sub(r"[^a-z0-9]", "", i.lower())
                 for i in (self.model.__module__.split(".") + [self.model.__name__, ])
             ])
-        self.db_table_safe = qn(self.db_table, self.using)
 
         for k, v in list(getattr(self, 'validations', {}).items()):
             if not isinstance(v, (list, tuple)):
@@ -51,7 +50,7 @@ class ModelOptions(object):
 
         # See cursor.description http://www.python.org/dev/peps/pep-0249/
         q = get_db(self.using).execute(
-            'SELECT * FROM {0} LIMIT 1'.format(self.db_table_safe)
+            'SELECT * FROM {0} LIMIT 1'.format(qn(self.db_table))
         )
         self.fields = [f[0] for f in q.description]
 
@@ -112,32 +111,6 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
 
     pk = property(_get_pk, _set_pk)
 
-    def _update(self):
-        """Uses SQL UPDATE to update record"""
-        query = 'UPDATE {0} SET '.format(self._meta.db_table_safe)
-        query += ', '.join(['{0} = {1}'.format(qn(f, self._meta.using), PLACEHOLDER) for f in self._changed])
-        query += ' WHERE {0} = {1} '.format(qn(self._meta.pk, self._meta.using), PLACEHOLDER)
-
-        params = [getattr(self, f) for f in self._changed]
-        params.append(self._get_pk())
-
-        cursor = get_db(self._meta.using).execute(query, params)
-
-    def _new_save(self):
-        """Uses SQL INSERT to create new record"""
-        # if pk field is set, we want to insert it too
-        # if pk field is None, we want to auto-create it from lastrowid
-        auto_pk = self._get_pk() is None
-        fields = [f for f in self._meta.fields
-                  if f != self._meta.pk or not auto_pk]
-        params = [getattr(self, f, None) for f in self._meta.fields
-                  if f != self._meta.pk or not auto_pk]
-        cursor = type(self).qs.insert(dict(zip(fields, params)))
-
-        if self._get_pk() is None:
-            self._set_pk(get_db(self._meta.using).last_insert_id(cursor))
-        return True
-
     def _get_defaults(self):
         """Sets attribute defaults based on ``defaults`` dict"""
         for k, v in list(getattr(self._meta, 'defaults', {}).items()):
@@ -145,13 +118,6 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
                 if isinstance(v, collections.Callable):
                     v = v()
                 setattr(self, k, v)
-
-    def delete(self):
-        """Deletes record from database"""
-        self._send_signal(signal='pre_delete')
-        type(self).qs.where(type(self).ss.pk == self.pk).delete()
-        self._send_signal(signal='post_delete')
-        return True
 
     def is_valid(self):
         """Returns boolean on whether all ``validations`` pass"""
@@ -186,13 +152,38 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         update_fields = self._changed
         self._send_signal(signal='pre_save', update_fields=update_fields)
         if self._new_record:
-            self._new_save()
+            self._insert()
             self._new_record = False
             result = True
         else:
             result = self._update()
         self._send_signal(signal='post_save', created=created, update_fields=update_fields)
         return result
+
+    def _insert(self):
+        """Uses SQL INSERT to create new record"""
+        auto_pk = self._get_pk() is None
+        fields = [f for f in self._meta.fields
+                  if f != self._meta.pk or not auto_pk]
+        params = [getattr(self, f, None) for f in self._meta.fields
+                  if f != self._meta.pk or not auto_pk]
+        cursor = type(self).qs.insert(dict(zip(fields, params)))
+
+        if self._get_pk() is None:
+            self._set_pk(get_db(self._meta.using).last_insert_id(cursor))
+        return True
+
+    def _update(self):
+        """Uses SQL UPDATE to update record"""
+        params = [getattr(self, f) for f in self._changed]
+        type(self).qs.where(type(self).ss.pk == self.pk).update(dict(zip(self._changed, params)))
+
+    def delete(self):
+        """Deletes record from database"""
+        self._send_signal(signal='pre_delete')
+        type(self).qs.where(type(self).ss.pk == self.pk).delete()
+        self._send_signal(signal='post_delete')
+        return True
 
     def _send_signal(self, *a, **kw):
         """Sends signal"""
