@@ -2,6 +2,8 @@ from __future__ import absolute_import, unicode_literals
 from threading import local
 from autumn import settings
 
+PLACEHOLDER = '%s'
+
 databases = {}
 
 
@@ -15,7 +17,8 @@ class Database(object):
         self.initial_sql = kwargs.pop('initial_sql', '')
         self._conf = kwargs
         self.ctx = local()
-        self.ctx.b_commit = True
+        self.ctx.autocommit = True
+        self.ctx.begin_level = 0
 
     def _connect(self, *args, **kwargs):
         raise NotImplementedError
@@ -33,7 +36,7 @@ class Database(object):
             self.conn.cursor().execute(self.initial_sql)
         return self.ctx.conn
 
-    def query(self, sql, params=()):
+    def _execute(self, sql, params=()):
         try:
             cursor = self.conn.cursor()
             cursor.execute(sql, params)
@@ -41,6 +44,24 @@ class Database(object):
             cursor = self.reconnect().cursor()
             cursor.execute(sql, params)
         return cursor
+
+    def execute(self, sql, params=(), using=None):
+        if self.debug:
+            print(sql, params)
+        if self.placeholder != PLACEHOLDER:
+            sql = sql.replace(PLACEHOLDER, self.placeholder)
+        try:
+            cursor = self._execute(sql, params)
+            if self.get_autocommit() and self.ctx.begin_level == 0:
+                self.commit()
+        except BaseException as ex:
+            if self.debug:
+                print("_execute: exception: ", ex)
+                print("sql:", sql)
+                print("params:", params)
+                raise
+        else:
+            return cursor
 
     def cursor(self):
         try:
@@ -50,6 +71,30 @@ class Database(object):
 
     def last_insert_id(self, cursor):
         return cursor.lastrowid
+
+    def get_autocommit(self):
+        return self.ctx.autocommit
+
+    def set_autocommit(self, autocommit=True):
+        self.ctx.autocommit = autocommit
+        return self
+
+    def begin(self):
+        self.ctx.begin_level += 1
+
+    def commit(self):
+        try:
+            self.conn.commit()
+        finally:
+            if self.ctx.begin_level > 0:
+                self.ctx.begin_level -= 1
+
+    def rollback(self):
+        try:
+            self.conn.rollback()
+        finally:
+            if self.ctx.begin_level > 0:
+                self.ctx.begin_level -= 1
 
     @classmethod
     def factory(cls, **kwargs):
@@ -86,6 +131,11 @@ class PostgreSQLDatabase(Database):
     def last_insert_id(self, cursor):
         cursor.execute("SELECT lastval()")
         return cursor.fetchone()[0]
+
+
+def get_db(using=None):
+    return databases[using or 'default']
+
 
 for name, conf in settings.DATABASES.items():
     databases[name] = Database.factory(**conf)

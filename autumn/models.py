@@ -1,9 +1,9 @@
 from __future__ import absolute_import, unicode_literals
 import re
-from .query import execute, get_db, PLACEHOLDER
-from .smartsql import classproperty, Table, smartsql, qn
-from . import settings
 import collections
+from . import settings
+from .connections import get_db, PLACEHOLDER
+from .smartsql import classproperty, Table, smartsql, qn
 
 try:
     str = unicode  # Python 2.* compatible
@@ -50,7 +50,9 @@ class ModelOptions(object):
                 self.validations[k] = (v, )
 
         # See cursor.description http://www.python.org/dev/peps/pep-0249/
-        q = execute('SELECT * FROM {0} LIMIT 1'.format(self.db_table_safe), using=self.using)
+        q = get_db(self.using).execute(
+            'SELECT * FROM {0} LIMIT 1'.format(self.db_table_safe)
+        )
         self.fields = [f[0] for f in q.description]
 
 
@@ -119,7 +121,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         params = [getattr(self, f) for f in self._changed]
         params.append(self._get_pk())
 
-        cursor = execute(query, params, self._meta.using)
+        cursor = get_db(self._meta.using).execute(query, params)
 
     def _new_save(self):
         """Uses SQL INSERT to create new record"""
@@ -137,7 +139,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         )
         params = [getattr(self, f, None) for f in self._meta.fields
                if f != self._meta.pk or not auto_pk]
-        cursor = execute(query, params, self._meta.using)
+        cursor = get_db(self._meta.using).execute(query, params)
 
         if self._get_pk() is None:
             self._set_pk(get_db(self._meta.using).last_insert_id(cursor))
@@ -156,7 +158,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         self._send_signal(signal='pre_delete')
         query = 'DELETE FROM {0} WHERE {1} = {2}'.format(self._meta.db_table_safe, self._meta.pk, PLACEHOLDER)
         params = [getattr(self, self._meta.pk)]
-        execute(query, params, self._meta.using)
+        get_db(self._meta.using).execute(query, params)
         self._send_signal(signal='post_delete')
         return True
 

@@ -5,7 +5,7 @@ sqlbuilder integration, https://bitbucket.org/evotech/sqlbuilder
 from __future__ import absolute_import, unicode_literals
 from sqlbuilder import smartsql
 from . import settings
-from .query import get_db, execute, begin, commit, rollback
+from .connections import get_db
 
 try:
     str = unicode  # Python 2.* compatible
@@ -130,7 +130,7 @@ class QS(smartsql.QS):
             return self._execute(self.sqlrepr(), *self.sqlparams())
 
     def _execute(self, sql, *params):
-        return execute(sql, params, self.using)
+        return get_db(self.using).execute(sql, params)
 
     def result(self):
         """Result"""
@@ -139,13 +139,13 @@ class QS(smartsql.QS):
         return self.execute()
 
     def begin(self):
-        return begin(self.using)
+        return get_db(self.using).begin()
 
     def commit(self):
-        return commit(self.using)
+        return get_db(self.using).commit()
 
     def rollback(self):
-        return rollback(self.using)
+        return get_db(self.using).rollback()
 
 
 class Table(smartsql.Table):

@@ -9,7 +9,7 @@ if __name__ == '__main__':
 
 import unittest
 from autumn import validators
-from autumn.query import execute
+from autumn.connections import get_db
 from autumn.smartsql import QS, qn
 from autumn.models import Model
 from autumn.tests.models import Book, Author
@@ -60,7 +60,7 @@ class TestModels(unittest.TestCase):
             """
         }
         for table in ('autumn_tests_models_author', 'books'):
-            execute('DELETE FROM {0}'.format(qn(table)))
+            get_db().execute('DELETE FROM {0}'.format(qn(table)))
 
         # Test Creation
         james = Author(first_name='James', last_name='Joyce')
