@@ -127,19 +127,12 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         """Uses SQL INSERT to create new record"""
         # if pk field is set, we want to insert it too
         # if pk field is None, we want to auto-create it from lastrowid
-        auto_pk = 1 and (self._get_pk() is None) or 0
-        fields = [
-            qn(f, self._meta.using) for f in self._meta.fields
-            if f != self._meta.pk or not auto_pk
-        ]
-        query = 'INSERT INTO {0} ({1}) VALUES ({2})'.format(
-               self._meta.db_table_safe,
-               ', '.join(fields),
-               ', '.join([PLACEHOLDER] * len(fields))
-        )
+        auto_pk = self._get_pk() is None
+        fields = [f for f in self._meta.fields
+                  if f != self._meta.pk or not auto_pk]
         params = [getattr(self, f, None) for f in self._meta.fields
-               if f != self._meta.pk or not auto_pk]
-        cursor = get_db(self._meta.using).execute(query, params)
+                  if f != self._meta.pk or not auto_pk]
+        cursor = type(self).qs.insert(dict(zip(fields, params)))
 
         if self._get_pk() is None:
             self._set_pk(get_db(self._meta.using).last_insert_id(cursor))
