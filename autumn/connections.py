@@ -4,6 +4,7 @@ from autumn import settings
 
 PLACEHOLDER = '%s'
 
+# TODO: thread safe dict emulating?
 databases = {}
 
 
