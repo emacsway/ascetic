@@ -10,6 +10,8 @@ DATABASES = {
     }
 }
 
+DEBUG = True
+
 
 def send_signal(*a, **kw):
     """Send signal abstract function. You should to override it.

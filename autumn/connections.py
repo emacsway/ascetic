@@ -1,4 +1,5 @@
 from __future__ import absolute_import, unicode_literals
+import logging
 from threading import local
 from autumn import settings
 
@@ -17,6 +18,8 @@ class Database(object):
     placeholder = '%s'
 
     def __init__(self, **kwargs):
+        self.using = kwargs.pop('using')
+        self.logger = logging.getLogger('.'.join((__name__, self.using)))
         self.engine = kwargs.pop('engine')
         self.debug = kwargs.pop('debug', False)
         self.initial_sql = kwargs.pop('initial_sql', '')
@@ -53,19 +56,17 @@ class Database(object):
 
     def execute(self, sql, params=(), using=None):
         if self.debug:
-            print(sql, params)
+            self.logger.debug("%s - %s", sql, params)
         if self.placeholder != PLACEHOLDER:
             sql = sql.replace(PLACEHOLDER, self.placeholder)
         try:
             cursor = self._execute(sql, params)
             if self.get_autocommit() and self.ctx.begin_level == 0:
                 self.commit()
-        except BaseException as ex:
+        except BaseException as e:
             if self.debug:
-                print("_execute: exception: ", ex)
-                print("sql:", sql)
-                print("params:", params)
-                raise
+                self.logger.exception(e)
+            raise
         else:
             return cursor
 
@@ -126,24 +127,18 @@ class DjangoDatabase(Database):
 
     def __init__(self, **kwargs):
         self.django_using = kwargs.pop('django_using')
-        self.debug = kwargs.pop('debug', False)
-        self.initial_sql = kwargs.pop('initial_sql', '')
-        self.thread_safe = kwargs.pop('thread_safe', True)
-        self._conf = kwargs
-        self.ctx = local() if self.thread_safe else DummyCtx()
-        self.ctx.autocommit = True
-        self.ctx.begin_level = 0
+        super(DjangoDatabase, self).__init__(**kwargs)
+        self.engine = self.django_engine()
+
+    def django_engine(self):
+        return self.DJANGO_ENGINES.get(
+            self.django_conn.settings_dict['ENGINE'].rsplit('.')[-1]
+        )
 
     @property
     def django_conn(self):
         from django.db import connections
         return connections[self.django_using]
-
-    @property
-    def engine(self):
-        return self.DJANGO_ENGINES.get(
-            self.django_conn.settings_dict['ENGINE'].rsplit('.')[-1]
-        )
 
     @property
     def conn(self):
@@ -194,4 +189,4 @@ def get_db(using=None):
 
 
 for name, conf in settings.DATABASES.items():
-    databases[name] = Database.factory(**conf)
+    databases[name] = Database.factory(using=name, **conf)
