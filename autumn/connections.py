@@ -102,8 +102,57 @@ class Database(object):
             'sqlite3': SqliteDatabase,
             'mysql': MySQLDatabase,
             'postgresql': PostgreSQLDatabase,
+            'django': DjangoDatabase,
         }
         return relations.get(kwargs['engine'])(**kwargs)
+
+
+class DjangoDatabase(Database):
+
+    DJANGO_ENGINES = {
+        'sqlite3': 'sqlite3',
+        'mysql': 'mysql',
+        'postgresql': 'postgres',
+        'postgresql_psycopg2': 'postgres',
+        'postgis': 'postgres',
+        'oracle': 'oracle',
+    }
+
+    def __init__(self, **kwargs):
+        self.django_using = kwargs.pop('django_using')
+        self.debug = kwargs.pop('debug', False)
+        self.initial_sql = kwargs.pop('initial_sql', '')
+        self._conf = kwargs
+        self.ctx = local()
+        self.ctx.autocommit = True
+        self.ctx.begin_level = 0
+
+    @property
+    def django_conn(self):
+        from django.db import connections
+        return connections[self.django_using]
+
+    @property
+    def engine(self):
+        return self.DJANGO_ENGINES.get(
+            self.django_conn.settings_dict['ENGINE'].rsplit('.')[-1]
+        )
+
+    @property
+    def conn(self):
+        self.django_conn.ensure_connection()
+        return self.django_conn.connection
+
+    def cursor(self):
+        return self.django_conn.cursor()
+
+    def get_autocommit(self):
+        from django.db.transaction import get_autocommit
+        return get_autocommit(self.django_using)
+
+    def set_autocommit(self, autocommit=True):
+        from django.db.transaction import set_autocommit
+        return set_autocommit(autocommit, self.django_using)
 
 
 class SqliteDatabase(Database):
