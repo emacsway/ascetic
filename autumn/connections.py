@@ -7,6 +7,10 @@ PLACEHOLDER = '%s'
 databases = {}
 
 
+class DummyCtx(object):
+    pass
+
+
 class Database(object):
 
     placeholder = '%s'
@@ -15,8 +19,9 @@ class Database(object):
         self.engine = kwargs.pop('engine')
         self.debug = kwargs.pop('debug', False)
         self.initial_sql = kwargs.pop('initial_sql', '')
+        self.thread_safe = kwargs.pop('thread_safe', True)
         self._conf = kwargs
-        self.ctx = local()
+        self.ctx = local() if self.thread_safe else DummyCtx()
         self.ctx.autocommit = True
         self.ctx.begin_level = 0
 
@@ -122,8 +127,9 @@ class DjangoDatabase(Database):
         self.django_using = kwargs.pop('django_using')
         self.debug = kwargs.pop('debug', False)
         self.initial_sql = kwargs.pop('initial_sql', '')
+        self.thread_safe = kwargs.pop('thread_safe', True)
         self._conf = kwargs
-        self.ctx = local()
+        self.ctx = local() if self.thread_safe else DummyCtx()
         self.ctx.autocommit = True
         self.ctx.begin_level = 0
 

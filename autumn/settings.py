@@ -6,6 +6,7 @@ DATABASES = {
         'passwd': "devel",
         'debug': True,
         'initial_sql': "SET NAMES 'UTF8';",
+        'thread_safe': True,
     }
 }
 
