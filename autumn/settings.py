@@ -10,6 +10,18 @@ DATABASES = {
     }
 }
 
+DATABASES = {
+    'default': {
+        'engine': "postgresql",
+        'user': "devel",
+        'database': "devel_autumn",
+        'password': "devel",
+        'debug': True,
+        'initial_sql': "SET NAMES 'UTF8';",
+        'thread_safe': True,
+    }
+}
+
 DEBUG = True
 
 
