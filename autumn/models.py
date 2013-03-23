@@ -184,6 +184,10 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
     def delete(self):
         """Deletes record from database"""
         self._send_signal(signal='pre_delete')
+        for key, rel in type(self).__dict__.items():
+            if isinstance(rel, OneToMany):
+                for child in getattr(self, key).iterator():
+                    rel.on_delete(self, child, rel)
         type(self).qs.where(type(self).ss.pk == self.pk).delete()
         self._send_signal(signal='post_delete')
         return True
@@ -220,3 +224,6 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
 
     class ValidationError(Exception):
         pass
+
+
+from .relations import OneToMany

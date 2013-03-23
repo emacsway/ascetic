@@ -1,8 +1,8 @@
 """
 sqlbuilder integration, https://bitbucket.org/evotech/sqlbuilder
 """
-
 from __future__ import absolute_import, unicode_literals
+import collections
 from sqlbuilder import smartsql
 from . import settings
 from .connections import get_db
@@ -189,7 +189,12 @@ class Table(smartsql.Table):
 class RelationQSMixIn(object):
 
     def get_qs(self):
-        return self.qs and self.qs.clone() or self.model.ss.qs.clone()
+        if isinstance(self.qs, collections.Callable):
+            return self.qs(self.model)
+        elif self.qs:
+            return self.qs.clone()
+        else:
+            return self.model.ss.qs.clone()
 
     def filter(self, *a, **kw):
         qs = self.get_qs()

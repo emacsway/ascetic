@@ -11,6 +11,19 @@ except NameError:
     integer_types = (int,)
 
 
+def cascade(parent, child, rel):
+    child.delete()
+
+
+def set_null(parent, child, rel):
+    setattr(child, rel.field, None)
+    child.save()
+
+
+def do_nothing(parent, child, rel):
+    pass
+
+
 class Relation(RelationQSMixIn):
 
     def __init__(self, model, field=None, qs=None):
@@ -21,6 +34,7 @@ class Relation(RelationQSMixIn):
     def set_up(self, instance, owner=None):
         if isinstance(self.model, string_types):
             self.model = registry.get(self.model)
+        self.owner = owner
 
     def set_field(self, model):
         if self.field is None and model:
@@ -61,6 +75,10 @@ class ForeignKey(Relation):
 
 
 class OneToMany(Relation):
+
+    def __init__(self, model, field=None, qs=None, on_delete=cascade):
+        self.on_delete = on_delete
+        super(OneToMany, self).__init__(model, field, qs)
 
     def set_up(self, instance, owner=None):
         super(OneToMany, self).set_up(instance, owner)
