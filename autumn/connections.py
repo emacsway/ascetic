@@ -109,31 +109,19 @@ class Database(object):
             'sqlite3': SqliteDatabase,
             'mysql': MySQLDatabase,
             'postgresql': PostgreSQLDatabase,
-            'django': DjangoDatabase,
         }
-        return relations.get(kwargs['engine'])(**kwargs)
+        Cls = relations.get(kwargs['engine'])
+        if 'django_using' in kwargs:
+            class Cls(DjangoMixin, Cls):
+                pass
+        return Cls(**kwargs)
 
 
-class DjangoDatabase(Database):
-
-    DJANGO_ENGINES = {
-        'sqlite3': 'sqlite3',
-        'mysql': 'mysql',
-        'postgresql': 'postgres',
-        'postgresql_psycopg2': 'postgres',
-        'postgis': 'postgres',
-        'oracle': 'oracle',
-    }
+class DjangoMixin(object):
 
     def __init__(self, **kwargs):
         self.django_using = kwargs.pop('django_using')
-        super(DjangoDatabase, self).__init__(**kwargs)
-        self.engine = self.django_engine()
-
-    def django_engine(self):
-        return self.DJANGO_ENGINES.get(
-            self.django_conn.settings_dict['ENGINE'].rsplit('.')[-1]
-        )
+        super(DjangoMixin, self).__init__(**kwargs)
 
     @property
     def django_conn(self):
