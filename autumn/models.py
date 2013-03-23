@@ -49,10 +49,13 @@ class ModelOptions(object):
                 self.validations[k] = (v, )
 
         # See cursor.description http://www.python.org/dev/peps/pep-0249/
-        q = get_db(self.using).execute(
+        db = get_db(self.using)
+        q = db.execute(
             'SELECT * FROM {0} LIMIT 1'.format(qn(self.db_table))
         )
         self.fields = [f[0] for f in q.description]
+        if hasattr(db, 'describe_table'):
+            self.schema = db.describe_table(self.db_table)
 
 
 class ModelBase(type):

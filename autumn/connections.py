@@ -171,6 +171,25 @@ class PostgreSQLDatabase(Database):
         cursor.execute("SELECT lastval()")
         return cursor.fetchone()[0]
 
+    def describe_table(self, table_name):
+        cursor = self.execute("""
+            SELECT * FROM information_schema.columns WHERE table_name = %s;
+        """, [table_name])
+        fields = [f[0] for f in cursor.description]
+        schema = {}
+        for row in cursor.fetchall():
+            data = dict(list(zip(fields, row)))
+            col = {
+                'name': data['column_name'],
+                'position': data['ordinal_position'],
+                'type': data['udt_name'],
+                'data_type': data['data_type'],
+                'null': data['is_nullable'].upper() == 'YES',
+                'max_length': data['character_maximum_length'],
+            }
+            schema[col['name']] = col
+        return schema
+
 
 def get_db(using=None):
     return databases[using or 'default']
