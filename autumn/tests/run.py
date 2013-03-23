@@ -166,13 +166,28 @@ class TestModels(unittest.TestCase):
 
         print '### Testing for smartsql integration'
         t = Author.ss
-        self.assertEqual(
-            t.get_fields(),
-            ['autumn_tests_models_author.id',
-             'autumn_tests_models_author.first_name',
-             'autumn_tests_models_author.last_name',
-             'autumn_tests_models_author.bio', ]
-        )
+        fields = [t.qs.sqlrepr(i) for i in t.get_fields()]
+        if get_db().engine == 'postgresql':
+            self.assertListEqual(
+                fields,
+                ['"autumn_tests_models_author"."id"',
+                 '"autumn_tests_models_author"."first_name"',
+                 '"autumn_tests_models_author"."last_name"',
+                 '"autumn_tests_models_author"."bio"' ]
+            )
+        else:
+            self.assertListEqual(
+                fields,
+                ['`autumn_tests_models_author`.`id`',
+                 '`autumn_tests_models_author`.`first_name`',
+                 '`autumn_tests_models_author`.`last_name`',
+                 '`autumn_tests_models_author`.`bio`', ]
+            )
+
+        if get_db().engine == 'postgresql':
+            self.assertEqual(Book.ss.author, '"book"."author_id"')
+        else:
+            self.assertEqual(Book.ss.author, '`book`.`author_id`')
 
         qs = t.qs
         if get_db().engine == 'postgresql':
