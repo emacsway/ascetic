@@ -171,7 +171,7 @@ class Table(smartsql.Table):
 
     def __getattr__(self, name):
         """Added some specific functional."""
-        from .relations import ForeignKey
+        from . import relations
         if name[0] == '_':
             raise AttributeError
         parts = name.split(smartsql.LOOKUP_SEP, 1)
@@ -180,26 +180,6 @@ class Table(smartsql.Table):
         parts[0] = result['field']
         if parts[0] == 'pk':
             parts[0] = self.model._meta.pk
-        if isinstance(self.model.__dict__.get(parts[0], None), ForeignKey):
-            getattr(self.model, parts[0])  # call ForeignKey.set_up()
-            parts[0] = self.model.__dict__.get(parts[0]).field
+        if isinstance(self.model._meta.relations.get(parts[0], None), relations.ForeignKey):
+            parts[0] = self.model._meta.relations.get(parts[0]).field
         return super(Table, self).__getattr__(smartsql.LOOKUP_SEP.join(parts))
-
-
-class RelationQSMixIn(object):
-
-    def get_qs(self):
-        if isinstance(self.qs, collections.Callable):
-            return self.qs(self.model)
-        elif self.qs:
-            return self.qs.clone()
-        else:
-            return self.model.ss.qs.clone()
-
-    def filter(self, *a, **kw):
-        qs = self.get_qs()
-        t = self.model.ss
-        for fn, param in kw.items():
-            f = smartsql.Field(fn, t)
-            qs = qs.where(f == param)
-        return qs

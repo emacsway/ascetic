@@ -34,6 +34,8 @@ class ModelOptions(object):
 
     def __init__(self, model, **kw):
         """Instance constructor"""
+        self.relations = {}
+
         for k, v in kw:
             setattr(self, k, v)
 
@@ -72,6 +74,10 @@ class ModelBase(type):
         else:
             NewOptions = ModelOptions
         opts = new_cls._meta = NewOptions(new_cls)
+
+        for key, rel in new_cls.__dict__.items():
+            if isinstance(rel, relations.Relation):
+                rel.add_to_class(new_cls, key)
 
         registry.add(new_cls)
         settings.send_signal(signal='class_prepared', sender=new_cls, using=new_cls._meta.using)
@@ -184,8 +190,8 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
     def delete(self):
         """Deletes record from database"""
         self._send_signal(signal='pre_delete')
-        for key, rel in type(self).__dict__.items():
-            if isinstance(rel, OneToMany):
+        for key, rel in self._meta.relations.items():
+            if isinstance(rel, relations.OneToMany):
                 for child in getattr(self, key).iterator():
                     rel.on_delete(self, child, rel)
         type(self).qs.where(type(self).ss.pk == self.pk).delete()
@@ -226,4 +232,4 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         pass
 
 
-from .relations import OneToMany
+from . import relations
