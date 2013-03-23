@@ -79,6 +79,12 @@ class ModelBase(type):
             if isinstance(rel, relations.Relation):
                 rel.add_to_class(new_cls, key)
 
+        for b in bases:
+            if not hasattr(b, '_meta'):
+                continue
+            base_meta = getattr(b, '_meta')
+            # TODO: inheritable options
+
         registry.add(new_cls)
         settings.send_signal(signal='class_prepared', sender=new_cls, using=new_cls._meta.using)
         return new_cls
