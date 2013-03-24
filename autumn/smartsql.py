@@ -102,7 +102,8 @@ class QS(smartsql.QS):
             fields.append(fn)
 
         if self.prefix_result:
-            # TODO: variant init_fields = ((model1, model_field_list1), (model2, model_field_list2), ...)?
+            # TODO: variant init_fields = ((alias1, model1, model_field_list1), (alias2, model2, model_field_list2), ...)?
+            # returns (instance of model1, instance of model2, another instance of model2, ...)
             init_fields = self.get_init_fields()
             if len(fields) == len(init_fields):
                 fields = init_fields
