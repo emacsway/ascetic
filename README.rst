@@ -130,5 +130,5 @@ Signals support
 Gratitude
 ==========
 
-Forked from `https://github.com/lucky/autumn <https://github.com/lucky/autumn>`_
-Thanks to `Jared Kuolt (lucky) <https://github.com/lucky>`_
+| Forked from `https://github.com/lucky/autumn <https://github.com/lucky/autumn>`_.
+| Thanks to `Jared Kuolt (lucky) <https://github.com/lucky>`_
