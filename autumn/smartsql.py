@@ -2,7 +2,6 @@
 sqlbuilder integration, https://bitbucket.org/evotech/sqlbuilder
 """
 from __future__ import absolute_import, unicode_literals
-import collections
 from sqlbuilder import smartsql
 from . import settings
 from .connections import get_db
@@ -91,7 +90,21 @@ class QS(smartsql.QS):
             cursor = self._execute(sql, *self._params)
         else:
             cursor = self._execute(self.sqlrepr(), *self.sqlparams())
-        fields = [f[0] for f in cursor.description]
+
+        fields = []
+        for f in cursor.description:
+            fn = f[0]
+            c = 2
+            while fn in fields:
+                fn = fn + str(2)
+                c += 1
+            fields.append(fn)
+
+        init_fields = self.get_init_fields()
+
+        if len(fields) == len(init_fields):
+            fields = init_fields
+
         for row in cursor.fetchall():
             data = dict(list(zip(fields, row)))
             if self.model:
@@ -101,6 +114,17 @@ class QS(smartsql.QS):
                 yield obj
             else:
                 yield data
+
+    def get_init_fields(self):
+        """Returns list of fields what was passed to query."""
+        init_fields = []
+        for f in self._fields:
+            if isinstance(f, smartsql.F):
+                if isinstance(f._prefix, Table) and f._prefix.model == self.model:
+                    init_fields.append(f._name)
+                    continue
+            init_fields.append('__'.join(self.sqlrepr(f).replace('`', '').replace('"', '').split('.')))
+        return init_fields
 
     def __getitem__(self, key):
         """Returns sliced self or item."""
@@ -147,6 +171,18 @@ class QS(smartsql.QS):
     def rollback(self):
         return get_db(self.using).rollback()
 
+    def as_union(self):
+        return UnionQuerySet(self)
+
+
+class UnionQuerySet(smartsql.UnionQuerySet, QS):
+    """Union query class"""
+    def __init__(self, qs):
+        super(UnionQuerySet, self).__init__(qs)
+        self.model = qs.model
+        self.using = qs.using
+        self.base_table = qs.base_table
+
 
 class Table(smartsql.Table):
     """Table class"""
@@ -183,3 +219,13 @@ class Table(smartsql.Table):
         if isinstance(self.model._meta.relations.get(parts[0], None), relations.ForeignKey):
             parts[0] = self.model._meta.relations.get(parts[0]).field
         return super(Table, self).__getattr__(smartsql.LOOKUP_SEP.join(parts))
+
+    def as_(self, alias):
+        return TableAlias(alias, self)
+
+
+class TableAlias(smartsql.TableAlias, Table):
+    """Table alias class"""
+    @property
+    def model(self):
+        return self.table.model
