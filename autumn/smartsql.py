@@ -104,6 +104,7 @@ class QS(smartsql.QS):
         if self.prefix_result:
             # TODO: variant init_fields = ((alias1, model1, model_field_list1), (alias2, model2, model_field_list2), ...)?
             # returns (instance of model1, instance of model2, another instance of model2, ...)
+            # How about fields from sub-select (not from table), that has not model?
             init_fields = self.get_init_fields()
             if len(fields) == len(init_fields):
                 fields = init_fields
