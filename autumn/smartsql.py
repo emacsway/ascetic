@@ -44,6 +44,7 @@ class QS(smartsql.QS):
 
     _cache = None
     prefix_result = False
+    model = None
     using = 'default'
 
     def raw(self, sql, *params):
