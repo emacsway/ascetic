@@ -8,6 +8,7 @@ setup(
     version='0.6.1',
 
     packages = find_packages(),
+    include_package_data=True,
 
     author="Ivan Zakrevsky",
     author_email="ivzak@yandex.ru",
