@@ -1,9 +1,11 @@
-# Autumn, a Python ORM
+=====================
+Autumn, a Python ORM
+=====================
 
-Autumn exists as a super-lightweight Object-relational mapper (ORM) for Python.  
-Autumn ORM follows the [KISS principle](http://en.wikipedia.org/wiki/KISS_principle).  
-It’s an alternative to [SQLObject](http://www.sqlobject.org/),
-[SQLAlchemy](http://www.sqlalchemy.org/), [Storm](https://storm.canonical.com/),
+Autumn exists as a super-lightweight Object-relational mapper (ORM) for Python.
+Autumn ORM follows the `KISS principle <http://en.wikipedia.org/wiki/KISS_principle>`_.
+It’s an alternative to `SQLObject <http://www.sqlobject.org/>`_,
+`SQLAlchemy <http://www.sqlalchemy.org/>`_, `Storm <https://storm.canonical.com/>`_,
 etc. Perhaps the biggest difference is the automatic population of fields as
 attributes (see the example below).
 Autumn as small as possible.
@@ -12,31 +14,31 @@ It is released under the MIT License (see LICENSE file for details).
 
 This project is currently considered beta software.
 
-## MySQL Example
+PostgreSQL Example
+===================
 
 Using these tables:
 
-    DROP TABLE IF EXISTS author;
-    CREATE TABLE author (
-        id INT(11) NOT NULL auto_increment,
+::
+
+    CREATE TABLE autumn_tests_models_author (
+        id serial NOT NULL PRIMARY KEY,
         first_name VARCHAR(40) NOT NULL,
         last_name VARCHAR(40) NOT NULL,
-        bio TEXT,
-        PRIMARY KEY (id)
+        bio TEXT
     );
-    DROP TABLE IF EXISTS books;
     CREATE TABLE books (
-        id INT(11) NOT NULL auto_increment,
+        id serial NOT NULL PRIMARY KEY,
         title VARCHAR(255),
-        author_id INT(11),
-        FOREIGN KEY (author_id) REFERENCES author(id),
-        PRIMARY KEY (id)
+        author_id integer REFERENCES autumn_tests_models_author(id) ON DELETE CASCADE
     );
 
 Put in your PYTHONPATH file autumn_settings.py with your settings.
 See file autumn/settings.py for more details.
 
 We setup our objects like so:
+
+::
 
     from autumn.model import Model
     from autumn.db.relations import ForeignKey, OneToMany
@@ -61,13 +63,17 @@ We setup our objects like so:
 Now we can create, retrieve, update and delete entries in our database.
 Creation
 
+::
+
     james = Author(first_name='James', last_name='Joyce')
     james.save()
 
     u = Book(title='Ulysses', author_id=james.id)
     u.save()
 
-### Retrieval
+Retrieval
+==========
+::
 
     a = Author.get(1)
     a.first_name # James
@@ -77,17 +83,24 @@ Creation
     a = Author.get()[:10]   # LIMIT 0, 10
     a = Author.get()[20:30] # LIMIT 20, 10
 
-### Updating
+Updating
+=========
+
+::
 
     a = Author.get(1)
     a.bio = 'What a crazy guy! Hard to read but... wow!'
     a.save()
 
-### Deleting
+Deleting
+=========
+
+::
 
     a.delete()
 
-### [SQLBuilder](https://bitbucket.org/evotech/sqlbuilder) integration
+`SQLBuilder <https://bitbucket.org/evotech/sqlbuilder>`_ integration
+=====================================================================
 
     ta = Author.ss
     tb = Book.ss
@@ -98,9 +111,10 @@ Creation
         (ta.first_name != 'James') & (ta.last_name != 'Joyce')
     )[:10]
 
-More info [https://bitbucket.org/evotech/sqlbuilder](https://bitbucket.org/evotech/sqlbuilder)
+More info `https://bitbucket.org/evotech/sqlbuilder <https://bitbucket.org/evotech/sqlbuilder>`_
 
-### Signals support
+Signals support
+================
 
 * pre_init
 * post_init
@@ -110,7 +124,8 @@ More info [https://bitbucket.org/evotech/sqlbuilder](https://bitbucket.org/evote
 * post_delete
 * class_prepared
 
-###  Gratitude
+Gratitude
+==========
 
-Forked from [https://github.com/lucky/autumn](https://github.com/lucky/autumn)  
-Thanks to [Jared Kuolt (lucky)](https://github.com/lucky)
+Forked from `https://github.com/lucky/autumn <https://github.com/lucky/autumn>`_
+Thanks to `Jared Kuolt (lucky) <https://github.com/lucky>`_
