@@ -1,5 +1,6 @@
 build/
 dist/
+autumn2.egg-info/
 .comments
 .gis
 sqlbuilder
