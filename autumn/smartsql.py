@@ -43,6 +43,7 @@ class QS(smartsql.QS):
     """Query Set adapted."""
 
     _cache = None
+    prefix_result = False
     using = 'default'
 
     def raw(self, sql, *params):
@@ -100,10 +101,11 @@ class QS(smartsql.QS):
                 c += 1
             fields.append(fn)
 
-        init_fields = self.get_init_fields()
-
-        if len(fields) == len(init_fields):
-            fields = init_fields
+        if self.prefix_result:
+            # TODO: variant init_fields = ((model1, model_field_list1), (model2, model_field_list2), ...)?
+            init_fields = self.get_init_fields()
+            if len(fields) == len(init_fields):
+                fields = init_fields
 
         for row in cursor.fetchall():
             data = dict(list(zip(fields, row)))
