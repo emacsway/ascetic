@@ -2,7 +2,7 @@ from __future__ import absolute_import, unicode_literals
 import logging
 from autumn import settings
 
-__copyright__ = 'Copyright (c) 2008 Jared Kuolt'
+__copyright__ = 'Copyright (c) 2012 - 2013 Ivan Zakrevsky, Jared Kuolt and contributors'
 
 version = (0, 5, 1, )
 version_string = "Autumn ORM version {0:d}.{1:d}.{2:d}".format(*version)
