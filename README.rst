@@ -73,6 +73,7 @@ Creation
 
 Retrieval
 ==========
+
 ::
 
     a = Author.get(1)
@@ -101,6 +102,8 @@ Deleting
 
 `SQLBuilder <https://bitbucket.org/evotech/sqlbuilder>`_ integration
 =====================================================================
+
+::
 
     ta = Author.ss
     tb = Book.ss
