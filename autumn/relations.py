@@ -37,6 +37,7 @@ class Relation(object):
         self.model = model_class
         self.name = name
         self.model._meta.relations[name] = self
+        setattr(self.model, name, self)
 
     @property
     def rel_model(self):
