@@ -12,7 +12,7 @@ setup(
 
     author="Ivan Zakrevsky",
     author_email="ivzak@yandex.ru",
-    description="A minimal python ORM",
+    description="Lightweight python ORM (Object-relational mapper).",
     long_description=open(os.path.join(os.path.dirname(__file__), 'README.rst')).read(),
     url="https://bitbucket.org/evotech/autumn",
     license="MIT License",

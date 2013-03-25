@@ -1,13 +1,14 @@
-=====================
-Autumn, a Python ORM
-=====================
+=================================
+Autumn, a lightweight Python ORM
+=================================
 
-Autumn exists as a super-lightweight Object-relational mapper (ORM) for Python.
+Autumn exists as a lightweight Object-relational mapper (ORM) for Python.
 Autumn ORM follows the `KISS principle <http://en.wikipedia.org/wiki/KISS_principle>`_.
 It’s an alternative to `SQLObject <http://www.sqlobject.org/>`_,
 `SQLAlchemy <http://www.sqlalchemy.org/>`_, `Storm <https://storm.canonical.com/>`_,
-etc. Perhaps the biggest difference is the automatic population of fields as
-attributes (see the example below).
+etc.
+Perhaps the biggest difference is the automatic population of fields as
+attributes (see the example below), and minimal size.
 Autumn as small as possible.
 
 It is released under the MIT License (see LICENSE file for details).
@@ -102,6 +103,8 @@ Deleting
 
 `SQLBuilder <https://bitbucket.org/evotech/sqlbuilder>`_ integration
 =====================================================================
+
+QuerySet based on sqlbuilder.smartsql, see `more info <https://bitbucket.org/evotech/sqlbuilder/overview>`_.
 
 ::
 
