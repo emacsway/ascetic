@@ -140,10 +140,12 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         self._validate()
         return not self._errors
 
-    def _validate(self):
+    def _validate(self, skip=()):
         """Tests all ``validations``"""
         self._errors = {}
         for key, validators in list(getattr(self._meta, 'validations', {}).items()):
+            if key in skip:
+                continue
             for validator in validators:
                 assert isinstance(validator, collections.Callable), 'The validator must be callable'
                 value = getattr(self, key)
