@@ -2,7 +2,7 @@
 Autumn, a lightweight Python ORM
 =================================
 
-Autumn exists as a lightweight Object-relational mapper (ORM) for Python.
+Autumn exists as a super-lightweight Object-relational mapper (ORM) for Python.
 Autumn ORM follows the `KISS principle <http://en.wikipedia.org/wiki/KISS_principle>`_.
 It’s an alternative to `SQLObject <http://www.sqlobject.org/>`_,
 `SQLAlchemy <http://www.sqlalchemy.org/>`_, `Storm <https://storm.canonical.com/>`_,
