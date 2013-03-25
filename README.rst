@@ -101,10 +101,8 @@ Deleting
 
     a.delete()
 
-`SQLBuilder <https://bitbucket.org/evotech/sqlbuilder>`_ integration
+`SQLBuilder <https://bitbucket.org/evotech/sqlbuilder/overview>`_ integration
 =====================================================================
-
-QuerySet based on sqlbuilder.smartsql, see `more info <https://bitbucket.org/evotech/sqlbuilder/overview>`_.
 
 ::
 
@@ -117,7 +115,7 @@ QuerySet based on sqlbuilder.smartsql, see `more info <https://bitbucket.org/evo
         (ta.first_name != 'James') & (ta.last_name != 'Joyce')
     )[:10]
 
-More info `https://bitbucket.org/evotech/sqlbuilder <https://bitbucket.org/evotech/sqlbuilder>`_
+QuerySet based on sqlbuilder.smartsql, more info `https://bitbucket.org/evotech/sqlbuilder <https://bitbucket.org/evotech/sqlbuilder>`_
 
 Signals support
 ================
