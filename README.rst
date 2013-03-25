@@ -115,7 +115,7 @@ Deleting
         (ta.first_name != 'James') & (ta.last_name != 'Joyce')
     )[:10]
 
-QuerySet based on sqlbuilder.smartsql, more info `https://bitbucket.org/evotech/sqlbuilder <https://bitbucket.org/evotech/sqlbuilder>`_
+QuerySet based on sqlbuilder.smartsql, see `more info <https://bitbucket.org/evotech/sqlbuilder/src/tip/sqlbuilder/smartsql>`_
 
 Signals support
 ================
