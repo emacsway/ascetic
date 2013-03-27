@@ -102,7 +102,7 @@ Deleting
     a.delete()
 
 `SQLBuilder <https://bitbucket.org/evotech/sqlbuilder/overview>`_ integration
-=====================================================================
+===============================================================================
 
 ::
 
@@ -115,7 +115,7 @@ Deleting
         (ta.first_name != 'James') & (ta.last_name != 'Joyce')
     )[:10]
 
-QuerySet based on sqlbuilder.smartsql, see `more info <https://bitbucket.org/evotech/sqlbuilder/src/tip/sqlbuilder/smartsql>`_
+QuerySet based on `sqlbuilder.smartsql <https://bitbucket.org/evotech/sqlbuilder/src/tip/sqlbuilder/smartsql>`_, see `more info <https://bitbucket.org/evotech/sqlbuilder/overview>`_
 
 Signals support
 ================
@@ -127,6 +127,14 @@ Signals support
 * pre_delete
 * post_delete
 * class_prepared
+
+Recommended for use with a web-framework and template engines:
+===============================================================
+
+* `wheezy.web <https://bitbucket.org/akorn/wheezy.web>`_ + `wheezy.template <https://bitbucket.org/akorn/wheezy.template>`_
+* `pysi <https://bitbucket.org/imbolc/pysi>`_ + `tenjin <http://www.kuwata-lab.com/tenjin/pytenjin-users-guide.html>`_
+* `Bottle <http://bottlepy.org/>`_ + `Bottle SimpleTemplate Engine <http://bottlepy.org/docs/dev/stpl.html>`_
+* etc.
 
 Gratitude
 ==========
