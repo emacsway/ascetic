@@ -108,14 +108,15 @@ Deleting
 
     ta = Author.ss
     tb = Book.ss
-    qs = Book.qs
+    qs = tb.qs
+
     object_list = qs.tables(
         qs.tables() & ta.on(tb.author_id == ta.id)
     ).where(
         (ta.first_name != 'James') & (ta.last_name != 'Joyce')
     )[:10]
 
-QuerySet based on `sqlbuilder.smartsql <https://bitbucket.org/evotech/sqlbuilder/src/tip/sqlbuilder/smartsql>`_, see `more info <https://bitbucket.org/evotech/sqlbuilder/overview>`_
+QuerySet based on `sqlbuilder.smartsql <https://bitbucket.org/evotech/sqlbuilder/src/tip/sqlbuilder/smartsql>`_, see `more info <https://bitbucket.org/evotech/sqlbuilder/overview>`_.
 
 Signals support
 ================
