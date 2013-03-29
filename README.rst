@@ -135,6 +135,7 @@ Recommended to use with web-frameworks and template engines:
 * `wheezy.web <https://bitbucket.org/akorn/wheezy.web>`_ + `wheezy.template <https://bitbucket.org/akorn/wheezy.template>`_
 * `pysi <https://bitbucket.org/imbolc/pysi>`_ + `tenjin <http://www.kuwata-lab.com/tenjin/pytenjin-users-guide.html>`_
 * `Bottle <http://bottlepy.org/>`_ + `Bottle SimpleTemplate Engine <http://bottlepy.org/docs/dev/stpl.html>`_
+* `Tornado <http://www.tornadoweb.org/>`_ + `tornado.template <http://www.tornadoweb.org/en/stable/template.html>`_
 * and other lightweight solutions...
 
 Gratitude
