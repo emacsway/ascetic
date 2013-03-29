@@ -85,6 +85,7 @@ class QS(smartsql.QS):
 
     def iterator(self):
         """iterator"""
+        from .models import data_registry
         if self._sql:
             sql = self._sql
             if self._limit:
@@ -111,6 +112,11 @@ class QS(smartsql.QS):
                 fields = init_fields
 
         for row in cursor.fetchall():
+            row = list(row)
+            for i, v in enumerate(row[:]):
+                row[i] = data_registry.convert_to_python(
+                    self.dialect(), cursor.description[i][1], v
+                )
             data = dict(list(zip(fields, row)))
             if self.model:
                 # obj = self.model(*row)
@@ -149,7 +155,13 @@ class QS(smartsql.QS):
         return smartsql.sqlrepr(expr or self, self.dialect())
 
     def sqlparams(self, expr=None):
-        return smartsql.sqlparams(expr or self)
+        from .models import data_registry
+        params = smartsql.sqlparams(expr or self)
+        for i, v in enumerate(params[:]):
+            params[i] = data_registry.convert_to_sql(
+                self.dialect(), v
+            )
+        return params
 
     def execute(self):
         """Implementation of query execution"""

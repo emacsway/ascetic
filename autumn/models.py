@@ -241,4 +241,56 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         pass
 
 
+class DataRegistry(object):
+    """
+    Stores data convertors
+    """
+    def __init__(self):
+        """Constructor, initial registry."""
+        self._to_python = {}
+        self._to_sql = {}
+
+    def register(self, direction, dialect, code_or_type):
+        """Registers callbacks."""
+        def decorator(func):
+            ns = getattr(self, '_{0}'.format(direction)).setdefault(dialect, {})
+            ns[code_or_type] = func
+            return func
+        return decorator
+
+    def to_python(self, dialect, code):
+        return self.register('to_python', dialect, code)
+
+    def to_sql(self, dialect, type):
+        return self.register('to_sql', dialect, type)
+
+    def convert_to_python(self, dialect, code, value):
+        try:
+            convertor = self._to_python[dialect][code]
+        except KeyError:
+            return value
+        else:
+            return convertor(value)
+
+    def convert_to_sql(self, dialect, value):
+        try:
+            convertor = self._to_sql[dialect][type(value)]
+        except KeyError:
+            for t in self._to_sql[dialect].keys():
+                if issubclass(type(value), t):
+                    convertor = self._to_sql[dialect][t]
+                    break
+            else:
+                return value
+        return convertor(value)
+
+data_registry = DataRegistry()
+
+
+@data_registry.to_sql('sqlite', Model)
+@data_registry.to_sql('mysql', Model)
+@data_registry.to_sql('postgres', Model)
+def model_to_sql(val):
+    return val.pk
+
 from . import relations
