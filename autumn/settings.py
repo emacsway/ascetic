@@ -24,20 +24,7 @@ DATABASES = {
 
 DEBUG = True
 
-
-def send_signal(*a, **kw):
-    """Send signal abstract function. You should to override it.
-
-    For example, you can use one from next event systems:
-    https://github.com/jesusabdullah/pyee
-    https://bitbucket.org/jek/blinker
-    https://launchpad.net/pydispatcher
-    https://github.com/theojulienne/PySignals
-    https://github.com/olivierverdier/dispatch
-    and others.
-    """
-    from autumn import signals
-    return getattr(signals, kw.pop('signal')).send(*a, **kw)
+SIGNAL_SEND_HANDLER = 'autumn.signals.send_signal'
 
 try:
     from autumn_settings import *

@@ -3,7 +3,7 @@ sqlbuilder integration, https://bitbucket.org/evotech/sqlbuilder
 """
 from __future__ import absolute_import, unicode_literals
 from sqlbuilder import smartsql
-from . import settings
+from . import signals
 from .connections import get_db
 
 try:
@@ -229,7 +229,7 @@ class Table(smartsql.Table):
             raise AttributeError
         parts = name.split(smartsql.LOOKUP_SEP, 1)
         result = {'field': parts[0], }
-        settings.send_signal(signal='field_conversion', sender=self, result=result, field=parts[0], model=self.model)
+        signals.send_signal(signal='field_conversion', sender=self, result=result, field=parts[0], model=self.model)
         parts[0] = result['field']
         if parts[0] == 'pk':
             parts[0] = self.model._meta.pk

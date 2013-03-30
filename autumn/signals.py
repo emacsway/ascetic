@@ -53,3 +53,23 @@ pre_init = Signal()
 post_init = Signal()
 class_prepared = Signal()
 field_conversion = Signal()
+
+
+def send_signal(*a, **kw):
+    """Send signal abstract handler.
+
+    You can to override it by settings.SIGNAL_SEND_HANDLER
+    For example, you can use one from next event systems:
+    https://github.com/jesusabdullah/pyee
+    https://bitbucket.org/jek/blinker
+    https://launchpad.net/pydispatcher
+    https://github.com/theojulienne/PySignals
+    https://github.com/olivierverdier/dispatch
+    and others.
+    """
+    return globals().get(kw.pop('signal')).send(*a, **kw)
+
+from . import settings
+from .utils import resolve
+if settings.SIGNAL_SEND_HANDLER != 'autumn.signals.send_signal':
+    send_signal = resolve(settings.SIGNAL_SEND_HANDLER)

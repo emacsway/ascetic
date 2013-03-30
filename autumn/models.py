@@ -1,7 +1,7 @@
 from __future__ import absolute_import, unicode_literals
 import re
 import collections
-from . import settings
+from . import signals
 from .connections import get_db
 from .smartsql import classproperty, Table, smartsql, qn
 
@@ -87,7 +87,7 @@ class ModelBase(type):
             # May be better way is a Meta class inheritance?
 
         registry.add(new_cls)
-        settings.send_signal(signal='class_prepared', sender=new_cls, using=new_cls._meta.using)
+        signals.send_signal(signal='class_prepared', sender=new_cls, using=new_cls._meta.using)
         return new_cls
 
 
@@ -214,7 +214,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
             'instance': self,
             'using': self._meta.using,
         })
-        return settings.send_signal(*a, **kw)
+        return signals.send_signal(*a, **kw)
 
     @classproperty
     def ss(cls):
