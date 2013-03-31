@@ -52,12 +52,15 @@ class ModelOptions(object):
 
         # See cursor.description http://www.python.org/dev/peps/pep-0249/
         db = get_db(self.using)
-        q = db.execute(
-            'SELECT * FROM {0} LIMIT 1'.format(qn(self.db_table))
-        )
-        self.fields = [f[0] for f in q.description]
+
+        self.schema = {}
         if hasattr(db, 'describe_table'):
             self.schema = db.describe_table(self.db_table)
+
+        q = db.execute('SELECT * FROM {0} LIMIT 1'.format(qn(self.db_table)))
+        self.fields = [f[0] for f in q.description]
+        for f in q.description:
+            self.schema.setdefault(f[0], {})['type_code'] = f[1]
 
 
 class ModelBase(type):
