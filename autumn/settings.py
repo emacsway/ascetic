@@ -24,7 +24,7 @@ DATABASES = {
 
 DEBUG = True
 
-SIGNAL_SEND_HANDLER = 'autumn.signals.send_signal'
+SIGNAL_SENDER = 'autumn.signals.send_signal'
 
 try:
     from autumn_settings import *
