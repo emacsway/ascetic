@@ -53,8 +53,9 @@ class ValidatorChain(object):
     def __init__(self, *validators):
         self.validators = validators
 
-    def __call__(self, value):
+    def __call__(self, *a, **kw):
         for validator in self.validators:
-            if not validator(value):
-                return False
+            test = validator(*a, **kw)
+            if test is not True:
+                return test
         return True
