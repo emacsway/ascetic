@@ -37,6 +37,21 @@ Using these tables:
 Put in your PYTHONPATH file autumn_settings.py with your settings.
 See file autumn/settings.py for more details.
 
+You can also set the settings directly::
+
+    import autumn.settings
+    autumn.settings.DATABASES = {
+        'default': {
+            'engine': "postgresql",
+            'user': "devel",
+            'database': "devel_autumn",
+            'password': "devel",
+            'debug': True,
+            'initial_sql': "SET NAMES 'UTF8';",
+            'thread_safe': True,
+        }
+    }
+
 We setup our objects like so:
 
 ::
