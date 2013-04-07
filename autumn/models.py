@@ -138,9 +138,9 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
                     v = v()
                 setattr(self, k, v)
 
-    def is_valid(self):
+    def is_valid(self, skip=()):
         """Returns boolean on whether all ``validations`` pass"""
-        self._validate()
+        self._validate(skip)
         return not self._errors
 
     def _validate(self, skip=()):
