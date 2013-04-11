@@ -26,8 +26,6 @@ class Database(object):
         self.thread_safe = kwargs.pop('thread_safe', True)
         self._conf = kwargs
         self.ctx = local() if self.thread_safe else DummyCtx()
-        self.ctx.autocommit = True
-        self.ctx.begin_level = 0
 
     def _connect(self, *args, **kwargs):
         raise NotImplementedError
@@ -61,7 +59,7 @@ class Database(object):
             sql = sql.replace(PLACEHOLDER, self.placeholder)
         try:
             cursor = self._execute(sql, params)
-            if self.get_autocommit() and self.ctx.begin_level == 0:
+            if self.get_autocommit() and self.begin_level() == 0:
                 self.commit()
         except BaseException as e:
             if self.debug:
@@ -80,28 +78,35 @@ class Database(object):
         return cursor.lastrowid
 
     def get_autocommit(self):
-        return self.ctx.autocommit
+        return getattr(self.ctx, 'autocommit', True)
 
     def set_autocommit(self, autocommit=True):
         self.ctx.autocommit = autocommit
         return self
 
+    def begin_level(self, val=None):
+        if not hasattr(self.ctx, 'begin_level'):
+            self.ctx.begin_level = 0
+        if val is not None:
+            self.ctx.begin_level += val
+        if self.ctx.begin_level < 0:
+            self.ctx.begin_level = 0
+        return self.ctx.begin_level
+
     def begin(self):
-        self.ctx.begin_level += 1
+        self.begin_level(+1)
 
     def commit(self):
         try:
             self.conn.commit()
         finally:
-            if self.ctx.begin_level > 0:
-                self.ctx.begin_level -= 1
+            self.begin_level(-1)
 
     def rollback(self):
         try:
             self.conn.rollback()
         finally:
-            if self.ctx.begin_level > 0:
-                self.ctx.begin_level -= 1
+            self.begin_level(-1)
 
     @classmethod
     def factory(cls, **kwargs):
