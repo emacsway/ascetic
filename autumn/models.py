@@ -120,6 +120,15 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
             self._changed.add(name)
         self.__dict__[name] = value
 
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and self._get_pk() == other._get_pk()
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash(self._get_pk())
+
     def _get_pk(self):
         """Sets the current value of the primary key"""
         return getattr(self, self._meta.pk, None)

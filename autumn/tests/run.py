@@ -109,6 +109,10 @@ class TestModels(unittest.TestCase):
         slww.pk = pk
         self.assertEqual(slww.pk, pk)
 
+        self.assertTrue(kurt == Author.get(kurt.id))
+        self.assertTrue(kurt != tom)
+        self.assertEqual(hash(kurt), kurt.pk)
+
         # Test ForeignKey
         self.assertEqual(slww.author.first_name, 'Tom')
         slww.author = kurt
