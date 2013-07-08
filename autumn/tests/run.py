@@ -11,8 +11,7 @@ import unittest
 from autumn import validators
 from autumn import utils
 from autumn.connections import get_db
-from autumn.smartsql import QS, qn
-from autumn.models import Model
+from autumn.models import Model, QS, qn
 from autumn.tests.models import Book, Author
 
 class TestUtils(unittest.TestCase):

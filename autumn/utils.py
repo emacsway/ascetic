@@ -10,6 +10,15 @@ except NameError:
     integer_types = (int,)
 
 
+class classproperty(object):
+    """Class property decorator"""
+    def __init__(self, getter):
+        self.getter = getter
+
+    def __get__(self, instance, owner):
+        return self.getter(owner)
+
+
 def resolve(str_or_obj):
     """Returns object from string"""
     if not isinstance(str_or_obj, string_types):

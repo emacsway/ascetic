@@ -56,9 +56,7 @@ We setup our objects like so:
 
 ::
 
-    from autumn.model import Model
-    from autumn.db.relations import ForeignKey, OneToMany
-    import datetime
+    from autumn.model import Model, ForeignKey, OneToMany
 
     class Author(Model):
         books = OneToMany('Book')

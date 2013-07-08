@@ -1,9 +1,10 @@
 from __future__ import absolute_import, unicode_literals
 import re
 import collections
+from sqlbuilder import smartsql
 from . import signals
 from .connections import get_db
-from .smartsql import classproperty, Table, smartsql, qn
+from .utils import classproperty
 
 try:
     str = unicode  # Python 2.* compatible
@@ -12,6 +13,15 @@ try:
 except NameError:
     string_types = (str,)
     integer_types = (int,)
+
+SMARTSQL_DIALECTS = {
+    'sqlite3': 'sqlite',
+    'mysql': 'mysql',
+    'postgresql': 'postgres',
+    'postgresql_psycopg2': 'postgres',
+    'postgis': 'postgres',
+    'oracle': 'oracle',
+}
 
 
 class ModelRegistry(object):
@@ -79,7 +89,7 @@ class ModelBase(type):
         opts = new_cls._meta = NewOptions(new_cls)
 
         for key, rel in new_cls.__dict__.items():
-            if isinstance(rel, relations.Relation):
+            if isinstance(rel, Relation):
                 rel.add_to_class(new_cls, key)
 
         for b in bases:
@@ -212,7 +222,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         """Deletes record from database"""
         self._send_signal(signal='pre_delete')
         for key, rel in self._meta.relations.items():
-            if isinstance(rel, relations.OneToMany):
+            if isinstance(rel, OneToMany):
                 for child in getattr(self, key).iterator():
                     rel.on_delete(self, child, rel)
         type(self).qs.where(type(self).ss.pk == self.pk).delete()
@@ -296,6 +306,325 @@ class DataRegistry(object):
                 return value
         return convertor(value)
 
+
+class QS(smartsql.QS):
+    """Query Set adapted."""
+
+    _cache = None
+    prefix_result = False
+    model = None
+    using = 'default'
+
+    def raw(self, sql, *params):
+        self = self.clone()
+        self._sql = sql
+        self._params = params
+        return self
+
+    def clone(self):
+        self = super(QS, self).clone()
+        self._cache = None
+        return self
+
+    def __len__(self):
+        """Returns length or list."""
+        self.fill_cache()
+        return len(self._cache)
+
+    def count(self):
+        """Returns length or list."""
+        if self._cache:
+            return len(self._cache)
+        qs = self.order_by(reset=True)
+        sql = "SELECT COUNT(1) as count_value FROM ({0}) as count_list".format(
+            qs.sqlrepr()
+        )
+        return self._execute(sql, *qs.sqlparams()).fetchone()[0]
+
+    def fill_cache(self):
+        if self._cache is None:
+            self._cache = list(self.iterator())
+        return self
+
+    def __iter__(self):
+        """Returns iterator."""
+        self.fill_cache()
+        return iter(self._cache)
+
+    def iterator(self):
+        """iterator"""
+        from .models import data_registry
+        if self._sql:
+            sql = self._sql
+            if self._limit:
+                sql = ' '.join([sql, smartsql.sqlrepr(self._limit, self.dialect())])
+            cursor = self._execute(sql, *self._params)
+        else:
+            cursor = self._execute(self.sqlrepr(), *self.sqlparams())
+
+        fields = []
+        for f in cursor.description:
+            fn = f[0]
+            c = 2
+            while fn in fields:
+                fn = fn + str(2)
+                c += 1
+            fields.append(fn)
+
+        if self.prefix_result:
+            # TODO: variant init_fields = ((alias1, model1, model_field_list1), (alias2, model2, model_field_list2), ...)?
+            # returns (instance of model1, instance of model2, another instance of model2, ...)
+            # How about fields from sub-select (not from table), that has not model?
+            init_fields = self.get_init_fields()
+            if len(fields) == len(init_fields):
+                fields = init_fields
+
+        for row in cursor.fetchall():
+            row = list(row)
+            for i, v in enumerate(row[:]):
+                row[i] = data_registry.convert_to_python(
+                    self.dialect(), cursor.description[i][1], v
+                )
+            data = dict(list(zip(fields, row)))
+            if self.model:
+                # obj = self.model(*row)
+                obj = self.model(**data)
+                obj._new_record = False
+                yield obj
+            else:
+                yield data
+
+    def get_init_fields(self):
+        """Returns list of fields what was passed to query."""
+        init_fields = []
+        for f in self._fields:
+            if isinstance(f, smartsql.F):
+                if isinstance(f._prefix, Table) and f._prefix.model == self.model:
+                    init_fields.append(f._name)
+                    continue
+            init_fields.append('__'.join(self.sqlrepr(f).replace('`', '').replace('"', '').split('.')))
+        return init_fields
+
+    def __getitem__(self, key):
+        """Returns sliced self or item."""
+        if self._cache:
+            return self._cache[key]
+        if isinstance(key, integer_types):
+            self = self.clone()
+            self = super(QS, self).__getitem__(key)
+            return list(self)[0]
+        return super(QS, self).__getitem__(key)
+
+    def dialect(self):
+        engine = get_db(self.using).engine
+        return SMARTSQL_DIALECTS.get(engine, engine)
+
+    def sqlrepr(self, expr=None):
+        return smartsql.sqlrepr(expr or self, self.dialect())
+
+    def sqlparams(self, expr=None):
+        from .models import data_registry
+        params = smartsql.sqlparams(expr or self)
+        for i, v in enumerate(params[:]):
+            params[i] = data_registry.convert_to_sql(
+                self.dialect(), v
+            )
+        return params
+
+    def execute(self):
+        """Implementation of query execution"""
+        if self._action in ('select', 'count', ):
+            return self
+        else:
+            return self._execute(self.sqlrepr(), *self.sqlparams())
+
+    def _execute(self, sql, *params):
+        return get_db(self.using).execute(sql, params)
+
+    def result(self):
+        """Result"""
+        if self._action in ('select', 'count', ):
+            return self
+        return self.execute()
+
+    def begin(self):
+        return get_db(self.using).begin()
+
+    def commit(self):
+        return get_db(self.using).commit()
+
+    def rollback(self):
+        return get_db(self.using).rollback()
+
+    def as_union(self):
+        return UnionQuerySet(self)
+
+
+class UnionQuerySet(smartsql.UnionQuerySet, QS):
+    """Union query class"""
+    def __init__(self, qs):
+        super(UnionQuerySet, self).__init__(qs)
+        self.model = qs.model
+        self.using = qs.using
+        self.base_table = qs.base_table
+
+
+class Table(smartsql.Table):
+    """Table class"""
+
+    def __init__(self, model, *args, **kwargs):
+        """Constructor"""
+        super(Table, self).__init__(model._meta.db_table, *args, **kwargs)
+        self.model = model
+        self.qs = kwargs.pop('qs', QS(self).fields(self.get_fields()))
+        self.qs.base_table = self
+        self.qs.model = self.model
+        self.qs.using = self.model._meta.using
+
+    def get_fields(self, prefix=None):
+        """Returns field list."""
+        if prefix is None:
+            prefix = self
+        result = []
+        for f in self.model._meta.fields:
+            result.append(smartsql.Field(f, prefix))
+        return result
+
+    def __getattr__(self, name):
+        """Added some specific functional."""
+        if name[0] == '_':
+            raise AttributeError
+        parts = name.split(smartsql.LOOKUP_SEP, 1)
+        result = {'field': parts[0], }
+        signals.send_signal(signal='field_conversion', sender=self, result=result, field=parts[0], model=self.model)
+        parts[0] = result['field']
+        if parts[0] == 'pk':
+            parts[0] = self.model._meta.pk
+        if isinstance(self.model._meta.relations.get(parts[0], None), ForeignKey):
+            parts[0] = self.model._meta.relations.get(parts[0]).field
+        return super(Table, self).__getattr__(smartsql.LOOKUP_SEP.join(parts))
+
+    def as_(self, alias):
+        return TableAlias(alias, self)
+
+
+class TableAlias(smartsql.TableAlias, Table):
+    """Table alias class"""
+    @property
+    def model(self):
+        return self.table.model
+
+
+def qn(name, using='default'):
+    """Quotes DB name"""
+    engine = get_db(using).engine
+    return smartsql.qn(name, SMARTSQL_DIALECTS.get(engine, engine))
+
+
+def cascade(parent, child, parent_rel):
+    child.delete()
+
+
+def set_null(parent, child, parent_rel):
+    setattr(child, parent_rel.rel_field, None)
+    child.save()
+
+
+def do_nothing(parent, child, rel):
+    pass
+
+
+class Relation(object):
+
+    def __init__(self, rel_model, rel_field=None, field=None, qs=None):
+        self.rel_model_or_name = rel_model
+        self._rel_field = rel_field
+        self._field = field
+        self.qs = qs
+
+    def add_to_class(self, model_class, name):
+        self.model = model_class
+        self.name = name
+        self.model._meta.relations[name] = self
+        setattr(self.model, name, self)
+
+    @property
+    def rel_model(self):
+        if isinstance(self.rel_model_or_name, string_types):
+            return registry.get(self.rel_model_or_name)
+        return self.rel_model_or_name
+
+    def get_qs(self):
+        if isinstance(self.qs, collections.Callable):
+            return self.qs(self)
+        elif self.qs:
+            return self.qs.clone()
+        else:
+            return self.rel_model.ss.qs.clone()
+
+    def filter(self, *a, **kw):
+        qs = self.get_qs()
+        t = self.rel_model.ss
+        for fn, param in kw.items():
+            f = smartsql.Field(fn, t)
+            qs = qs.where(f == param)
+        return qs
+
+
+class ForeignKey(Relation):
+
+    @property
+    def field(self):
+        return self._field or '{0}_id'.format(self.rel_model._meta.db_table.split("_").pop())
+
+    @property
+    def rel_field(self):
+        return self._rel_field or self.rel_model._meta.pk
+
+    def __get__(self, instance, owner):
+        if not instance:
+            return self.rel_model
+        fk_val = getattr(instance, self.field)
+        if fk_val is None:
+            return None
+        return self.filter(**{self.rel_field: fk_val})[0]
+
+    def __set__(self, instance, value):
+        if isinstance(value, Model):
+            if not isinstance(value, self.rel_model):
+                raise Exception(
+                    ('Value should be an instance of "{0}.{1}" ' +
+                    'or primary key of related instance.').format(
+                        self.rel_model.__module__, self.model.__name__
+                    )
+                )
+            value = value._get_pk()
+        setattr(instance, self.field, value)
+
+    def __delete__(self, instance):
+        setattr(instance, self.field, None)
+
+
+class OneToMany(Relation):
+
+    def __init__(self, rel_model, rel_field=None, field=None, qs=None, on_delete=cascade):
+        self.on_delete = on_delete
+        super(OneToMany, self).__init__(rel_model, rel_field, field, qs)
+
+    @property
+    def rel_field(self):
+        return self._rel_field or '{0}_id'.format(self.model._meta.db_table.split("_").pop())
+
+    @property
+    def field(self):
+        return self._field or self.model._meta.pk
+
+    def __get__(self, instance, owner):
+        if not instance:
+            return self.rel_model
+        return self.filter(**{self.rel_field: getattr(instance, self.field)})
+
+
 data_registry = DataRegistry()
 
 
@@ -304,5 +633,3 @@ data_registry = DataRegistry()
 @data_registry.to_sql('postgres', Model)
 def model_to_sql(val):
     return val.pk
-
-from . import relations

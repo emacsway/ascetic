@@ -1,6 +1,5 @@
 from __future__ import absolute_import, unicode_literals
-from autumn.models import Model
-from autumn.relations import ForeignKey, OneToMany
+from autumn.models import Model, ForeignKey, OneToMany
 from autumn import validators
 
 
