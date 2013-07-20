@@ -59,7 +59,6 @@ We setup our objects like so:
     from autumn.model import Model, ForeignKey, OneToMany
 
     class Author(Model):
-        books = OneToMany('Book')
 
         class Meta:
             defaults = {'bio': 'No bio available'}
@@ -69,7 +68,7 @@ We setup our objects like so:
             )}
 
     class Book(Model):
-        author = ForeignKey(Author)
+        author = ForeignKey(Author, related_name='books')
 
         class Meta:
             db_table = 'books'

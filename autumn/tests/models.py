@@ -4,7 +4,7 @@ from autumn import validators
 
 
 class Author(Model):
-    books = OneToMany('autumn.tests.models.Book')
+    # books = OneToMany('autumn.tests.models.Book')
 
     class Meta:
         defaults = {'bio': 'No bio available'}
@@ -13,7 +13,7 @@ class Author(Model):
 
 
 class Book(Model):
-    author = ForeignKey(Author)
+    author = ForeignKey(Author, related_name='books')
 
     class Meta:
         db_table = 'books'

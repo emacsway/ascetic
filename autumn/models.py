@@ -100,6 +100,15 @@ class ModelBase(type):
             # May be better way is a Meta class inheritance?
 
         registry.add(new_cls)
+
+        for m in registry.models.values():
+            for key, rel in m._meta.relations.items():
+                try:
+                    if hasattr(rel, 'add_related') and rel.rel_model is new_cls:
+                        rel.add_related()
+                except KeyError:
+                    pass
+
         signals.send_signal(signal='class_prepared', sender=new_cls, using=new_cls._meta.using)
         return new_cls
 
@@ -551,7 +560,10 @@ class Relation(object):
     @property
     def rel_model(self):
         if isinstance(self.rel_model_or_name, string_types):
-            return registry.get(self.rel_model_or_name)
+            name = self.rel_model_or_name
+            if name == 'self':
+                name = ".".join((self.model.__module__, self.model.__name__))
+            return registry.get(name)
         return self.rel_model_or_name
 
     def get_qs(self):
@@ -573,6 +585,11 @@ class Relation(object):
 
 class ForeignKey(Relation):
 
+    def __init__(self, rel_model, rel_field=None, field=None, qs=None, related_name=None, on_delete=cascade):
+        self.on_delete = on_delete
+        self._related_name = related_name
+        super(ForeignKey, self).__init__(rel_model, rel_field, field, qs)
+
     @property
     def field(self):
         return self._field or '{0}_id'.format(self.rel_model._meta.db_table.split("_").pop())
@@ -580,6 +597,30 @@ class ForeignKey(Relation):
     @property
     def rel_field(self):
         return self._rel_field or self.rel_model._meta.pk
+
+    @property
+    def related_name(self):
+        return self._related_name or '{0}_set'.format(rel_model.__name__.lower())
+
+    def add_to_class(self, model_class, name):
+        super(ForeignKey, self).add_to_class(model_class, name)
+        self.add_related()
+
+    def add_related(self):
+        try:
+            rel_model = self.rel_model
+        except KeyError:
+            return
+
+        if self.related_name in rel_model._meta.relations:
+            return
+
+        OneToMany(
+            self.model, self.field, self.rel_field,
+            None, on_delete=self.on_delete
+        ).add_to_class(
+            rel_model, self.related_name
+        )
 
     def __get__(self, instance, owner):
         if not instance:
