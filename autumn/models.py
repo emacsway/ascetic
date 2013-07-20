@@ -369,7 +369,6 @@ class QS(smartsql.QS):
 
     def iterator(self):
         """iterator"""
-        from .models import data_registry
         if self._sql:
             sql = self._sql
             if self._limit:
@@ -439,7 +438,6 @@ class QS(smartsql.QS):
         return smartsql.sqlrepr(expr or self, self.dialect())
 
     def sqlparams(self, expr=None):
-        from .models import data_registry
         params = smartsql.sqlparams(expr or self)
         for i, v in enumerate(params[:]):
             params[i] = data_registry.convert_to_sql(
