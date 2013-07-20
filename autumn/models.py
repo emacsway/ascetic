@@ -24,6 +24,10 @@ SMARTSQL_DIALECTS = {
 }
 
 
+class ModelNotRegistered(Exception):
+    pass
+
+
 class ModelRegistry(object):
     models = {}
 
@@ -31,7 +35,10 @@ class ModelRegistry(object):
         self.models[".".join((model.__module__, model.__name__))] = model
 
     def get(self, model_name):
-        return self.models[model_name]
+        try:
+            return self.models[model_name]
+        except KeyError:
+            raise ModelNotRegistered
 
 registry = ModelRegistry()
 
@@ -106,7 +113,7 @@ class ModelBase(type):
                 try:
                     if hasattr(rel, 'add_related') and rel.rel_model is new_cls:
                         rel.add_related()
-                except KeyError:
+                except ModelNotRegistered:
                     pass
 
         signals.send_signal(signal='class_prepared', sender=new_cls, using=new_cls._meta.using)
@@ -545,11 +552,12 @@ def do_nothing(parent, child, rel):
 
 class Relation(object):
 
-    def __init__(self, rel_model, rel_field=None, field=None, qs=None):
+    def __init__(self, rel_model, rel_field=None, field=None, qs=None, on_delete=cascade):
         self.rel_model_or_name = rel_model
         self._rel_field = rel_field
         self._field = field
         self.qs = qs
+        self.on_delete = on_delete
 
     def add_to_class(self, model_class, name):
         self.model = model_class
@@ -585,8 +593,7 @@ class Relation(object):
 
 class ForeignKey(Relation):
 
-    def __init__(self, rel_model, rel_field=None, field=None, qs=None, related_name=None, on_delete=cascade):
-        self.on_delete = on_delete
+    def __init__(self, rel_model, rel_field=None, field=None, qs=None, on_delete=cascade, related_name=None):
         self._related_name = related_name
         super(ForeignKey, self).__init__(rel_model, rel_field, field, qs)
 
@@ -609,7 +616,7 @@ class ForeignKey(Relation):
     def add_related(self):
         try:
             rel_model = self.rel_model
-        except KeyError:
+        except ModelNotRegistered:
             return
 
         if self.related_name in rel_model._meta.relations:
@@ -647,10 +654,6 @@ class ForeignKey(Relation):
 
 
 class OneToMany(Relation):
-
-    def __init__(self, rel_model, rel_field=None, field=None, qs=None, on_delete=cascade):
-        self.on_delete = on_delete
-        super(OneToMany, self).__init__(rel_model, rel_field, field, qs)
 
     @property
     def rel_field(self):
