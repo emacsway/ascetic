@@ -3,6 +3,9 @@ import logging
 from autumn import settings
 
 if settings.DEBUG:
+    import warnings
+    warnings.simplefilter('default')
+
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
     ch = logging.StreamHandler()

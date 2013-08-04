@@ -177,7 +177,7 @@ class TestModels(unittest.TestCase):
             pass
 
         print '### Testing for smartsql integration'
-        t = Author.ss
+        t = Author.s
         fields = [t.qs.sqlrepr(i) for i in t.get_fields()]
         if get_db().engine == 'postgresql':
             self.assertListEqual(
@@ -197,9 +197,9 @@ class TestModels(unittest.TestCase):
             )
 
         if get_db().engine == 'postgresql':
-            self.assertEqual(Book.ss.author, '"book"."author_id"')
+            self.assertEqual(Book.s.author, '"book"."author_id"')
         else:
-            self.assertEqual(Book.ss.author, '`book`.`author_id`')
+            self.assertEqual(Book.s.author, '`book`.`author_id`')
 
         qs = t.qs
         if get_db().engine == 'postgresql':

@@ -123,7 +123,7 @@ class ModelBase(type):
 class Model(ModelBase(bytes("NewBase"), (object, ), {})):
     """Model class"""
 
-    _ss = None
+    _s = None
 
     def __init__(self, *args, **kwargs):
         """Allows setting of fields using kwargs"""
@@ -232,7 +232,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
     def _update(self):
         """Uses SQL UPDATE to update record"""
         params = [getattr(self, f) for f in self._changed]
-        type(self).qs.where(type(self).ss.pk == self.pk).update(dict(zip(self._changed, params)))
+        type(self).qs.where(type(self).s.pk == self.pk).update(dict(zip(self._changed, params)))
 
     def delete(self):
         """Deletes record from database"""
@@ -241,7 +241,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
             if isinstance(rel, OneToMany):
                 for child in getattr(self, key).iterator():
                     rel.on_delete(self, child, rel)
-        type(self).qs.where(type(self).ss.pk == self.pk).delete()
+        type(self).qs.where(type(self).s.pk == self.pk).delete()
         self._send_signal(signal='post_delete')
         return True
 
@@ -255,14 +255,19 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         return signals.send_signal(*a, **kw)
 
     @classproperty
+    def s(cls):
+        if cls._s is None:
+            cls._s = Table(cls)
+        return cls._s
+
+    @classproperty
     def ss(cls):
-        if cls._ss is None:
-            cls._ss = Table(cls)
-        return cls._ss
+        smartsql.warn('Model.ss', 'Model.s', 4)
+        return cls.s
 
     @classproperty
     def qs(cls):
-        return cls.ss.qs
+        return cls.s.qs
 
     @classmethod
     def get(cls, _obj_pk=None, **kwargs):
@@ -272,7 +277,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
 
         qs = cls.qs
         for k, v in kwargs.items():
-            qs = qs.where(smartsql.Field(k, cls.ss) == v)
+            qs = qs.where(smartsql.Field(k, cls.s) == v)
         return qs
 
     class ValidationError(Exception):
@@ -578,11 +583,11 @@ class Relation(object):
         elif self.qs:
             return self.qs.clone()
         else:
-            return self.rel_model.ss.qs.clone()
+            return self.rel_model.s.qs.clone()
 
     def filter(self, *a, **kw):
         qs = self.get_qs()
-        t = self.rel_model.ss
+        t = self.rel_model.s
         for fn, param in kw.items():
             f = smartsql.Field(fn, t)
             qs = qs.where(f == param)

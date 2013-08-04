@@ -118,8 +118,8 @@ Deleting
 
 ::
 
-    ta = Author.ss
-    tb = Book.ss
+    ta = Author.s
+    tb = Book.s
     qs = tb.qs
 
     object_list = qs.tables(
