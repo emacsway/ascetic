@@ -32,7 +32,7 @@ class ModelRegistry(object):
     models = {}
 
     def add(self, model):
-        self.models[".".join((model.__module__, model.__name__))] = model
+        self.models[model._meta.name] = model
 
     def get(self, model_name):
         try:
@@ -57,6 +57,8 @@ class ModelOptions(object):
             setattr(self, k, v)
 
         self.model = model
+        if not hasattr(self, 'name'):
+            self.name = ".".join((model.__module__, model.__name__))
         if not hasattr(self, 'db_table'):
             self.db_table = "_".join([
                 re.sub(r"[^a-z0-9]", "", i.lower())
@@ -573,7 +575,7 @@ class Relation(object):
         if isinstance(self.rel_model_or_name, string_types):
             name = self.rel_model_or_name
             if name == 'self':
-                name = ".".join((self.model.__module__, self.model.__name__))
+                name = self.model._meta.name
             return registry.get(name)
         return self.rel_model_or_name
 
@@ -644,9 +646,9 @@ class ForeignKey(Relation):
         if isinstance(value, Model):
             if not isinstance(value, self.rel_model):
                 raise Exception(
-                    ('Value should be an instance of "{0}.{1}" ' +
+                    ('Value should be an instance of "{0}" ' +
                     'or primary key of related instance.').format(
-                        self.rel_model.__module__, self.model.__name__
+                        self.rel_model._meta.name
                     )
                 )
             value = value._get_pk()
