@@ -44,12 +44,8 @@ class Database(object):
         return self.ctx.conn
 
     def _execute(self, sql, params=()):
-        try:
-            cursor = self.conn.cursor()
-            cursor.execute(sql, params)
-        except:
-            cursor = self.reconnect().cursor()
-            cursor.execute(sql, params)
+        cursor = self.cursor()
+        cursor.execute(sql, params)
         return cursor
 
     def execute(self, sql, params=(), using=None):
@@ -135,17 +131,19 @@ class DjangoMixin(object):
 
     @property
     def conn(self):
-        self.django_conn.ensure_connection()
+        # self.django_conn.ensure_connection()
+        if not self.django_conn.connection:
+            self.cursor()
         return self.django_conn.connection
 
     def cursor(self):
         return self.django_conn.cursor()
 
-    def get_autocommit(self):
+    def get_autocommit_(self):
         from django.db.transaction import get_autocommit
         return get_autocommit(self.django_using)
 
-    def set_autocommit(self, autocommit=True):
+    def set_autocommit_(self, autocommit=True):
         from django.db.transaction import set_autocommit
         return set_autocommit(autocommit, self.django_using)
 
