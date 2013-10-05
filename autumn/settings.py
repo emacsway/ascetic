@@ -1,3 +1,5 @@
+import os
+
 DATABASES = {
     'default': {
         'engine': "mysql",
@@ -27,6 +29,10 @@ DEBUG = True
 SIGNAL_SENDER = 'autumn.signals.send_signal'
 
 try:
-    from autumn_settings import *
+    m = __import__(os.getenv('AUTUMN_SETTINGS', 'autumn_settings'))
 except ImportError:
     pass
+else:
+    for key in dir(m):
+        if key[0] != '_':
+            globals()[key] = getattr(m, key)
