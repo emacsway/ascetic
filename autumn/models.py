@@ -228,7 +228,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         cursor = type(self).qs.insert(dict(zip(fields, params)))
 
         if self._get_pk() is None:
-            self._set_pk(get_db(self._meta.using).last_insert_id(cursor))
+            self._set_pk(type(self).qs.get_db().last_insert_id(cursor))
         return True
 
     def _update(self):
@@ -438,7 +438,7 @@ class QS(smartsql.QS):
         return super(QS, self).__getitem__(key)
 
     def dialect(self):
-        engine = get_db(self.using).engine
+        engine = self.get_db().engine
         return SMARTSQL_DIALECTS.get(engine, engine)
 
     def sqlrepr(self, expr=None):
@@ -460,7 +460,7 @@ class QS(smartsql.QS):
             return self._execute(self.sqlrepr(), *self.sqlparams())
 
     def _execute(self, sql, *params):
-        return get_db(self.using).execute(sql, params)
+        return self.get_db().execute(sql, params)
 
     def result(self):
         """Result"""
@@ -468,14 +468,17 @@ class QS(smartsql.QS):
             return self
         return self.execute()
 
+    def get_db(self):
+        return get_db(self.using)
+
     def begin(self):
-        return get_db(self.using).begin()
+        return self.get_db().begin()
 
     def commit(self):
-        return get_db(self.using).commit()
+        return self.get_db().commit()
 
     def rollback(self):
-        return get_db(self.using).rollback()
+        return self.get_db().rollback()
 
     def as_union(self):
         return UnionQuerySet(self)
