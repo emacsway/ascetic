@@ -424,7 +424,7 @@ class QS(smartsql.QS):
             init_fields.append('__'.join(self.sqlrepr(f).replace('`', '').replace('"', '').split('.')))
         return init_fields
 
-    def get_init_data(self):
+    def get_fields_data(self):
         """Returns list of data fields what was passed to query."""
         # Experiment for: author.alias = ModelForAlias(**data)
         # The main problem, attribute of model for alias can be busy, for example, by descriptor
