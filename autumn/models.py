@@ -321,7 +321,7 @@ class DataRegistry(object):
         try:
             convertor = self._to_sql[dialect][type(value)]
         except KeyError:
-            for t in self._to_sql[dialect].keys():
+            for t in self._to_sql.setdefault(dialect, {}).keys():
                 if issubclass(type(value), t):
                     convertor = self._to_sql[dialect][t]
                     break
@@ -396,6 +396,7 @@ class QS(smartsql.QS):
         if self.prefix_result:
             # TODO: variant init_fields = ((alias1, model1, model_field_list1), (alias2, model2, model_field_list2), ...)?
             # returns (instance of model1, instance of model2, another instance of model2, ...)
+            # or instance.alias_name = other model instance.
             # How about fields from sub-select (not from table), that has not model?
             init_fields = self.get_init_fields()
             if len(fields) == len(init_fields):
@@ -421,7 +422,7 @@ class QS(smartsql.QS):
         init_fields = []
         for f in self._fields:
             if isinstance(f, smartsql.F):
-                if isinstance(f._prefix, Table) and f._prefix.model == self.model:
+                if isinstance(f._prefix, Table) and getattr(f._prefix, 'model', None) == self.model:
                     init_fields.append(f._name)
                     continue
             init_fields.append('__'.join(self.sqlrepr(f).replace('`', '').replace('"', '').split('.')))
@@ -615,7 +616,7 @@ class ForeignKey(Relation):
 
     @property
     def related_name(self):
-        return self._related_name or '{0}_set'.format(rel_model.__name__.lower())
+        return self._related_name or '{0}_set'.format(self.rel_model.__name__.lower())
 
     def add_to_class(self, model_class, name):
         super(ForeignKey, self).add_to_class(model_class, name)
