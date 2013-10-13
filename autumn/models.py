@@ -386,18 +386,14 @@ class QS(smartsql.QS):
 
         fields = []
         for f in cursor.description:
-            fn = f[0]
+            fn = fn1 = f[0]
             c = 2
             while fn in fields:
-                fn = fn + str(2)
+                fn = fn1 + str(2)
                 c += 1
             fields.append(fn)
 
         if self.prefix_result:
-            # TODO: variant init_fields = ((alias1, model1, model_field_list1), (alias2, model2, model_field_list2), ...)?
-            # returns (instance of model1, instance of model2, another instance of model2, ...)
-            # or instance.alias_name = other model instance.
-            # How about fields from sub-select (not from table), that has not model?
             init_fields = self.get_init_fields()
             if len(fields) == len(init_fields):
                 fields = init_fields
@@ -422,10 +418,31 @@ class QS(smartsql.QS):
         init_fields = []
         for f in self._fields:
             if isinstance(f, smartsql.F):
-                if isinstance(f._prefix, Table) and getattr(f._prefix, 'model', None) == self.model:
+                if isinstance(f._prefix, Table) and not isinstance(f._prefix, TableAlias) and f._prefix.model == self.model:
                     init_fields.append(f._name)
                     continue
             init_fields.append('__'.join(self.sqlrepr(f).replace('`', '').replace('"', '').split('.')))
+        return init_fields
+
+    def get_init_data(self):
+        """Returns list of data fields what was passed to query."""
+        # Experiment for: author.alias = ModelForAlias(**data)
+        # The main problem, attribute of model for alias can be busy, for example, by descriptor
+        init_fields = []
+        for f in self._fields:
+            parts = self.sqlrepr(f).replace('`', '').replace('"', '').split('.')
+            name = parts[-1]
+            prefix = parts[0] if len(parts) == 2 else None
+            if isinstance(f, smartsql.F):
+                if isinstance(f._prefix, Table):
+                    model = f._prefix.model
+                    if not isinstance(f._prefix, TableAlias) and model == self.model:
+                        init_fields.append((None, None, f._name))
+                        continue
+                    elif model is not None:
+                        init_fields.append((prefix, model, f._name))
+                        continue
+            init_fields.append(None, None, '__'.join(parts))
         return init_fields
 
     def __getitem__(self, key):
