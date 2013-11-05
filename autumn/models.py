@@ -658,10 +658,7 @@ class ForeignKey(Relation):
             return None
         # TODO: cacheable and cache setable instance
         # with checking of cached instance pk and fk_val
-        try:
-            return self.filter(**{self.rel_field: fk_val})[0]
-        except IndexError:
-            return None
+        return self.filter(**{self.rel_field: fk_val})[0]
 
     def __set__(self, instance, value):
         if isinstance(value, Model):
