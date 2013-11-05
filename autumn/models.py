@@ -334,7 +334,7 @@ class QS(smartsql.QS):
     """Query Set adapted."""
 
     _cache = None
-    prefix_result = False
+    separate_models = False
     model = None
     using = 'default'
 
@@ -386,14 +386,14 @@ class QS(smartsql.QS):
 
         fields = []
         for f in cursor.description:
-            fn = fn1 = f[0]
+            fn_suf = fn = f[0]
             c = 2
-            while fn in fields:
-                fn = fn1 + str(2)
+            while fn_suf in fields:
+                fn_suf = fn + str(c)
                 c += 1
-            fields.append(fn)
+            fields.append(fn_suf)
 
-        if self.prefix_result:
+        if self.separate_models:
             init_fields = self.get_init_fields()
             if len(fields) == len(init_fields):
                 fields = init_fields
@@ -414,24 +414,13 @@ class QS(smartsql.QS):
                 yield data
 
     def get_init_fields(self):
-        """Returns list of fields what was passed to query."""
-        init_fields = []
-        for f in self._fields:
-            if isinstance(f, smartsql.F):
-                if isinstance(f._prefix, Table) and not isinstance(f._prefix, TableAlias) and f._prefix.model == self.model:
-                    init_fields.append(f._name)
-                    continue
-            init_fields.append('__'.join(self.sqlrepr(f).replace('`', '').replace('"', '').split('.')))
-        return init_fields
-
-    def get_fields_data(self):
         """Returns list of data fields what was passed to query."""
         # Experiment for: author.alias = ModelForAlias(**data)
         # The main problem, attribute of model for alias can be busy, for example, by descriptor
         init_fields = []
         for f in self._fields:
             parts = self.sqlrepr(f).replace('`', '').replace('"', '').split('.')
-            name = parts[-1]
+            fn = parts[-1]
             prefix = parts[0] if len(parts) == 2 else None
             if isinstance(f, smartsql.F):
                 if isinstance(f._prefix, Table):
@@ -442,7 +431,12 @@ class QS(smartsql.QS):
                     elif model is not None:
                         init_fields.append((prefix, model, f._name))
                         continue
-            init_fields.append(None, None, '__'.join(parts))
+            fn_suf = fn
+            c = 2
+            while (None, None, fn_suf) in init_fields:
+                fn_suf = fn + str(c)
+                c += 1
+            init_fields.append(None, None, fn_suf)
         return init_fields
 
     def __getitem__(self, key):
@@ -668,7 +662,7 @@ class ForeignKey(Relation):
             if not isinstance(value, self.rel_model):
                 raise Exception(
                     ('Value should be an instance of "{0}" ' +
-                    'or primary key of related instance.').format(
+                     'or primary key of related instance.').format(
                         self.rel_model._meta.name
                     )
                 )
