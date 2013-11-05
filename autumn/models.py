@@ -417,6 +417,7 @@ class QS(smartsql.QS):
         """Returns list of data fields what was passed to query."""
         # Experiment for: author.alias = ModelForAlias(**data)
         # The main problem, attribute of model for alias can be busy, for example, by descriptor
+        # TODO: Relation cache setable
         init_fields = []
         for f in self._fields:
             parts = self.sqlrepr(f).replace('`', '').replace('"', '').split('.')
@@ -655,7 +656,12 @@ class ForeignKey(Relation):
         fk_val = getattr(instance, self.field)
         if fk_val is None:
             return None
-        return self.filter(**{self.rel_field: fk_val})[0]
+        # TODO: cacheable and cache setable instance
+        # with checking of cached instance pk and fk_val
+        try:
+            return self.filter(**{self.rel_field: fk_val})[0]
+        except IndexError:
+            return None
 
     def __set__(self, instance, value):
         if isinstance(value, Model):
