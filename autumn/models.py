@@ -318,16 +318,17 @@ class DataRegistry(object):
             return convertor(value)
 
     def convert_to_sql(self, dialect, value):
-        try:
-            convertor = self._to_sql[dialect][type(value)]
-        except KeyError:
-            for t in self._to_sql.setdefault(dialect, {}).keys():
-                if issubclass(type(value), t):
-                    convertor = self._to_sql[dialect][t]
-                    break
+        convertor = None
+        for t in type(value).mro():
+            try:
+                convertor = self._to_sql[dialect][t]
+            except KeyError:
+                pass
             else:
-                return value
-        return convertor(value)
+                break
+        if convertor is not None:
+            return convertor(value)
+        return value
 
 
 class QS(smartsql.QS):
