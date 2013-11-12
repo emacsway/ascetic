@@ -258,7 +258,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
 
     @classproperty
     def s(cls):
-        if cls._s is None:
+        if '_s' not in cls.__dict__:
             cls._s = Table(cls)
         return cls._s
 
