@@ -137,6 +137,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         self._changed = set()
         self._send_signal(signal='post_init')
         self._errors = {}
+        self._cache = {}
 
     def __setattr__(self, name, value):
         """Records when fields have changed"""
@@ -318,16 +319,13 @@ class DataRegistry(object):
             return convertor(value)
 
     def convert_to_sql(self, dialect, value):
-        convertor = None
         for t in type(value).mro():
             try:
                 convertor = self._to_sql[dialect][t]
             except KeyError:
                 pass
             else:
-                break
-        if convertor is not None:
-            return convertor(value)
+                return convertor(value)
         return value
 
 
@@ -424,7 +422,7 @@ class QS(smartsql.QS):
         """Returns list of data fields what was passed to query."""
         # Experiment for: author.alias = ModelForAlias(**data)
         # The main problem, attribute of model for alias can be busy, for example, by descriptor
-        # TODO: Relation cache setable
+        # TODO: Sets cache of relation
         init_fields = []
         for f in self._fields:
             parts = self.sqlrepr(f).replace('`', '').replace('"', '').split('.')
@@ -675,9 +673,9 @@ class ForeignKey(Relation):
         fk_val = getattr(instance, self.field)
         if fk_val is None:
             return None
-        # TODO: cacheable and cache setable instance
-        # with checking of cached instance pk and fk_val
-        return self.filter(**{self.rel_field: fk_val})[0]
+        if getattr(instance._cache.get(self.name, None), self.rel_field, None) != fk_val:
+            instance._cache[self.name] = self.filter(**{self.rel_field: fk_val})[0]
+        return instance._cache[self.name]
 
     def __set__(self, instance, value):
         if isinstance(value, Model):
@@ -688,10 +686,12 @@ class ForeignKey(Relation):
                         self.rel_model._meta.name
                     )
                 )
+            instance._cache[self.name] = value
             value = value._get_pk()
         setattr(instance, self.field, value)
 
     def __delete__(self, instance):
+        instance._cache.pop(self.name, None)
         setattr(instance, self.field, None)
 
 
@@ -708,6 +708,7 @@ class OneToMany(Relation):
     def __get__(self, instance, owner):
         if not instance:
             return self.rel_model
+        # Cache attr already exists in QS, so, can be even setable.
         return self.filter(**{self.rel_field: getattr(instance, self.field)})
 
 
