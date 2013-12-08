@@ -341,10 +341,9 @@ class QS(smartsql.QS):
 
     def __init__(self, tables=None):
         super(QS, self).__init__(tables=tables)
-        if isinstance(tables, (Table, TableAlias)):
-            self.base_table = tables
-            self.model = self.base_table.model
-            self.using = self.base_table.model._meta.using
+        if isinstance(tables, Table):
+            self.model = tables.model
+            self.using = self.model._meta.using
 
     def raw(self, sql, *params):
         self = self.clone()
@@ -511,7 +510,6 @@ class UnionQuerySet(smartsql.UnionQuerySet, QS):
         super(UnionQuerySet, self).__init__(qs)
         self.model = qs.model
         self.using = qs.using
-        self.base_table = qs.base_table
 
 
 class Table(smartsql.Table):
