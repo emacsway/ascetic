@@ -42,12 +42,17 @@ class ModelRegistry(object):
 
 registry = ModelRegistry()
 
+class Field(object):
+    def __init__(self, **kw):
+        for k, v in kw.items():
+            setattr(self, k, v)
 
 class ModelOptions(object):
     """Model options"""
 
     pk = 'id'
     using = 'default'
+    field_class = Field
 
     def __init__(self, model, **kw):
         """Instance constructor"""
@@ -72,14 +77,20 @@ class ModelOptions(object):
         # See cursor.description http://www.python.org/dev/peps/pep-0249/
         db = get_db(self.using)
 
-        self.schema = {}
-        if hasattr(db, 'describe_table'):
-            self.schema = db.describe_table(self.db_table)
-
+        schema = db.describe_table(self.db_table)
+        map = getattr(self, 'map', {})
+        # fileds and columns can be a descriptor for multilingual mapping.
+        self.fields = collections.OrderedDict()
+        self.columns = collections.OrderedDict()
         q = db.execute('SELECT * FROM {0} LIMIT 1'.format(qn(self.db_table)))
-        self.fields = [f[0] for f in q.description]
-        for f in q.description:
-            self.schema.setdefault(f[0], {})['type_code'] = f[1]
+        for row in q.description:
+            column = row[0]
+            name = map.get(column, column)
+            data = schema.get(column, {})
+            data.update({'column': column, 'name': name, 'type_code': row[1]})
+            field = self.field_class(**data)
+            self.fields[name] = field
+            self.columns[column] = field
 
 
 class ModelBase(type):
@@ -130,14 +141,14 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
     def __init__(self, *args, **kwargs):
         """Allows setting of fields using kwargs"""
         self._send_signal(signal='pre_init', args=args, kwargs=kwargs)
-        self.__dict__[self._meta.pk] = None
-        self._new_record = True
-        [setattr(self, self._meta.fields[i], arg) for i, arg in enumerate(args)]
-        [setattr(self, k, v) for k, v in list(kwargs.items())]
         self._changed = set()
-        self._send_signal(signal='post_init')
         self._errors = {}
         self._cache = {}
+        self.__dict__[self._meta.pk] = None
+        self._new_record = True
+        [setattr(self, self._meta.fields.keys()[i], arg) for i, arg in enumerate(args)]
+        [setattr(self, k, v) for k, v in list(kwargs.items())]
+        self._send_signal(signal='post_init')
 
     def __setattr__(self, name, value):
         """Records when fields have changed"""
@@ -145,7 +156,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         if cls_attr is not None:
             if isinstance(cls_attr, property) or issubclass(cls_attr, Model):
                 return object.__setattr__(self, name, value)
-        if name != '_changed' and name in self._meta.fields and hasattr(self, '_changed'):
+        if name in self._meta.fields:
             self._changed.add(name)
         self.__dict__[name] = value
 
@@ -168,7 +179,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
 
     pk = property(_get_pk, _set_pk)
 
-    def _get_defaults(self):
+    def _set_defaults(self):
         """Sets attribute defaults based on ``defaults`` dict"""
         for k, v in list(getattr(self._meta, 'defaults', {}).items()):
             if not getattr(self, k, None):
@@ -202,9 +213,20 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
                         valid_or_msg or 'Improper value "{0}" for "{1}"'.format(value, key)
                     )
 
+    def _set_data(self, data):
+        for column, value in data.items():
+            setattr(self, self._meta.columns[column].name, value)
+        self._changed = set()
+        return self
+
+    def _get_data(self, fields=frozenset(), exclude=frozenset()):
+        return dict([(f.column, getattr(self, f.name, None))
+                     for f in self._meta.fields.values()
+                     if f.name not in exclude or (fields and f.name in fields)])
+
     def save(self):
         """Sets defaults, validates and inserts into or updates database"""
-        self._get_defaults()
+        self._set_defaults()
         if not self.is_valid():
             raise self.ValidationError("Invalid data!")
         created = self._new_record
@@ -222,20 +244,15 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
     def _insert(self):
         """Uses SQL INSERT to create new record"""
         auto_pk = self._get_pk() is None
-        fields = [f for f in self._meta.fields
-                  if f != self._meta.pk or not auto_pk]
-        params = [getattr(self, f, None) for f in self._meta.fields
-                  if f != self._meta.pk or not auto_pk]
-        cursor = type(self).qs.insert(dict(zip(fields, params)))
-
-        if self._get_pk() is None:
+        exclude = set([self._meta.pk]) if auto_pk else set()
+        cursor = type(self).qs.insert(self._get_data(exclude=exclude))
+        if auto_pk:
             self._set_pk(type(self).qs.get_db().last_insert_id(cursor))
         return True
 
     def _update(self):
         """Uses SQL UPDATE to update record"""
-        params = [getattr(self, f) for f in self._changed]
-        type(self).qs.where(type(self).s.pk == self.pk).update(dict(zip(self._changed, params)))
+        type(self).qs.where(type(self).s.pk == self.pk).update(self._get_data(fields=self._changed))
 
     def delete(self):
         """Deletes record from database"""
@@ -411,8 +428,7 @@ class QS(smartsql.QS):
                 )
             data = dict(list(zip(fields, row)))
             if self.model:
-                # obj = self.model(*row)
-                obj = self.model(**data)
+                obj = self.model()._set_data(data)
                 obj._new_record = False
                 yield obj
             else:
@@ -536,8 +552,8 @@ class Table(smartsql.Table):
         if prefix is None:
             prefix = self
         result = []
-        for f in self.model._meta.fields:
-            result.append(smartsql.Field(f, prefix))
+        for f in self.model._meta.fields.values():
+            result.append(smartsql.Field(f.column, prefix))
         return result
 
     def __getattr__(self, name):
@@ -545,13 +561,17 @@ class Table(smartsql.Table):
         if name[0] == '_':
             raise AttributeError
         parts = name.split(smartsql.LOOKUP_SEP, 1)
-        result = {'field': parts[0], }
-        signals.send_signal(signal='field_conversion', sender=self, result=result, field=parts[0], model=self.model)
-        parts[0] = result['field']
-        if parts[0] == 'pk':
-            parts[0] = self.model._meta.pk
-        if isinstance(self.model._meta.relations.get(parts[0], None), ForeignKey):
-            parts[0] = self.model._meta.relations.get(parts[0]).field
+        field = parts[0]
+        result = {'field': field, }
+        signals.send_signal(signal='field_conversion', sender=self, result=result, field=field, model=self.model)
+        field = result['field']
+        if field == 'pk':
+            field = self.model._meta.pk
+        if field in self.model._meta.fields:
+            field = self.model._meta.fields[field].column
+        if isinstance(self.model._meta.relations.get(field, None), ForeignKey):
+            field = self.model._meta.relations.get(field).field
+        parts[0] = field
         return super(Table, self).__getattr__(smartsql.LOOKUP_SEP.join(parts))
 
     def as_(self, alias):
@@ -580,7 +600,7 @@ def set_null(parent, child, parent_rel):
     child.save()
 
 
-def do_nothing(parent, child, rel):
+def do_nothing(parent, child, parent_rel):
     pass
 
 

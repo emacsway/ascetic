@@ -1,4 +1,5 @@
 from __future__ import absolute_import, unicode_literals
+import collections
 import logging
 from threading import local
 from autumn import settings
@@ -104,6 +105,9 @@ class Database(object):
         finally:
             self.begin_level(-1)
 
+    def describe_table(self, table_name):
+        return {}
+
     @classmethod
     def factory(cls, **kwargs):
         relations = {
@@ -179,18 +183,18 @@ class PostgreSQLDatabase(Database):
             SELECT * FROM information_schema.columns WHERE table_name = %s;
         """, [table_name])
         fields = [f[0] for f in cursor.description]
-        schema = {}
+        schema = collections.OrderedDict()
         for row in cursor.fetchall():
             data = dict(list(zip(fields, row)))
             col = {
-                'name': data['column_name'],
+                'column': data['column_name'],
                 'position': data['ordinal_position'],
                 'type': data['udt_name'],
                 'data_type': data['data_type'],
                 'null': data['is_nullable'].upper() == 'YES',
                 'max_length': data['character_maximum_length'],
             }
-            schema[col['name']] = col
+            schema[col['column']] = col
         return schema
 
 
