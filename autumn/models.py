@@ -42,10 +42,12 @@ class ModelRegistry(object):
 
 registry = ModelRegistry()
 
+
 class Field(object):
     def __init__(self, **kw):
         for k, v in kw.items():
             setattr(self, k, v)
+
 
 class ModelOptions(object):
     """Model options"""
