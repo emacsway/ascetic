@@ -76,15 +76,15 @@ class ModelOptions(object):
             if not isinstance(v, (list, tuple)):
                 self.validations[k] = (v, )
 
-        # See cursor.description http://www.python.org/dev/peps/pep-0249/
         db = get_db(self.using)
 
         schema = db.describe_table(self.db_table)
-        map = getattr(self, 'map', {})
+        map = dict([(v, k) for k, v in getattr(self, 'map', {}).items()])
         # fileds and columns can be a descriptor for multilingual mapping.
         self.fields = collections.OrderedDict()
         self.columns = collections.OrderedDict()
         q = db.execute('SELECT * FROM {0} LIMIT 1'.format(qn(self.db_table)))
+        # See cursor.description http://www.python.org/dev/peps/pep-0249/
         for row in q.description:
             column = row[0]
             name = map.get(column, column)
@@ -438,8 +438,7 @@ class QS(smartsql.QS):
 
     def get_init_fields(self):
         """Returns list of data fields what was passed to query."""
-        # Experiment for: author.alias = ModelForAlias(**data)
-        # The main problem, attribute of model for alias can be busy, for example, by descriptor
+        # Experiment for: author.rel = RelModel(**data)
         # TODO: Sets cache of relation
         init_fields = []
         for f in self._fields:
