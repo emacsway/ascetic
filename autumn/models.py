@@ -567,10 +567,10 @@ class Table(smartsql.Table):
         field = result['field']
         if field == 'pk':
             field = self.model._meta.pk
-        if field in self.model._meta.fields:
-            field = self.model._meta.fields[field].column
         if isinstance(self.model._meta.relations.get(field, None), ForeignKey):
             field = self.model._meta.relations.get(field).field
+        if field in self.model._meta.fields:
+            field = self.model._meta.fields[field].column
         parts[0] = field
         return super(Table, self).__getattr__(smartsql.LOOKUP_SEP.join(parts))
 
