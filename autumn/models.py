@@ -218,6 +218,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
     def _set_data(self, data):
         for column, value in data.items():
             setattr(self, self._meta.columns[column].name, value)
+        self._new_record = False
         self._changed = set()
         # Do use this method for sets File fields and other special data types?
         return self
@@ -412,16 +413,9 @@ class QS(smartsql.QS):
         for row in cursor.fetchall():
             row = list(row)
             for i, v in enumerate(row[:]):
-                row[i] = data_registry.convert_to_python(
-                    self.dialect(), cursor.description[i][1], v
-                )
+                row[i] = data_registry.convert_to_python(self.dialect(), cursor.description[i][1], v)
             data = dict(list(zip(fields, row)))
-            if self.model:
-                obj = self.model()._set_data(data)
-                obj._new_record = False
-                yield obj
-            else:
-                yield data
+            yield self.model()._set_data(data) if self.model else data
 
     def get_init_fields(self):
         """Returns list of data fields what was passed to query."""
@@ -469,9 +463,7 @@ class QS(smartsql.QS):
     def sqlparams(self, expr=None):
         params = smartsql.sqlparams(expr or self)
         for i, v in enumerate(params[:]):
-            params[i] = data_registry.convert_to_sql(
-                self.dialect(), v
-            )
+            params[i] = data_registry.convert_to_sql(self.dialect(), v)
         return params
 
     def execute(self):
