@@ -265,11 +265,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
 
     def _send_signal(self, *a, **kw):
         """Sends signal"""
-        kw.update({
-            'sender': type(self),
-            'instance': self,
-            'using': self._meta.using,
-        })
+        kw.update({'sender': type(self), 'instance': self, 'using': self._meta.using})
         return signals.send_signal(*a, **kw)
 
     @classproperty
