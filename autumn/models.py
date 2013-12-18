@@ -232,16 +232,10 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         self._set_defaults()
         if not self.is_valid():
             raise self.ValidationError("Invalid data!")
-        created = self._new_record
-        update_fields = self._changed
-        self._send_signal(signal='pre_save', update_fields=update_fields)
-        if self._new_record:
-            self._insert()
-            self._new_record = False
-            result = True
-        else:
-            result = self._update()
-        self._send_signal(signal='post_save', created=created, update_fields=update_fields)
+        self._send_signal(signal='pre_save', update_fields=self._changed)
+        result = self._insert() if self._new_record else self._update()
+        self._send_signal(signal='post_save', created=self._new_record, update_fields=self._changed)
+        self._new_record = False
         self._changed = set()
         return result
 
