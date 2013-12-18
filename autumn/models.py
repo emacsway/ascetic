@@ -143,11 +143,11 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
     def __init__(self, *args, **kwargs):
         """Allows setting of fields using kwargs"""
         self._send_signal(signal='pre_init', args=args, kwargs=kwargs)
+        self._new_record = True
         self._changed = set()
         self._errors = {}
         self._cache = {}
         self.__dict__[self._meta.pk] = None
-        self._new_record = True
         [setattr(self, self._meta.fields.keys()[i], arg) for i, arg in enumerate(args)]
         [setattr(self, k, v) for k, v in list(kwargs.items())]
         self._send_signal(signal='post_init')
