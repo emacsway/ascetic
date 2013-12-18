@@ -521,12 +521,7 @@ class Table(smartsql.Table):
 
     def get_fields(self, prefix=None):
         """Returns field list."""
-        if prefix is None:
-            prefix = self
-        result = []
-        for f in self.model._meta.fields.values():
-            result.append(smartsql.Field(f.column, prefix))
-        return result
+        return [smartsql.Field(f.column, prefix if prefix is not None else self) for f in self.model._meta.fields.values()]
 
     def __getattr__(self, name):
         """Added some specific functional."""
