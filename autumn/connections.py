@@ -1,6 +1,7 @@
 from __future__ import absolute_import, unicode_literals
 import collections
 import logging
+from functools import wraps
 from threading import local
 from autumn import settings
 
@@ -12,6 +13,41 @@ databases = {}
 
 class DummyCtx(object):
     pass
+
+
+class Transaction(object):
+
+    def __init__(self, using='default'):
+        """Constructor of Transaction instance."""
+        self.db = get_db(using)
+
+    def __call__(self, f=None):
+        if f is None:
+            return self
+
+        @wraps(f)
+        def _decorated(*args, **kw):
+            with self:
+                rv = f(*args, **kw)
+            return rv
+
+        return _decorated
+
+    def __enter__(self):
+        self.db.begin()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            if exc_type:
+                self.db.rollback()
+            else:
+                try:
+                    self.db.commit()
+                except:
+                    self.db.rollback()
+                    raise
+        finally:
+            pass
 
 
 class Database(object):
@@ -89,6 +125,10 @@ class Database(object):
         if self.ctx.begin_level < 0:
             self.ctx.begin_level = 0
         return self.ctx.begin_level
+
+    @property
+    def transaction(self):
+        return Transaction(self.using)
 
     def begin(self):
         self.begin_level(+1)

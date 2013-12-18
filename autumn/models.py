@@ -219,12 +219,13 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         for column, value in data.items():
             setattr(self, self._meta.columns[column].name, value)
         self._changed = set()
+        # Do use this method for sets File fields and other special data types?
         return self
 
     def _get_data(self, fields=frozenset(), exclude=frozenset()):
         return dict([(f.column, getattr(self, f.name, None))
                      for f in self._meta.fields.values()
-                     if f.name not in exclude or (fields and f.name in fields)])
+                     if not (f.name in exclude or (fields and f.name not in fields))])
 
     def save(self):
         """Sets defaults, validates and inserts into or updates database"""
@@ -241,6 +242,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         else:
             result = self._update()
         self._send_signal(signal='post_save', created=created, update_fields=update_fields)
+        self._changed = set()
         return result
 
     def _insert(self):
@@ -249,7 +251,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         exclude = set([self._meta.pk]) if auto_pk else set()
         cursor = type(self).qs.insert(self._get_data(exclude=exclude))
         if auto_pk:
-            self._set_pk(type(self).qs.get_db().last_insert_id(cursor))
+            self._set_pk(type(self).qs.db.last_insert_id(cursor))
         return True
 
     def _update(self):
@@ -281,11 +283,6 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         if '_s' not in cls.__dict__:
             cls._s = Table(cls)
         return cls._s
-
-    @classproperty
-    def ss(cls):
-        smartsql.warn('Model.ss', 'Model.s', 4)
-        return cls.s
 
     @classproperty
     def qs(cls):
@@ -473,7 +470,7 @@ class QS(smartsql.QS):
         return super(QS, self).__getitem__(key)
 
     def dialect(self):
-        engine = self.get_db().engine
+        engine = self.db.engine
         return SMARTSQL_DIALECTS.get(engine, engine)
 
     def sqlrepr(self, expr=None):
@@ -495,7 +492,7 @@ class QS(smartsql.QS):
             return self._execute(self.sqlrepr(), *self.sqlparams())
 
     def _execute(self, sql, *params):
-        return self.get_db().execute(sql, params)
+        return self.db.execute(sql, params)
 
     def result(self):
         """Result"""
@@ -503,17 +500,9 @@ class QS(smartsql.QS):
             return self
         return self.execute()
 
-    def get_db(self):
+    @property
+    def db(self):
         return get_db(self.using)
-
-    def begin(self):
-        return self.get_db().begin()
-
-    def commit(self):
-        return self.get_db().commit()
-
-    def rollback(self):
-        return self.get_db().rollback()
 
     def as_union(self):
         return UnionQuerySet(self)
