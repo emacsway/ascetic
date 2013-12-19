@@ -570,6 +570,8 @@ def set_null(parent, child, parent_rel):
 def do_nothing(parent, child, parent_rel):
     pass
 
+# TODO: descriptor for FileField?
+
 
 class Relation(object):
 
