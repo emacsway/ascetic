@@ -142,7 +142,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
 
     def __init__(self, *args, **kwargs):
         """Allows setting of fields using kwargs"""
-        self._send_signal(signal='pre_init', args=args, kwargs=kwargs)
+        self._send_signal(signal='pre_init', args=args, kwargs=kwargs, using=self._meta.using)
         self._new_record = True
         self._changed = set()
         self._errors = {}
@@ -150,7 +150,7 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
         self.__dict__[self._meta.pk] = None
         [setattr(self, self._meta.fields.keys()[i], arg) for i, arg in enumerate(args)]
         [setattr(self, k, v) for k, v in list(kwargs.items())]
-        self._send_signal(signal='post_init')
+        self._send_signal(signal='post_init', using=self._meta.using)
 
     def __setattr__(self, name, value):
         """Records when fields have changed"""
@@ -228,45 +228,47 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
                      for f in self._meta.fields.values()
                      if not (f.name in exclude or (fields and f.name not in fields))])
 
-    def save(self):
+    def save(self, using=None):
         """Sets defaults, validates and inserts into or updates database"""
+        using = using or self._meta.using
         self._set_defaults()
         if not self.is_valid():
             raise self.ValidationError("Invalid data!")
-        self._send_signal(signal='pre_save', update_fields=self._changed)
-        result = self._insert() if self._new_record else self._update()
-        self._send_signal(signal='post_save', created=self._new_record, update_fields=self._changed)
+        self._send_signal(signal='pre_save', update_fields=self._changed, using=using)
+        result = self._insert(using) if self._new_record else self._update(using)
+        self._send_signal(signal='post_save', created=self._new_record, update_fields=self._changed, using=using)
         self._new_record = False
         self._changed = set()
         return result
 
-    def _insert(self):
+    def _insert(self, using):
         """Uses SQL INSERT to create new record"""
         auto_pk = self._get_pk() is None
         exclude = set([self._meta.pk]) if auto_pk else set()
-        cursor = type(self).qs.insert(self._get_data(exclude=exclude))
+        cursor = type(self).qs.using(using).insert(self._get_data(exclude=exclude))
         if auto_pk:
             self._set_pk(type(self).qs.db.last_insert_id(cursor))
         return True
 
-    def _update(self):
+    def _update(self, using):
         """Uses SQL UPDATE to update record"""
-        type(self).qs.where(type(self).s.pk == self.pk).update(self._get_data(fields=self._changed))
+        type(self).qs.using(using).where(type(self).s.pk == self.pk).update(self._get_data(fields=self._changed))
 
-    def delete(self):
+    def delete(self, using=None):
         """Deletes record from database"""
-        self._send_signal(signal='pre_delete')
+        using = using or self._meta.using
+        self._send_signal(signal='pre_delete', using=using)
         for key, rel in self._meta.relations.items():
             if isinstance(rel, OneToMany):
                 for child in getattr(self, key).iterator():
                     rel.on_delete(self, child, rel)
-        type(self).qs.where(type(self).s.pk == self.pk).delete()
-        self._send_signal(signal='post_delete')
+        type(self).qs.using(using).where(type(self).s.pk == self.pk).delete()
+        self._send_signal(signal='post_delete', using=using)
         return True
 
     def _send_signal(self, *a, **kw):
         """Sends signal"""
-        kw.update({'sender': type(self), 'instance': self, 'using': self._meta.using})
+        kw.update({'sender': type(self), 'instance': self})
         return signals.send_signal(*a, **kw)
 
     @classproperty
@@ -339,21 +341,21 @@ class DataRegistry(object):
 class QS(smartsql.QS):
     """Query Set adapted."""
 
+    _expr = None
     _cache = None
-    separate_models = False
+    _using = 'default'
     model = None
-    using = 'default'
+    separate_models = False
 
     def __init__(self, tables=None):
         super(QS, self).__init__(tables=tables)
         if isinstance(tables, Table):
             self.model = tables.model
-            self.using = self.model._meta.using
+            self._using = self.model._meta.using
 
     def raw(self, sql, *params):
         self = self.clone()
-        self._sql = sql
-        self._params = params
+        self._expr = smartsql.OmitParentheses(smartsql.E(sql, *params))
         return self
 
     def clone(self):
@@ -368,13 +370,9 @@ class QS(smartsql.QS):
 
     def count(self):
         """Returns length or list."""
-        if self._cache:
+        if self._cache is not None:
             return len(self._cache)
-        qs = self.order_by(reset=True)
-        sql = "SELECT COUNT(1) as count_value FROM ({0}) as count_list".format(
-            qs.sqlrepr()
-        )
-        return self._execute(sql, *qs.sqlparams()).fetchone()[0]
+        return super(QS, self).count()
 
     def fill_cache(self):
         if self._cache is None:
@@ -388,14 +386,7 @@ class QS(smartsql.QS):
 
     def iterator(self):
         """iterator"""
-        if self._sql:
-            sql = self._sql
-            if self._limit:
-                sql = ' '.join([sql, smartsql.sqlrepr(self._limit, self.dialect())])
-            cursor = self._execute(sql, *self._params)
-        else:
-            cursor = self._execute(self.sqlrepr(), *self.sqlparams())
-
+        cursor = self.execute()
         fields = []
         for f in cursor.description:
             fn_suf = fn = f[0]
@@ -448,10 +439,24 @@ class QS(smartsql.QS):
         if self._cache:
             return self._cache[key]
         if isinstance(key, integer_types):
-            self = self.clone()
             self = super(QS, self).__getitem__(key)
             return list(self)[0]
         return super(QS, self).__getitem__(key)
+
+    def _build_sql(self):
+        if not (self._action == "select" and self._expr):
+            return super(QS, self)._build_sql()
+        sql = smartsql.ExprList(self._expr)
+        if self._limit:
+            sql.append(self._limit)
+        return sql
+
+    def using(self, alias=None):
+        if alias is None:
+            return self._using
+        self = self.clone()
+        self._using = alias
+        return self
 
     def dialect(self):
         engine = self.db.engine
@@ -468,23 +473,22 @@ class QS(smartsql.QS):
 
     def execute(self):
         """Implementation of query execution"""
-        if self._action in ('select', 'count', ):
-            return self
-        else:
-            return self._execute(self.sqlrepr(), *self.sqlparams())
+        return self._execute(self.sqlrepr(), self.sqlparams())
 
-    def _execute(self, sql, *params):
+    def _execute(self, sql, params):
         return self.db.execute(sql, params)
 
     def result(self):
         """Result"""
-        if self._action in ('select', 'count', ):
+        if self._action == 'select':
             return self
+        if self._action == 'count':
+            return self.execute().fetchone()[0]
         return self.execute()
 
     @property
     def db(self):
-        return get_db(self.using)
+        return get_db(self.using())
 
     def as_union(self):
         return UnionQuerySet(self)
@@ -495,7 +499,7 @@ class UnionQuerySet(smartsql.UnionQuerySet, QS):
     def __init__(self, qs):
         super(UnionQuerySet, self).__init__(qs)
         self.model = qs.model
-        self.using = qs.using
+        self._using = qs.using()
 
 
 class Table(smartsql.Table):

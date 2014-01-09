@@ -85,7 +85,7 @@ class Database(object):
         cursor.execute(sql, params)
         return cursor
 
-    def execute(self, sql, params=(), using=None):
+    def execute(self, sql, params=()):
         if self.debug:
             self.logger.debug("%s - %s", sql, params)
         if self.placeholder != PLACEHOLDER:
