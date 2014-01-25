@@ -97,6 +97,8 @@ class ModelOptions(object):
 
 class ModelBase(type):
     """Metaclass for Model"""
+    options_class = ModelOptions
+
     def __new__(cls, name, bases, attrs):
         if name in ('Model', 'NewBase', ):
             return super(ModelBase, cls).__new__(cls, name, bases, attrs)
@@ -104,22 +106,18 @@ class ModelBase(type):
         new_cls = type.__new__(cls, name, bases, attrs)
 
         if hasattr(new_cls, 'Meta'):
-            class NewOptions(new_cls.Meta, ModelOptions):
-                pass
+            if isinstance(new_cls.Meta, new_cls.options_class):
+                NewOptions = new_cls.Meta
+            else:
+                class NewOptions(new_cls.Meta, new_cls.options_class):
+                    pass
         else:
-            NewOptions = ModelOptions
+            NewOptions = new_cls.options_class
         opts = new_cls._meta = NewOptions(new_cls)
 
         for key, rel in new_cls.__dict__.items():
             if isinstance(rel, Relation):
                 rel.add_to_class(new_cls, key)
-
-        for b in bases:
-            if not hasattr(b, '_meta'):
-                continue
-            base_meta = getattr(b, '_meta')
-            # TODO: inheritable options???
-            # May be better way is a Meta class inheritance?
 
         registry.add(new_cls)
 
