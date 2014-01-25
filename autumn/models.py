@@ -343,7 +343,6 @@ class QS(smartsql.QS):
     _cache = None
     _using = 'default'
     model = None
-    separate_models = False
 
     def __init__(self, tables=None):
         super(QS, self).__init__(tables=tables)
@@ -394,43 +393,12 @@ class QS(smartsql.QS):
                 c += 1
             fields.append(fn_suf)
 
-        if self.separate_models:
-            init_fields = self.get_init_fields()
-            if len(fields) == len(init_fields):
-                fields = init_fields
-
         for row in cursor.fetchall():
             row = list(row)
             for i, v in enumerate(row[:]):
                 row[i] = data_registry.convert_to_python(self.dialect(), cursor.description[i][1], v)
             data = dict(list(zip(fields, row)))
             yield self.model()._set_data(data) if self.model else data
-
-    def get_init_fields(self):
-        """Returns list of data fields what was passed to query."""
-        # Experiment for: author.rel = RelModel(**data)
-        # TODO: Sets cache of relation
-        init_fields = []
-        for f in self._fields:
-            parts = self.sqlrepr(f).replace('`', '').replace('"', '').split('.')
-            fn = parts[-1]
-            prefix = parts[0] if len(parts) == 2 else None
-            if isinstance(f, smartsql.F):
-                if isinstance(f._prefix, Table):
-                    model = f._prefix.model
-                    if not isinstance(f._prefix, TableAlias) and model == self.model:
-                        init_fields.append((None, None, f._name))
-                        continue
-                    elif model is not None:
-                        init_fields.append((prefix, model, f._name))
-                        continue
-            fn_suf = fn
-            c = 2
-            while (None, None, fn_suf) in init_fields:
-                fn_suf = fn + str(c)
-                c += 1
-            init_fields.append(None, None, fn_suf)
-        return init_fields
 
     def __getitem__(self, key):
         """Returns sliced self or item."""
