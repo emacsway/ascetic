@@ -187,16 +187,16 @@ class Model(ModelBase(bytes("NewBase"), (object, ), {})):
                     v = v()
                 setattr(self, k, v)
 
-    def is_valid(self, skip=()):
+    def is_valid(self, exclude=(), fields=()):
         """Returns boolean on whether all ``validations`` pass"""
-        self._validate(skip)
+        self._validate(exclude, fields)
         return not self._errors
 
-    def _validate(self, skip=()):
+    def _validate(self, exclude=(), fields=()):
         """Tests all ``validations``"""
         self._errors = {}
         for key, validators in list(getattr(self._meta, 'validations', {}).items()):
-            if key in skip:
+            if key in exclude or (fields and key not in fields):
                 continue
             for validator in validators:
                 assert isinstance(validator, collections.Callable), 'The validator must be callable'
