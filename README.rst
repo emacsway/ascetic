@@ -159,11 +159,11 @@ Other projects
 
 See also:
 
-* SQLAlchemy (scheme from class or database, see "autoload" option) http://www.sqlalchemy.org/
-* SQLObject (scheme from class or database, see "fromDatabase" option) http://www.sqlobject.org/
-* Storm (properties from class) https://storm.canonical.com/
-* Peewee (scheme from class) http://peewee.readthedocs.org/
-* Twistar (scheme from database), provides asynchronous DB interaction http://findingscience.com/twistar/
-* Openorm (lightweight datamapper) http://code.google.com/p/openorm/source/browse/python/
-* Activemodel (scheme from database) http://code.google.com/p/activemodel/
-* ActiveRecord like ORM under 200 lines (scheme from database) http://code.activestate.com/recipes/496905-an-activerecord-like-orm-object-relation-mapper-un/
+* `SQLAlchemy <http://www.sqlalchemy.org/>`_ (scheme from class or database, see "autoload" option)
+* `SQLObject <http://www.sqlobject.org/>`_ (scheme from class or database, see "fromDatabase" option)
+* `Storm <https://storm.canonical.com/>`_ (properties from class)
+* `Peewee <http://peewee.readthedocs.org/>`_ (scheme from class)
+* `Twistar <http://findingscience.com/twistar/>`_ (scheme from database), provides asynchronous DB interaction
+* `Openorm <http://code.google.com/p/openorm/source/browse/python/>`_ (lightweight datamapper)
+* `Activemodel <http://code.google.com/p/activemodel/>`_ (scheme from database)
+* `ActiveRecord <http://code.activestate.com/recipes/496905-an-activerecord-like-orm-object-relation-mapper-un/>`_ like ORM under 200 lines (scheme from database)
