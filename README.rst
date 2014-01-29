@@ -4,16 +4,14 @@ Autumn, a lightweight Python ORM
 
 Autumn exists as a super-lightweight Object-relational mapper (ORM) for Python.
 Autumn ORM follows the `KISS principle <http://en.wikipedia.org/wiki/KISS_principle>`_.
-It’s an alternative to `SQLObject <http://www.sqlobject.org/>`_,
-`SQLAlchemy <http://www.sqlalchemy.org/>`_, `Storm <https://storm.canonical.com/>`_,
-etc.
-Perhaps the biggest difference is the automatic population of fields as
-attributes (see the example below), and minimal size.
+Has automatic population of fields from database (see the example below), and minimal size.
+You do not have to specify the columns in the class. This follows the `DRY <http://en.wikipedia.org/wiki/DRY_code>`_ principle. 
 Autumn as small as possible.
 
 It is released under the MIT License (see LICENSE file for details).
 
 This project is currently considered beta software.
+
 
 PostgreSQL Example
 ===================
@@ -84,6 +82,7 @@ Creation
     u = Book(title='Ulysses', author_id=james.id)
     u.save()
 
+
 Retrieval
 ==========
 
@@ -97,6 +96,7 @@ Retrieval
     a = Author.get()[:10]   # LIMIT 0, 10
     a = Author.get()[20:30] # LIMIT 20, 10
 
+
 Updating
 =========
 
@@ -106,12 +106,14 @@ Updating
     a.bio = 'What a crazy guy! Hard to read but... wow!'
     a.save()
 
+
 Deleting
 =========
 
 ::
 
     a.delete()
+
 
 `SQLBuilder <https://bitbucket.org/evotech/sqlbuilder/overview>`_ integration
 ===============================================================================
@@ -126,6 +128,7 @@ Deleting
 
 QuerySet based on `sqlbuilder.smartsql <https://bitbucket.org/evotech/sqlbuilder/src/tip/sqlbuilder/smartsql>`_, see `more info <https://bitbucket.org/evotech/sqlbuilder/overview>`_.
 
+
 Signals support
 ================
 
@@ -137,13 +140,30 @@ Signals support
 * post_delete
 * class_prepared
 
+
 Web
 ====
 
 You can use Autumn ORM with lightweight web-frameworks, like `wheezy.web <https://bitbucket.org/akorn/wheezy.web>`_, `Bottle <http://bottlepy.org/>`_, `Tornado <http://www.tornadoweb.org/>`_, `pysi <https://bitbucket.org/imbolc/pysi>`_, etc.
+
 
 Gratitude
 ==========
 
 | Forked from `https://github.com/lucky/autumn <https://github.com/lucky/autumn>`_
 | Thanks to `Jared Kuolt (lucky) <https://github.com/lucky>`_
+
+
+Other projects
+===============
+
+See also:
+
+* SQLAlchemy (scheme from class or database, see "autoload" option) http://www.sqlalchemy.org/
+* SQLObject (scheme from class or database, see "fromDatabase" option) http://www.sqlobject.org/
+* Storm (properties from class) https://storm.canonical.com/
+* Peewee (scheme from class) http://peewee.readthedocs.org/
+* Twistar (scheme from database), provides asynchronous DB interaction http://findingscience.com/twistar/
+* Openorm (lightweight datamapper) http://code.google.com/p/openorm/source/browse/python/
+* Activemodel (scheme from database) http://code.google.com/p/activemodel/
+* ActiveRecord like ORM under 200 lines (scheme from database) http://code.activestate.com/recipes/496905-an-activerecord-like-orm-object-relation-mapper-un/
