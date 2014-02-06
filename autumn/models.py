@@ -133,7 +133,7 @@ class ModelBase(type):
         return new_cls
 
 
-class Model(ModelBase(bytes("NewBase"), (object, ), {})):
+class Model(ModelBase(b"NewBase", (object, ), {})):
     """Model class"""
 
     _s = None
