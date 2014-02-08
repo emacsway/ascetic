@@ -154,7 +154,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         """Records when fields have changed"""
         cls_attr = getattr(type(self), name, None)
         if cls_attr is not None:
-            if isinstance(cls_attr, property) or issubclass(cls_attr, Model):
+            if isinstance(cls_attr, (property, Relation)):
                 return object.__setattr__(self, name, value)
         if name in self._meta.fields:
             self._changed.add(name)
@@ -628,7 +628,7 @@ class ForeignKey(Relation):
 
     def __get__(self, instance, owner):
         if not instance:
-            return self.rel_model
+            return self
         fk_val = getattr(instance, self.field)
         if fk_val is None:
             return None
@@ -666,7 +666,7 @@ class OneToMany(Relation):
 
     def __get__(self, instance, owner):
         if not instance:
-            return self.rel_model
+            return self
         # Cache attr already exists in QS, so, can be even setable.
         return self.filter(**{self.rel_field: getattr(instance, self.field)})
 
