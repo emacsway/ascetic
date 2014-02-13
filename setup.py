@@ -14,7 +14,7 @@ setup(
     author_email="ivzak@yandex.ru",
     description="Lightweight python ORM (Object-relational mapper).",
     long_description=open(os.path.join(os.path.dirname(__file__), 'README.rst')).read(),
-    url="https://bitbucket.org/evotech/autumn",
+    url="https://bitbucket.org/emacsway/autumn",
     license="MIT License",
     keywords = "ORM Database SQL",
     install_requires=[

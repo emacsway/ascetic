@@ -115,7 +115,7 @@ Deleting
     a.delete()
 
 
-`SQLBuilder <https://bitbucket.org/evotech/sqlbuilder/overview>`_ integration
+`SQLBuilder <https://bitbucket.org/emacsway/sqlbuilder/overview>`_ integration
 ===============================================================================
 
 ::
@@ -126,7 +126,7 @@ Deleting
         (Author.s.first_name != 'James') & (Author.s.last_name != 'Joyce')
     )[:10]
 
-QuerySet based on `sqlbuilder.smartsql <https://bitbucket.org/evotech/sqlbuilder/src/tip/sqlbuilder/smartsql>`_, see `more info <https://bitbucket.org/evotech/sqlbuilder/overview>`_.
+QuerySet based on `sqlbuilder.smartsql <https://bitbucket.org/emacsway/sqlbuilder/src/tip/sqlbuilder/smartsql>`_, see `more info <https://bitbucket.org/emacsway/sqlbuilder/overview>`_.
 
 
 Signals support
