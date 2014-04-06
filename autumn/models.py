@@ -396,8 +396,11 @@ class QS(smartsql.QS):
     def prefetch(self, *a, **kw):
         """Prefetch relations"""
         c = self.clone()
-        c._prefetch.update(kw)
-        c.prefetch.update({i: self.model._meta.relations[i].qs for i in a})
+        if a and not a[0]:
+            c._prefetch = {}
+        else:
+            c._prefetch.update(kw)
+            c.prefetch.update({i: self.model._meta.relations[i].qs for i in a})
         return self
 
     def __iter__(self):
