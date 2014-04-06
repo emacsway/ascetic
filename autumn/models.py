@@ -551,7 +551,7 @@ class TableAlias(smartsql.TableAlias, Table):
     """Table alias class"""
     @property
     def model(self):
-        return self._table.model
+        return getattr(self._table, 'model', None)  # Can be subquery
 
 
 def qn(name, using='default'):
