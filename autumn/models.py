@@ -346,6 +346,7 @@ class QS(smartsql.QS):
 
     def __init__(self, tables=None):
         super(QS, self).__init__(tables=tables)
+        self._prefetch = {}
         if isinstance(tables, Table):
             self.model = tables.model
             self._using = self.model._meta.using
@@ -374,6 +375,29 @@ class QS(smartsql.QS):
     def fill_cache(self):
         if self._cache is None:
             self._cache = list(self.iterator())
+        self.populate_prefetch()
+        return self
+
+    def populate_prefetch(self):
+        for key, qs in self._prefetch.items():
+            rel = self.model._meta.relations[key]
+            # recursive handle prefetch
+            rows = list(qs.where(
+                smartsql.Field(rel.rel_field).in_(
+                    filter([getattr(i, rel.field) for i in self._cache])
+                )
+            ))
+            for obj in self._cache:
+                val = [i for i in rows if getattr(i, rel.rel_field) == getattr(obj, rel.field)]
+                if isinstance(rel, ForeignKey):
+                    val = val[0] if val else None
+                setattr(obj, "{}_prefetch".format(rel.field), val)
+
+    def prefetch(self, *a, **kw):
+        """Prefetch relations"""
+        c = self.clone()
+        c._prefetch.update(kw)
+        c.prefetch.update({i: self.model._meta.relations[i].qs for i in a})
         return self
 
     def __iter__(self):
