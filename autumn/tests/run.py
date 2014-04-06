@@ -14,8 +14,9 @@ from autumn.connections import get_db
 from autumn.models import Model, QS, qn
 from autumn.tests.models import Book, Author
 
+
 class TestUtils(unittest.TestCase):
-    
+
     maxDiff = None
 
     def test_resolve(self):
@@ -185,7 +186,7 @@ class TestModels(unittest.TestCase):
                 ['"autumn_tests_models_author"."id"',
                  '"autumn_tests_models_author"."first_name"',
                  '"autumn_tests_models_author"."last_name"',
-                 '"autumn_tests_models_author"."bio"' ]
+                 '"autumn_tests_models_author"."bio"', ]
             )
         else:
             self.assertListEqual(
@@ -217,6 +218,16 @@ class TestModels(unittest.TestCase):
             self.assertEqual(qs.sqlrepr(), """SELECT `autumn_tests_models_author`.`id`, `autumn_tests_models_author`.`first_name`, `autumn_tests_models_author`.`last_name`, `autumn_tests_models_author`.`bio` FROM `autumn_tests_models_author` WHERE (`autumn_tests_models_author`.`id` = %s)""")
         self.assertEqual(len(qs), 1)
         self.assertTrue(isinstance(qs[0], Author))
+
+        # prefetch
+        for obj in Book.qs.prefetch('author').order_by("id"):
+            self.assertTrue(hasattr(obj, 'author_prefetch'))
+            self.assertEqual(obj.author_prefetch, obj.author)
+
+        for obj in Author.qs.prefetch('books').order_by("id"):
+            self.assertTrue(hasattr(obj, 'books_prefetch'))
+            self.assertEqual(len(obj.books_prefetch), len(obj.books))
+
 
     def testvalidators(self):
         ev = validators.Email()

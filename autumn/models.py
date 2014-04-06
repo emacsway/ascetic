@@ -1,5 +1,6 @@
 from __future__ import absolute_import, unicode_literals
 import re
+import copy
 import collections
 from sqlbuilder import smartsql
 from . import signals
@@ -22,6 +23,8 @@ SMARTSQL_DIALECTS = {
     'postgis': 'postgres',
     'oracle': 'oracle',
 }
+
+cr = copy.copy(smartsql.cr)
 
 
 class ModelNotRegistered(Exception):
@@ -293,6 +296,9 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
     class ValidationError(Exception):
         pass
 
+    def __repr__(self):
+        return "<{0}.{1}: {2}>".format(type(self).__module__, type(self).__name__, self.pk)
+
 
 class DataRegistry(object):
     """
@@ -336,6 +342,7 @@ class DataRegistry(object):
         return value
 
 
+@cr('QuerySet')
 class QS(smartsql.QS):
     """Query Set adapted."""
 
@@ -357,9 +364,10 @@ class QS(smartsql.QS):
         return self
 
     def clone(self):
-        self = super(QS, self).clone()
-        self._cache = None
-        return self
+        c = super(QS, self).clone()
+        c._cache = None
+        c._prefetch = self._prefetch.copy()
+        return c
 
     def __len__(self):
         """Returns length or list."""
@@ -384,14 +392,14 @@ class QS(smartsql.QS):
             # recursive handle prefetch
             rows = list(qs.where(
                 smartsql.Field(rel.rel_field).in_(
-                    filter([getattr(i, rel.field) for i in self._cache])
+                    filter(None, [getattr(i, rel.field) for i in self._cache])
                 )
             ))
             for obj in self._cache:
                 val = [i for i in rows if getattr(i, rel.rel_field) == getattr(obj, rel.field)]
                 if isinstance(rel, ForeignKey):
                     val = val[0] if val else None
-                setattr(obj, "{}_prefetch".format(rel.field), val)
+                setattr(obj, "{}_prefetch".format(key), val)
 
     def prefetch(self, *a, **kw):
         """Prefetch relations"""
@@ -400,8 +408,8 @@ class QS(smartsql.QS):
             c._prefetch = {}
         else:
             c._prefetch.update(kw)
-            c.prefetch.update({i: self.model._meta.relations[i].qs for i in a})
-        return self
+            c._prefetch.update({i: self.model._meta.relations[i].qs for i in a})
+        return c
 
     def __iter__(self):
         """Returns iterator."""
@@ -483,10 +491,8 @@ class QS(smartsql.QS):
     def db(self):
         return get_db(self.using())
 
-    def as_union(self):
-        return UnionQuerySet(self)
 
-
+@cr
 class UnionQuerySet(smartsql.UnionQuerySet, QS):
     """Union query class"""
     def __init__(self, qs):
@@ -495,6 +501,7 @@ class UnionQuerySet(smartsql.UnionQuerySet, QS):
         self._using = qs.using()
 
 
+@cr
 class Table(smartsql.Table):
     """Table class"""
 
@@ -538,10 +545,8 @@ class Table(smartsql.Table):
         parts[0] = field
         return super(Table, self).__getattr__(smartsql.LOOKUP_SEP.join(parts))
 
-    def as_(self, alias):
-        return TableAlias(alias, self)
 
-
+@cr
 class TableAlias(smartsql.TableAlias, Table):
     """Table alias class"""
     @property
