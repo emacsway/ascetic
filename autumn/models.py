@@ -580,13 +580,16 @@ def do_nothing(parent, child, parent_rel):
 
 class Relation(object):
 
-    def __init__(self, rel_model, rel_field=None, field=None, qs=None, on_delete=cascade, rel_name=None):
+    def __init__(self, rel_model, rel_field=None, field=None, qs=None, on_delete=cascade, rel_name=None, related_name=None):
         self.rel_model_or_name = rel_model
         self._rel_field = rel_field
         self._field = field
         self._qs = qs
         self.on_delete = on_delete
         self._rel_name = rel_name
+        if related_name:
+            smartsql.warn('related_name', 'rel_name')
+            self._rel_name = self._rel_name or related_name
 
     def add_to_class(self, model_class, name):
         self.model = model_class
