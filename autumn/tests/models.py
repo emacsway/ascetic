@@ -13,7 +13,7 @@ class Author(Model):
 
 
 class Book(Model):
-    author = ForeignKey(Author, related_name='books')
+    author = ForeignKey(Author, rel_name='books')
 
     class Meta:
         db_table = 'books'

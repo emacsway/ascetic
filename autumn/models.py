@@ -399,6 +399,9 @@ class QS(smartsql.QS):
                 val = [i for i in rows if getattr(i, rel.rel_field) == getattr(obj, rel.field)]
                 if isinstance(rel, ForeignKey):
                     val = val[0] if val else None
+                elif isinstance(rel, OneToMany):
+                    for i in val:
+                        setattr(i, "{}_prefetch".format(rel.rel_name), obj)
                 setattr(obj, "{}_prefetch".format(key), val)
 
     def prefetch(self, *a, **kw):
@@ -577,12 +580,13 @@ def do_nothing(parent, child, parent_rel):
 
 class Relation(object):
 
-    def __init__(self, rel_model, rel_field=None, field=None, qs=None, on_delete=cascade):
+    def __init__(self, rel_model, rel_field=None, field=None, qs=None, on_delete=cascade, rel_name=None):
         self.rel_model_or_name = rel_model
         self._rel_field = rel_field
         self._field = field
         self._qs = qs
         self.on_delete = on_delete
+        self._rel_name = rel_name
 
     def add_to_class(self, model_class, name):
         self.model = model_class
@@ -622,21 +626,17 @@ class Relation(object):
 
 class ForeignKey(Relation):
 
-    def __init__(self, rel_model, rel_field=None, field=None, qs=None, on_delete=cascade, related_name=None):
-        self._related_name = related_name
-        super(ForeignKey, self).__init__(rel_model, rel_field, field, qs)
-
     @property
     def field(self):
-        return self._field or '{0}_id'.format(self.rel_model._meta.db_table.split("_").pop())
+        return self._field or '{0}_id'.format(self.rel_model._meta.db_table.rsplit("_", 1).pop())
 
     @property
     def rel_field(self):
         return self._rel_field or self.rel_model._meta.pk
 
     @property
-    def related_name(self):
-        return self._related_name or '{0}_set'.format(self.rel_model.__name__.lower())
+    def rel_name(self):
+        return self._rel_name or '{0}_set'.format(self.rel_model.__name__.lower())
 
     def add_to_class(self, model_class, name):
         super(ForeignKey, self).add_to_class(model_class, name)
@@ -648,14 +648,14 @@ class ForeignKey(Relation):
         except ModelNotRegistered:
             return
 
-        if self.related_name in rel_model._meta.relations:
+        if self.rel_name in rel_model._meta.relations:
             return
 
         OneToMany(
             self.model, self.field, self.rel_field,
-            None, on_delete=self.on_delete
+            None, on_delete=self.on_delete, rel_name=self.name
         ).add_to_class(
-            rel_model, self.related_name
+            rel_model, self.rel_name
         )
 
     def __get__(self, instance, owner):
@@ -688,13 +688,19 @@ class ForeignKey(Relation):
 
 class OneToMany(Relation):
 
-    @property
-    def rel_field(self):
-        return self._rel_field or '{0}_id'.format(self.model._meta.db_table.split("_").pop())
+    # TODO: is it need add_related() here to construct related FK?
 
     @property
     def field(self):
         return self._field or self.model._meta.pk
+
+    @property
+    def rel_field(self):
+        return self._rel_field or '{0}_id'.format(self.model._meta.db_table.rsplit("_", 1).pop())
+
+    @property
+    def rel_name(self):
+        return self._rel_name or self.rel_model.__name__.lower()
 
     def __get__(self, instance, owner):
         if not instance:

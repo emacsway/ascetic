@@ -151,12 +151,13 @@ class TestModels(unittest.TestCase):
 
         # Test count
         self.assertEqual(Author.get().count(), 3)
-
+        self.assertEqual(len(Book.get()), 4)
         self.assertEqual(len(Book.get()[1:4]), 3)
 
         # Test delete
         a.delete()
         self.assertEqual(Author.get().count(), 2)
+        self.assertEqual(len(Book.get()), 3)
 
         # Test validation
         a = Author(first_name='', last_name='Ted')
@@ -220,13 +221,15 @@ class TestModels(unittest.TestCase):
         self.assertTrue(isinstance(qs[0], Author))
 
         # prefetch
-        for obj in Book.qs.prefetch('author').order_by("id"):
+        for obj in Book.qs.prefetch('author').order_by(Book.s.id):
             self.assertTrue(hasattr(obj, 'author_prefetch'))
             self.assertEqual(obj.author_prefetch, obj.author)
 
-        for obj in Author.qs.prefetch('books').order_by("id"):
+        for obj in Author.qs.prefetch('books').order_by(Author.s.id):
             self.assertTrue(hasattr(obj, 'books_prefetch'))
             self.assertEqual(len(obj.books_prefetch), len(obj.books))
+            for i in obj.books_prefetch:
+                self.assertEqual(i.author_prefetch, obj)
 
 
     def testvalidators(self):
