@@ -161,6 +161,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
                 return object.__setattr__(self, name, value)
         if name in self._meta.fields:
             self._changed.add(name)
+            value = data_registry.convert_to_python(type(self).qs.dialect(), self._meta.fields[name].type_code, value)
         self.__dict__[name] = value
 
     def __eq__(self, other):
