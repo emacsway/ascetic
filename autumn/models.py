@@ -577,7 +577,7 @@ def set_null(parent, child, parent_rel):
 def do_nothing(parent, child, parent_rel):
     pass
 
-# TODO: descriptor for FileField?
+# TODO: descriptor for FileField? Or custom postgresql data type? See http://www.postgresql.org/docs/8.4/static/sql-createtype.html
 
 
 class Relation(object):
