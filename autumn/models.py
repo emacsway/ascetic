@@ -213,6 +213,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
                     except TypeError:
                         valid_or_msg = validator(value)
                 if valid_or_msg is not True:
+                    # Don't need message code. To rewrite message simple wrap (or extend) validator.
                     self._errors.setdefault(key, []).append(
                         valid_or_msg or 'Improper value "{0}" for "{1}"'.format(value, key)
                     )
