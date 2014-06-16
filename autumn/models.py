@@ -155,10 +155,8 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def __setattr__(self, name, value):
         """Records when fields have changed"""
-        cls_attr = getattr(type(self), name, None)
-        if cls_attr is not None:
-            if isinstance(cls_attr, (property, Relation)):
-                return object.__setattr__(self, name, value)
+        if hasattr(getattr(type(self), name, None), '__set__'):
+            return object.__setattr__(self, name, value)
         if name in self._meta.fields:
             self._changed.add(name)
             value = data_registry.convert_to_python(type(self).qs.dialect(), self._meta.fields[name].type_code, value)
@@ -186,9 +184,12 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
     def _set_defaults(self):
         """Sets attribute defaults based on ``defaults`` dict"""
         for k, v in list(getattr(self._meta, 'defaults', {}).items()):
-            if not getattr(self, k, None):
+            if getattr(self, k, None) is None:
                 if isinstance(v, collections.Callable):
-                    v = v()
+                    try:
+                        v(self, k)
+                    except TypeError:
+                        v = v()
                 setattr(self, k, v)
 
     def is_valid(self, exclude=(), fields=()):
@@ -198,6 +199,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def _validate(self, exclude=(), fields=()):
         """Tests all ``validations``"""
+        self._set_defaults()
         self._errors = {}
         for key, validators in list(getattr(self._meta, 'validations', {}).items()):
             if key in exclude or (fields and key not in fields):
@@ -234,7 +236,6 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
     def save(self, using=None):
         """Sets defaults, validates and inserts into or updates database"""
         using = using or self._meta.using
-        self._set_defaults()
         if not self.is_valid():
             raise self.ValidationError("Invalid data!")
         self._send_signal(signal='pre_save', update_fields=self._changed, using=using)
