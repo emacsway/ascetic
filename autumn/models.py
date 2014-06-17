@@ -75,7 +75,9 @@ class ModelOptions(object):
                 for i in (self.model.__module__.split(".") + [self.model.__name__, ])
             ])
 
-        for k, v in list(getattr(self, 'validations', {}).items()):
+        if not hasattr(self, 'validations'):
+            self.validations = {}
+        for k, v in self.validations.items():
             if not isinstance(v, (list, tuple)):
                 self.validations[k] = (v, )
 
@@ -84,6 +86,18 @@ class ModelOptions(object):
         schema = db.describe_table(self.db_table)
         map = dict([(v, k) for k, v in getattr(self, 'map', {}).items()])
         # fileds and columns can be a descriptor for multilingual mapping.
+
+        self.declared_fields = {}
+        for name in self.model.__dict__:
+            field = getattr(self.model, name, None)
+            if isinstance(field, Field):
+                self.declared_fields[name] = field
+                delattr(self.model, name)
+                if getattr(field, 'column', None):
+                    map[field.column] = name
+                if getattr(field, 'validators', None):
+                    self.validations[name] = field.validators
+
         self.fields = collections.OrderedDict()
         self.columns = collections.OrderedDict()
         q = db.execute('SELECT * FROM {0} LIMIT 1'.format(qn(self.db_table)))
@@ -93,7 +107,11 @@ class ModelOptions(object):
             name = map.get(column, column)
             data = schema.get(column, {})
             data.update({'column': column, 'name': name, 'type_code': row[1]})
-            field = self.field_class(**data)
+            if name in self.declared_fields:
+                field = self.declared_fields.get(name)
+                field.__dict__.update(data)
+            else:
+                field = self.field_class(**data)
             self.fields[name] = field
             self.columns[column] = field
 
@@ -159,6 +177,8 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
             return object.__setattr__(self, name, value)
         if name in self._meta.fields:
             self._changed.add(name)
+            if hasattr(self._meta.fields[name], 'to_python'):
+                value = self._meta.fields[name].to_python(value)
             value = data_registry.convert_to_python(type(self).qs.dialect(), self._meta.fields[name].type_code, value)
         self.__dict__[name] = value
 
@@ -201,7 +221,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         """Tests all ``validations``"""
         self._set_defaults()
         self._errors = {}
-        for key, validators in list(getattr(self._meta, 'validations', {}).items()):
+        for key, validators in self._meta.validations.items():
             if key in exclude or (fields and key not in fields):
                 continue
             for validator in validators:
