@@ -51,6 +51,12 @@ class Field(object):
         for k, v in kw.items():
             setattr(self, k, v)
 
+    def to_python(self, value):
+        return data_registry.convert_to_python(self.model.qs.dialect(), self.type_code, value)
+
+    def to_string(self, value):
+        data_registry.convert_to_string(value)
+
 
 class ModelOptions(object):
     """Model options"""
@@ -68,7 +74,7 @@ class ModelOptions(object):
 
         self.model = model
         if not hasattr(self, 'name'):
-            self.name = ".".join((model.__module__, model.__name__))
+            self.name = ".".join((self.model.__module__, self.model.__name__))
         if not hasattr(self, 'db_table'):
             self.db_table = "_".join([
                 re.sub(r"[^a-z0-9]", "", i.lower())
@@ -95,8 +101,6 @@ class ModelOptions(object):
                 delattr(self.model, name)
                 if getattr(field, 'column', None):
                     map[field.column] = name
-                if getattr(field, 'validators', None):
-                    self.validations[name] = field.validators
 
         # self.all(whole)_fields = collections.OrderedDict()  # with parents, MTI
         self.fields = collections.OrderedDict()
@@ -107,14 +111,21 @@ class ModelOptions(object):
             column = row[0]
             name = map.get(column, column)
             data = schema.get(column, {})
-            data.update({'column': column, 'name': name, 'type_code': row[1]})
+            data.update({'column': column, 'type_code': row[1]})
             if name in self.declared_fields:
                 field = self.declared_fields.get(name)
                 field.__dict__.update(data)
             else:
                 field = self.field_class(**data)
-            self.fields[name] = field
-            self.columns[column] = field
+            self.add_field(field, name)
+
+    def add_field(self, field, name):
+        field.name = name
+        field.model = self.model
+        if getattr(field, 'validators', None):
+            self.validations[name] = field.validators
+        self.fields[name] = field
+        self.columns[field.column] = field
 
 
 class ModelBase(type):
@@ -179,9 +190,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         if name in self._meta.fields.values():
             field = self._meta.fields[name]
             self._changed.add(name)
-            if hasattr(field, 'to_python'):
-                value = field.to_python(value)
-            value = data_registry.convert_to_python(type(self).qs.dialect(), field.type_code, value)
+            value = field.to_python(value)
         self.__dict__[name] = value
 
     def __eq__(self, other):
@@ -298,11 +307,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         for field in self._meta.fields.values():
             if field.name in exclude or (fields and field.name not in fields):
                 continue
-            value = getattr(self, field.name, None)
-            if hasattr(field, 'to_string'):
-                value = field.to_string(value)
-            value = data_registry.convert_to_string(value)
-            result[fields.name] = value
+            result[fields.name] = field.to_string(getattr(self, field.name, None))
         return result
 
     def _send_signal(self, *a, **kw):
