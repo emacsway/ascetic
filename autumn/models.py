@@ -98,6 +98,7 @@ class ModelOptions(object):
                 if getattr(field, 'validators', None):
                     self.validations[name] = field.validators
 
+        # self.all(whole)_fields = collections.OrderedDict()  # with parents, MTI
         self.fields = collections.OrderedDict()
         self.columns = collections.OrderedDict()
         q = db.execute('SELECT * FROM {0} LIMIT 1'.format(qn(self.db_table)))
@@ -175,11 +176,12 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         """Records when fields have changed"""
         if hasattr(getattr(type(self), name, None), '__set__'):
             return object.__setattr__(self, name, value)
-        if name in self._meta.fields:
+        if name in self._meta.fields.values():
+            field = self._meta.fields[name]
             self._changed.add(name)
-            if hasattr(self._meta.fields[name], 'to_python'):
-                value = self._meta.fields[name].to_python(value)
-            value = data_registry.convert_to_python(type(self).qs.dialect(), self._meta.fields[name].type_code, value)
+            if hasattr(field, 'to_python'):
+                value = field.to_python(value)
+            value = data_registry.convert_to_python(type(self).qs.dialect(), field.type_code, value)
         self.__dict__[name] = value
 
     def __eq__(self, other):
@@ -249,15 +251,15 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         return self
 
     def _get_data(self, fields=frozenset(), exclude=frozenset()):
-        return dict([(f.column, getattr(self, f.name, None))
-                     for f in self._meta.fields.values()
-                     if not (f.name in exclude or (fields and f.name not in fields))])
+        return {f.column: getattr(self, f.name, None)
+                for f in self._meta.fields.values()
+                if not (f.name in exclude or (fields and f.name not in fields))}
 
     def save(self, using=None):
         """Sets defaults, validates and inserts into or updates database"""
         using = using or self._meta.using
         if not self.is_valid():
-            raise self.ValidationError("Invalid data!")
+            raise self.ValidationError(self._errors)
         self._send_signal(signal='pre_save', update_fields=self._changed, using=using)
         result = self._insert(using) if self._new_record else self._update(using)
         self._send_signal(signal='post_save', created=self._new_record, update_fields=self._changed, using=using)
@@ -289,6 +291,19 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         type(self).qs.using(using).where(type(self).s.pk == self.pk).delete()
         self._send_signal(signal='post_delete', using=using)
         return True
+
+    def serialize(self, fields=frozenset(), exclude=frozenset()):
+        self._set_defaults()
+        result = {}
+        for field in self._meta.fields.values():
+            if field.name in exclude or (fields and field.name not in fields):
+                continue
+            value = getattr(self, field.name, None)
+            if hasattr(field, 'to_string'):
+                value = field.to_string(value)
+            value = data_registry.convert_to_string(value)
+            result[fields.name] = value
+        return result
 
     def _send_signal(self, *a, **kw):
         """Sends signal"""
@@ -329,14 +344,12 @@ class DataRegistry(object):
     """
     def __init__(self):
         """Constructor, initial registry."""
-        self._to_python = {}
-        self._to_sql = {}
+        self._register = {}
 
-    def register(self, direction, dialect, code_or_type):
+    def register(self, *args):
         """Registers callbacks."""
         def decorator(func):
-            ns = getattr(self, '_{0}'.format(direction)).setdefault(dialect, {})
-            ns[code_or_type] = func
+            self._register[args] = func
             return func
         return decorator
 
@@ -346,9 +359,12 @@ class DataRegistry(object):
     def to_sql(self, dialect, type):
         return self.register('to_sql', dialect, type)
 
+    def to_string(self, type):
+        return self.register('to_string', type)
+
     def convert_to_python(self, dialect, code, value):
         try:
-            convertor = self._to_python[dialect][code]
+            convertor = self._register[('to_python', dialect, code)]
         except KeyError:
             return value
         else:
@@ -357,7 +373,17 @@ class DataRegistry(object):
     def convert_to_sql(self, dialect, value):
         for t in type(value).mro():
             try:
-                convertor = self._to_sql[dialect][t]
+                convertor = self._register[('to_sql', dialect, t)]
+            except KeyError:
+                pass
+            else:
+                return convertor(value)
+        return value
+
+    def convert_to_string(self, dialect, value):
+        for t in type(value).mro():
+            try:
+                convertor = self._register[('to_string', t)]
             except KeyError:
                 pass
             else:
