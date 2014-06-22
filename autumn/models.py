@@ -102,7 +102,7 @@ class ModelOptions(object):
                 if getattr(field, 'column', None):
                     map[field.column] = name
 
-        # self.all(whole)_fields = collections.OrderedDict()  # with parents, MTI
+        # self.all(whole, total)_fields = collections.OrderedDict()  # with parents, MTI
         self.fields = collections.OrderedDict()
         self.columns = collections.OrderedDict()
         q = db.execute('SELECT * FROM {0} LIMIT 1'.format(qn(self.db_table)))
