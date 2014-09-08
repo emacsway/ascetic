@@ -267,7 +267,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
     def save(self, using=None):
         """Sets defaults, validates and inserts into or updates database"""
         using = using or self._meta.using
-        if not self.is_valid():
+        if not self.is_valid(fields=self._changed):
             raise self.ValidationError(self._errors)
         self._send_signal(signal='pre_save', update_fields=self._changed, using=using)
         result = self._insert(using) if self._new_record else self._update(using)
