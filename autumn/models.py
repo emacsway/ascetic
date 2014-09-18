@@ -31,15 +31,14 @@ class ModelNotRegistered(Exception):
     pass
 
 
-class ModelRegistry(object):
-    models = {}
+class ModelRegistry(dict):
 
     def add(self, model):
-        self.models[model._meta.name] = model
+        self[model._meta.name] = model
 
-    def get(self, model_name):
+    def __getitem__(self, model_name):
         try:
-            return self.models[model_name]
+            return self[model_name]
         except KeyError:
             raise ModelNotRegistered
 
@@ -154,7 +153,7 @@ class ModelBase(type):
 
         registry.add(new_cls)
 
-        for m in registry.models.values():
+        for m in registry.values():
             for key, rel in m._meta.relations.items():
                 try:
                     if hasattr(rel, 'add_related') and rel.rel_model is new_cls:
@@ -657,7 +656,7 @@ class Relation(object):
             name = self.rel_model_or_name
             if name == 'self':
                 name = self.model._meta.name
-            return registry.get(name)
+            return registry[name]
         return self.rel_model_or_name
 
     def _get_qs(self):
