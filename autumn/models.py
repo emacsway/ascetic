@@ -187,7 +187,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         """Records when fields have changed"""
         if hasattr(getattr(type(self), name, None), '__set__'):
             return object.__setattr__(self, name, value)
-        if name in self._meta.fields.values():
+        if name in self._meta.fields:
             field = self._meta.fields[name]
             self._changed.add(name)
             value = field.to_python(value)
