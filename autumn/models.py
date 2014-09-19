@@ -305,6 +305,8 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
             if isinstance(rel, OneToMany):
                 for child in getattr(self, key).iterator():
                     rel.on_delete(self, child, rel)
+            elif isinstance(rel, OneToOne):
+                rel.on_delete(self, getattr(self, key), rel)
         type(self).qs.using(using).where(type(self).s.pk == self.pk).delete()
         self._send_signal(signal='post_delete', using=using)
         return True
@@ -459,8 +461,10 @@ class QS(smartsql.QS):
             ))
             for obj in self._cache:
                 val = [i for i in rows if getattr(i, rel.rel_field) == getattr(obj, rel.field)]
-                if isinstance(rel, ForeignKey):
+                if isinstance(rel, (ForeignKey, OneToOne)):
                     val = val[0] if val else None
+                    if val and isinstance(rel, OneToOne):
+                        setattr(val, "{}_prefetch".format(rel.rel_name), obj)
                 elif isinstance(rel, OneToMany):
                     for i in val:
                         setattr(i, "{}_prefetch".format(rel.rel_name), obj)
@@ -749,6 +753,26 @@ class ForeignKey(Relation):
     def __delete__(self, instance):
         instance._cache.pop(self.name, None)
         setattr(instance, self.field, None)
+
+
+class OneToOne(ForeignKey):
+
+    def add_related(self):
+        try:
+            rel_model = self.rel_model
+        except ModelNotRegistered:
+            return
+
+        if self.rel_name in rel_model._meta.relations:
+            return
+
+        OneToOne(
+            self.model, self.field, self.rel_field,
+            None, on_delete=self.on_delete, rel_name=self.name
+        ).add_to_class(
+            rel_model, self.rel_name
+        )
+        self.on_delete = do_nothing
 
 
 class OneToMany(Relation):

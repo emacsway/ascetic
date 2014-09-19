@@ -20,23 +20,13 @@ class PolymorphicModelBase(models.ModelBase):
             if getattr(base._meta, 'polymorphic', None):
                 pk_rel_name = "{}_ptr".format(base.__name__.lower())
                 new_cls.pk = "{}_id".format(pk_rel_name)
-                models.ForeignKey(
+                models.OneToOne(
                     base,
                     field=new_cls.pk,
                     to_field=base.pk
                 ).add_to_class(
                     new_cls, pk_rel_name
                 )
-                '''
-                # Can be circularity on_delete.
-                models.ForeignKey(
-                    new_cls,
-                    field=base.pk,
-                    to_field=new_cls.pk
-                ).add_to_class(
-                    base, new_cls.__name__.lower()
-                )
-                '''
         return new_cls
 
 
