@@ -132,10 +132,15 @@ class ModelBase(type):
     options_class = ModelOptions
 
     def __new__(cls, name, bases, attrs):
-        if name in ('Model', 'NewBase', ):
-            return super(ModelBase, cls).__new__(cls, name, bases, attrs)
 
         new_cls = type.__new__(cls, name, bases, attrs)
+
+        if name in ('Model', 'NewBase', ):
+            return new_cls
+
+        if getattr(attrs.get('Meta'), 'abstract', None):
+            del new_cls.Meta
+            return new_cls
 
         if hasattr(new_cls, 'Meta'):
             if isinstance(new_cls.Meta, new_cls.options_class):
