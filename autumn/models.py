@@ -252,7 +252,11 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def _set_data(self, data):
         for column, value in data.items():
-            setattr(self, self._meta.columns[column].name, value)
+            try:
+                attr = self._meta.columns[column].name
+            except KeyError:
+                attr = column
+            setattr(self, attr, value)
         self._new_record = False
         self._changed = set()
         # Do use this method for sets File fields and other special data types?
