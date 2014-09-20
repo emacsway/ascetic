@@ -23,7 +23,8 @@ class PolymorphicModelBase(models.ModelBase):
                 models.OneToOne(
                     base,
                     field=new_cls.pk,
-                    to_field=base.pk
+                    to_field=base.pk,
+                    rel_name=new_cls.__name__.lower()
                 ).add_to_class(
                     new_cls, pk_rel_name
                 )
