@@ -83,15 +83,23 @@ class PolymorphicModel(PolymorphicModelBase(b"NewBase", (models.Model, ), {})):
             return obj
 
     def __setattr__(self, name, value):
-        """Records when fields have changed"""
-        if self.parent_model_instance:
+        if name not in type(self)._meta.fields and self.parent_model_instance:
             self.parent_model_instance.__setattr__(name, value)
-        super(PolymorphicModel, self).__setattr__(name, value)
+        else:
+            super(PolymorphicModel, self).__setattr__(name, value)
 
-    def _set_data(self, *a, **kw):
+    def __getattr__(self, name):
+        if name not in type(self)._meta.fields and self.parent_model_instance:
+            self.parent_model_instance.__getattr__(name)
+        else:
+            super(PolymorphicModel, self).__getattr__(name)
+
+    def _set_data(self, data):
+        super(PolymorphicModel, self)._set_data(data)
+        for column in self._meta.columns:
+            data.pop(column, None)
         if self.parent_model_instance:
-            self.parent_model_instance._set_data(*a, **kw)
-        super(PolymorphicModel, self)._set_data(*a, **kw)
+            self.parent_model_instance._set_data(data)
         return self
 
     def is_valid(self, *a, **kw):
