@@ -447,7 +447,7 @@ class QS(smartsql.QS):
     def fill_cache(self):
         if self._cache is None:
             self._cache = list(self.iterator())
-        self.populate_prefetch()
+            self.populate_prefetch()
         return self
 
     def populate_prefetch(self):

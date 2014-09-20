@@ -5,7 +5,7 @@ from .. import models
 
 class GenericForeignKey(models.Relation):
 
-    def __init__(self, type_field="type_id", field="object_id"):
+    def __init__(self, type_field="object_type_id", field="object_id"):
         self.type_field = type_field
         self.field = field
 

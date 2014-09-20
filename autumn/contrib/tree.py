@@ -1,18 +1,15 @@
 from __future__ import absolute_import, unicode_literals
-from .. import models
 from sqlbuilder import smartsql
-
+from .. import models
+from . import polymorphic
 # Not testet yet!!!
 
 
-def get_base_model(cls):
+def get_root_model(cls):
     """Returns base model for MTI"""
-    # return [m for m in cls.mro() if issubclass(m, MpModel) and m != MpModel].pop()
-    base_cls = cls._meta.get_field('tree_path').model
-    if cls._meta.proxy_for_model == base_cls:
-        return cls
-    else:
-        return base_cls
+    if isinstance(cls, polymorphic.PolymorphicModel) and cls.root_model:
+        return cls.root_model
+    return cls
 
 
 class MpModel(object):
@@ -37,7 +34,7 @@ class MpModel(object):
     def save(self, using=None):
         """Sets content_type and calls parent method."""
         using = using or self._meta.using
-        base_model = get_base_model(type(self))
+        base_model = get_root_model(type(self))
         if self.pk:
             old_tree_path = base_model.qs.get(pk=self.pk).tree_path
         else:
@@ -78,7 +75,7 @@ class MpModel(object):
         return objs
 
     def get_ancestors_by_path(self, root=False, me=False, reverse=True):
-        base_model = get_base_model(type(self))
+        base_model = get_root_model(type(self))
         t = base_model.s
         qs = base_model.qs.where(
             smartsql.P(self.tree_path).startswith(t.tree_path)
@@ -94,7 +91,7 @@ class MpModel(object):
         return qs
 
     def get_ancestors_by_paths(self, root=False, me=False, reverse=True):
-        base_model = get_base_model(type(self))
+        base_model = get_root_model(type(self))
         qs = base_model.qs
         cond = None
         paths = self.tree_path.split(self.PATH_SEPARATOR)
@@ -125,7 +122,7 @@ class MpModel(object):
 
     def get_children(self):
         """Fix for MTI"""
-        base_model = get_base_model(type(self))
+        base_model = get_root_model(type(self))
         return base_model.qs.where(base_model.s.parent == self.pk)
 
     def _descendants(self):
@@ -142,7 +139,7 @@ class MpModel(object):
         return r
 
     def get_descendants(self, me=False):
-        base_model = get_base_model(type(self))
+        base_model = get_root_model(type(self))
         qs = base_model.qs.where(base_model.s.tree_path.startswith(self.tree_path))
         if not me:
             qs = qs.where(base_model.s.pk != self.pk)
