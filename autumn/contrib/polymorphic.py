@@ -46,13 +46,13 @@ class PolymorphicModel(PolymorphicModelBase(b"NewBase", (models.Model, ), {})):
     @property
     def root_model(self):
         for cls in type(self).mro().reverse():
-            if getattr(cls._meta, 'polimorphic', None):
+            if getattr(cls._meta, 'polymorphic', None):
                 return cls
 
     @models.classproperty
     def parent_model(self):
         for cls in type(self).mro():
-            if getattr(cls._meta, 'polimorphic', None):
+            if getattr(cls._meta, 'polymorphic', None):
                 return cls
 
     @property
