@@ -1,3 +1,4 @@
+from .. import signals
 # Not testet yet!!!
 
 
@@ -68,8 +69,13 @@ class TranslationRegistry(dict):
                     return key
         return field
 
+    def field_conversion_receiver(self, sender, result, field, model):
+        trans_field = self.translated_field(model, field)
+        if trans_field != field:
+            result['field'] = trans_field
+
     def connect_field_conversion(self):
-        raise NotImplementedError
+        signals.field_conversion.connect(self.field_conversion_receiver)
 
     def get_language(self):
         raise NotImplementedError
