@@ -1,5 +1,12 @@
 from .. import signals
+
 # Not testet yet!!!
+
+
+def required(obj, key, val):
+    reg = TranslationRegistry.registry
+    current_key = reg.translated_field(reg.original_field(key))
+    return key == current_key and val not in [None, '']
 
 
 class TranslationMixIn(object):
