@@ -76,11 +76,10 @@ class PolymorphicModel(PolymorphicModelBase(b"NewBase", (models.Model, ), {})):
         return self
 
     def is_valid(self, *a, **kw):
+        valid = super(PolymorphicModel, self).is_valid(*a, **kw)
         if self.parent_model_instance:
-            if not self.parent_model_instance.is_valid(*a, **kw):
-                parent_valid = False
-        self_valid = super(PolymorphicModel, self).is_valid(*a, **kw)
-        return parent_valid and self_valid
+            valid = valid and self.parent_model_instance.is_valid(*a, **kw)
+        return valid
 
     def _validate(self, *a, **kw):
         super(PolymorphicModel, self)._validate(*a, **kw)
