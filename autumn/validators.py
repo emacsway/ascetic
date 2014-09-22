@@ -14,6 +14,17 @@ class Validator(object):
     pass
 
 
+class Required(Validator):
+    empty_values = (None, '')
+    msg = False
+
+    def __init__(self, msg):
+        self.msg = msg
+
+    def __call__(self, value):
+        return value not in self.empty_values or self.msg
+
+
 class Regex(Validator):
     def __call__(self, value):
         return bool(self.regex.match(value))
@@ -45,8 +56,8 @@ class Number(Validator):
 
     def __call__(self, number):
         return isinstance(number, integer_types + (float, complex,)) and \
-               (self.minimum is None or number >= self.minimum) and \
-               (self.maximum is None or number <= self.maximum)
+            (self.minimum is None or number >= self.minimum) and \
+            (self.maximum is None or number <= self.maximum)
 
 
 class ValidatorChain(object):

@@ -89,7 +89,7 @@ class ModelOptions(object):
         db = get_db(self.using)
 
         schema = db.describe_table(self.db_table)
-        map = dict([(v, k) for k, v in getattr(self, 'map', {}).items()])
+        map_ = dict([(v, k) for k, v in getattr(self, 'map', {}).items()])
         # fileds and columns can be a descriptor for multilingual mapping.
 
         self.declared_fields = {}
@@ -99,7 +99,7 @@ class ModelOptions(object):
                 self.declared_fields[name] = field
                 delattr(self.model, name)
                 if getattr(field, 'column', None):
-                    map[field.column] = name
+                    map_[field.column] = name
 
         # self.all(whole, total)_fields = collections.OrderedDict()  # with parents, MTI
         self.fields = collections.OrderedDict()
@@ -108,7 +108,7 @@ class ModelOptions(object):
         # See cursor.description http://www.python.org/dev/peps/pep-0249/
         for row in q.description:
             column = row[0]
-            name = map.get(column, column)
+            name = map_.get(column, column)
             data = schema.get(column, {})
             data.update({'column': column, 'type_code': row[1]})
             if name in self.declared_fields:
@@ -227,12 +227,12 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
                         v = v()
                 setattr(self, k, v)
 
-    def is_valid(self, exclude=(), fields=()):
+    def is_valid(self, exclude=frozenset(), fields=frozenset()):
         """Returns boolean on whether all ``validations`` pass"""
         self._validate(exclude, fields)
         return not self._errors
 
-    def _validate(self, exclude=(), fields=()):
+    def _validate(self, exclude=frozenset(), fields=frozenset()):
         """Tests all ``validations``"""
         self._set_defaults()
         self._errors = {}
