@@ -585,7 +585,7 @@ class Table(smartsql.Table):
             self._qs = self._qs(self)
         elif self._qs is None:
             self._qs = QS(self).fields(self.get_fields())
-        return self._qs.clone()
+        return self._qs
 
     def _set_qs(self, val):
         self._qs = val
