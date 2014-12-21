@@ -51,7 +51,7 @@ class Field(object):
             setattr(self, k, v)
 
     def to_python(self, value):
-        return data_registry.convert_to_python(self.model.qs.dialect(), self.type_code, value)
+        return value
 
     def to_string(self, value):
         data_registry.convert_to_string(value)
@@ -341,10 +341,13 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         if _obj_pk is not None:
             return cls.get(**{cls._meta.pk: _obj_pk})[0]
 
-        qs = cls.qs
-        for k, v in kwargs.items():
-            qs = qs.where(smartsql.Field(k, cls.s) == v)
-        return qs
+        if kwargs:
+            qs = cls.qs
+            for k, v in kwargs.items():
+                qs = qs.where(smartsql.Field(k, cls.s) == v)
+            return qs
+
+        return cls.qs.clone()
 
     class ValidationError(Exception):
         pass
@@ -418,9 +421,11 @@ class QS(smartsql.QS):
     def __init__(self, tables=None):
         super(QS, self).__init__(tables=tables)
         self._prefetch = {}
+        self.is_base(True)
         if isinstance(tables, Table):
             self.model = tables.model
             self._using = self.model._meta.using
+            self._set_dialect()
 
     def raw(self, sql, *params):
         self = self.clone()
@@ -431,6 +436,7 @@ class QS(smartsql.QS):
         c = super(QS, self).clone()
         c._cache = None
         c._prefetch = self._prefetch.copy()
+        c.is_base(False)
         return c
 
     def __len__(self):
@@ -445,6 +451,8 @@ class QS(smartsql.QS):
         return super(QS, self).count()
 
     def fill_cache(self):
+        if self.is_base():
+            raise Exception('You should clone base queryset before query.')
         if self._cache is None:
             self._cache = list(self.iterator())
             self.populate_prefetch()
@@ -526,11 +534,22 @@ class QS(smartsql.QS):
             return self._using
         self = self.clone()
         self._using = alias
+        self._set_dialect()
         return self
 
-    def dialect(self):
+    def _set_dialect(self):
         engine = self.db.engine
-        return SMARTSQL_DIALECTS.get(engine, engine)
+        SMARTSQL_DIALECTS.get(engine, engine)
+        self._dialect = SMARTSQL_DIALECTS.get(engine, engine)
+
+    def dialect(self):
+        return self._dialect
+
+    def is_base(self, value=None):
+        if value is None:
+            return self._is_base
+        self._is_base = value
+        return self
 
     def sqlrepr(self, expr=None):
         return smartsql.sqlrepr(expr or self, self.dialect())
@@ -543,7 +562,8 @@ class QS(smartsql.QS):
 
     def execute(self):
         """Implementation of query execution"""
-        return self._execute(self.sqlrepr(), self.sqlparams())
+        sql = self._build_sql()
+        return self._execute(self.sqlrepr(sql), self.sqlparams(sql))
 
     def _execute(self, sql, params):
         return self.db.execute(sql, params)
