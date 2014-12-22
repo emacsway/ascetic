@@ -187,15 +187,17 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         [setattr(self, k, v) for k, v in list(kwargs.items())]
         self._send_signal(signal='post_init', using=self._meta.using)
 
-    def __setattr__(self, name, value):
+    def __setattr__(self, name, value, track=True):
         """Records when fields have changed"""
-        if hasattr(getattr(type(self), name, None), '__set__'):
+        try:
+            value = self._meta.fields[name].to_python(value)
+        except KeyError:
             return object.__setattr__(self, name, value)
-        if name in self._meta.fields:
-            field = self._meta.fields[name]
-            self._changed.add(name)
-            value = field.to_python(value)
+        except AttributeError:
+            pass
         self.__dict__[name] = value
+        if track:
+            self._changed.add(name)
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self._get_pk() == other._get_pk()
@@ -261,9 +263,8 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
                 attr = self._meta.columns[column].name
             except KeyError:
                 attr = column
-            setattr(self, attr, value)
+            self.__setattr__(attr, value, track=False)
         self._new_record = False
-        self._changed = set()
         # Do use this method for sets File fields and other special data types?
         return self
 
@@ -381,31 +382,23 @@ class DataRegistry(object):
         return self.register('to_string', type)
 
     def convert_to_python(self, dialect, code, value):
-        try:
-            convertor = self._register[('to_python', dialect, code)]
-        except KeyError:
-            return value
-        else:
-            return convertor(value)
+        key = ('to_python', dialect, code)
+        if key in self._register:
+            return self._register[key](value)
+        return value
 
     def convert_to_sql(self, dialect, value):
         for t in type(value).mro():
-            try:
-                convertor = self._register[('to_sql', dialect, t)]
-            except KeyError:
-                pass
-            else:
-                return convertor(value)
+            key = ('to_sql', dialect, t)
+            if key in self._register:
+                return self._register[key](value)
         return value
 
-    def convert_to_string(self, dialect, value):
+    def convert_to_string(self, value):
         for t in type(value).mro():
-            try:
-                convertor = self._register[('to_string', t)]
-            except KeyError:
-                pass
-            else:
-                return convertor(value)
+            key = ('to_string', t)
+            if key in self._register:
+                return self._register[key](value)
         return value
 
 
@@ -496,20 +489,21 @@ class QS(smartsql.QS):
     def iterator(self):
         """iterator"""
         cursor = self.execute()
+        descr = cursor.description
         fields = []
-        for f in cursor.description:
-            fn_suf = fn = f[0]
-            c = 2
-            while fn_suf in fields:
-                fn_suf = fn + str(c)
-                c += 1
-            fields.append(fn_suf)
+        for f in descr:
+            fn = f[0]
+            if fn in fields:
+                c = 2
+                fn_base = fn
+                while fn in fields:
+                    fn = fn_base + str(c)
+                    c += 1
+            fields.append(fn)
 
         for row in cursor.fetchall():
-            row = list(row)
-            for i, v in enumerate(row[:]):
-                row[i] = data_registry.convert_to_python(self.dialect(), cursor.description[i][1], v)
-            data = dict(list(zip(fields, row)))
+            row = [data_registry.convert_to_python(self._dialect, descr[i][1], v) for i, v in enumerate(row)]
+            data = dict(zip(fields, row))
             yield self.model()._set_data(data) if self.model else data
 
     def __getitem__(self, key):
@@ -552,12 +546,12 @@ class QS(smartsql.QS):
         return self
 
     def sqlrepr(self, expr=None):
-        return smartsql.sqlrepr(expr or self, self.dialect())
+        return smartsql.sqlrepr(expr or self, self._dialect)
 
     def sqlparams(self, expr=None):
         params = smartsql.sqlparams(expr or self)
         for i, v in enumerate(params[:]):
-            params[i] = data_registry.convert_to_sql(self.dialect(), v)
+            params[i] = data_registry.convert_to_sql(self._dialect, v)
         return params
 
     def execute(self):
