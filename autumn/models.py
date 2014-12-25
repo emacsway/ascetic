@@ -51,6 +51,8 @@ class Field(object):
             setattr(self, k, v)
 
     def to_python(self, value):
+        # Is it need to force type when value received from python, not from database?
+        # return data_registry.convert_to_python(self.model.qs._dialect, self.type_code, value)
         return value
 
     def to_string(self, value):
@@ -183,8 +185,12 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         self._errors = {}
         self._cache = {}
         self.__dict__[self._meta.pk] = None
-        [setattr(self, self._meta.fields.keys()[i], arg) for i, arg in enumerate(args)]
-        [setattr(self, k, v) for k, v in list(kwargs.items())]
+        if args:
+            for i, arg in enumerate(args):
+                setattr(self, self._meta.fields.keys()[i], arg)
+        if kwargs:
+            for k, v in kwargs.items():
+                setattr(self, k, v)
         self._send_signal(signal='post_init', using=self._meta.using)
 
     def __setattr__(self, name, value, track=True):
@@ -220,7 +226,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def _set_defaults(self):
         """Sets attribute defaults based on ``defaults`` dict"""
-        for k, v in list(getattr(self._meta, 'defaults', {}).items()):
+        for k, v in getattr(self._meta, 'defaults', {}).items():
             if getattr(self, k, None) is None:
                 if isinstance(v, collections.Callable):
                     try:
