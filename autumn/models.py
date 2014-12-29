@@ -111,7 +111,6 @@ class ModelOptions(object):
             column = row[0]
             name = map_.get(column, column).encode('utf-8')
             data = schema.get(column, {})
-            # print '@@', type(name), repr(name)
             data.update({b'column': column, b'type_code': row[1]})
             if name in self.declared_fields:
                 field = self.declared_fields.get(name)
@@ -175,13 +174,13 @@ class ModelBase(type):
 class Model(ModelBase(b"NewBase", (object, ), {})):
     """Model class"""
 
+    _errors = False
+    _new_record = True
     _s = None
 
     def __init__(self, *args, **kwargs):
         """Allows setting of fields using kwargs"""
         self._send_signal(signal=b'pre_init', args=args, kwargs=kwargs, using=self._meta.using)
-        self._new_record = True
-        self._errors = {}
         self._cache = {}
         self.__dict__[self._meta.pk] = None
         if args:
