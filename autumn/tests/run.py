@@ -161,22 +161,14 @@ class TestModels(unittest.TestCase):
 
         # Test validation
         a = Author(first_name='', last_name='Ted')
-        try:
-            a.save()
-            raise Exception('Validation not caught')
-        except Model.ValidationError:
-            pass
+        self.assertFalse(a.is_valid())
 
         # Test defaults
         a.first_name = 'Bill and'
         a.save()
         self.assertEqual(a.bio, 'No bio available')
 
-        try:
-            Author(first_name='I am a', last_name='BadGuy!').save()
-            raise Exception('Validation not caught')
-        except Model.ValidationError:
-            pass
+        self.assertFalse(Author(first_name='I am a', last_name='BadGuy!').is_valid())
 
         print '### Testing for smartsql integration'
         t = Author.s

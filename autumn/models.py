@@ -52,8 +52,7 @@ class Field(object):
 
     def to_python(self, value):
         # Is it need to force type when value received from python, not from database?
-        # return data_registry.convert_to_python(self.model.qs._dialect, self.type_code, value)
-        return value
+        return data_registry.convert_to_python(self.model.qs._dialect, self.type_code, value)
 
     def to_string(self, value):
         data_registry.convert_to_string(value)
@@ -62,7 +61,7 @@ class Field(object):
 class ModelOptions(object):
     """Model options"""
 
-    pk = 'id'
+    pk = b'id'
     using = 'default'
     field_class = Field
 
@@ -74,9 +73,9 @@ class ModelOptions(object):
             setattr(self, k, v)
 
         self.model = model
-        if not hasattr(self, 'name'):
+        if not hasattr(self, b'name'):
             self.name = ".".join((self.model.__module__, self.model.__name__))
-        if not hasattr(self, 'db_table'):
+        if not hasattr(self, b'db_table'):
             self.db_table = "_".join([
                 re.sub(r"[^a-z0-9]", "", i.lower())
                 for i in (self.model.__module__.split(".") + [self.model.__name__, ])
@@ -91,7 +90,7 @@ class ModelOptions(object):
         db = get_db(self.using)
 
         schema = db.describe_table(self.db_table)
-        map_ = dict([(v, k) for k, v in getattr(self, 'map', {}).items()])
+        map_ = dict([(v, k) for k, v in getattr(self, b'map', {}).items()])
         # fileds and columns can be a descriptor for multilingual mapping.
 
         self.declared_fields = {}
@@ -100,7 +99,7 @@ class ModelOptions(object):
             if isinstance(field, Field):
                 self.declared_fields[name] = field
                 delattr(self.model, name)
-                if getattr(field, 'column', None):
+                if getattr(field, b'column', None):
                     map_[field.column] = name
 
         # self.all(whole, total)_fields = collections.OrderedDict()  # with parents, MTI
@@ -110,9 +109,10 @@ class ModelOptions(object):
         # See cursor.description http://www.python.org/dev/peps/pep-0249/
         for row in q.description:
             column = row[0]
-            name = map_.get(column, column)
+            name = map_.get(column, column).encode('utf-8')
             data = schema.get(column, {})
-            data.update({'column': column, 'type_code': row[1]})
+            # print '@@', type(name), repr(name)
+            data.update({b'column': column, b'type_code': row[1]})
             if name in self.declared_fields:
                 field = self.declared_fields.get(name)
                 field.__dict__.update(data)
@@ -123,7 +123,7 @@ class ModelOptions(object):
     def add_field(self, field, name):
         field.name = name
         field.model = self.model
-        if getattr(field, 'validators', None):
+        if getattr(field, b'validators', None):
             self.validations[name] = field.validators
         self.fields[name] = field
         self.columns[field.column] = field
@@ -168,7 +168,7 @@ class ModelBase(type):
                 except ModelNotRegistered:
                     pass
 
-        signals.send_signal(signal='class_prepared', sender=new_cls, using=new_cls._meta.using)
+        signals.send_signal(signal=b'class_prepared', sender=new_cls, using=new_cls._meta.using)
         return new_cls
 
 
@@ -179,9 +179,8 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def __init__(self, *args, **kwargs):
         """Allows setting of fields using kwargs"""
-        self._send_signal(signal='pre_init', args=args, kwargs=kwargs, using=self._meta.using)
+        self._send_signal(signal=b'pre_init', args=args, kwargs=kwargs, using=self._meta.using)
         self._new_record = True
-        self._changed = set()
         self._errors = {}
         self._cache = {}
         self.__dict__[self._meta.pk] = None
@@ -191,19 +190,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         if kwargs:
             for k, v in kwargs.items():
                 setattr(self, k, v)
-        self._send_signal(signal='post_init', using=self._meta.using)
-
-    def __setattr__(self, name, value, track=True):
-        """Records when fields have changed"""
-        try:
-            value = self._meta.fields[name].to_python(value)
-        except KeyError:
-            return object.__setattr__(self, name, value)
-        except AttributeError:
-            pass
-        self.__dict__[name] = value
-        if track:
-            self._changed.add(name)
+        self._send_signal(signal=b'post_init', using=self._meta.using)
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self._get_pk() == other._get_pk()
@@ -269,7 +256,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
                 attr = self._meta.columns[column].name
             except KeyError:
                 attr = column
-            self.__setattr__(attr, value, track=False)
+            self.__dict__[attr] = value
         self._new_record = False
         # Do use this method for sets File fields and other special data types?
         return self
@@ -282,13 +269,10 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
     def save(self, using=None):
         """Sets defaults, validates and inserts into or updates database"""
         using = using or self._meta.using
-        if not self.is_valid(fields=self._changed):
-            raise self.ValidationError(self._errors)
-        self._send_signal(signal='pre_save', update_fields=self._changed, using=using)
+        self._send_signal(signal=b'pre_save', using=using)
         result = self._insert(using) if self._new_record else self._update(using)
-        self._send_signal(signal='post_save', created=self._new_record, update_fields=self._changed, using=using)
+        self._send_signal(signal=b'post_save', created=self._new_record, using=using)
         self._new_record = False
-        self._changed = set()
         return result
 
     def _insert(self, using):
@@ -302,12 +286,12 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def _update(self, using):
         """Uses SQL UPDATE to update record"""
-        type(self).qs.using(using).where(type(self).s.pk == self.pk).update(self._get_data(fields=self._changed))
+        type(self).qs.using(using).where(type(self).s.pk == self.pk).update(self._get_data())
 
     def delete(self, using=None):
         """Deletes record from database"""
         using = using or self._meta.using
-        self._send_signal(signal='pre_delete', using=using)
+        self._send_signal(signal=b'pre_delete', using=using)
         for key, rel in self._meta.relations.items():
             if isinstance(rel, OneToMany):
                 for child in getattr(self, key).iterator():
@@ -315,7 +299,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
             elif isinstance(rel, OneToOne):
                 rel.on_delete(self, getattr(self, key), rel)
         type(self).qs.using(using).where(type(self).s.pk == self.pk).delete()
-        self._send_signal(signal='post_delete', using=using)
+        self._send_signal(signal=b'post_delete', using=using)
         return True
 
     def serialize(self, fields=frozenset(), exclude=frozenset()):
@@ -329,7 +313,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def _send_signal(self, *a, **kw):
         """Sends signal"""
-        kw.update({'sender': type(self), 'instance': self})
+        kw.update({b'sender': type(self), b'instance': self})
         return signals.send_signal(*a, **kw)
 
     @classproperty
@@ -503,7 +487,7 @@ class QS(smartsql.QS):
                 c = 2
                 fn_base = fn
                 while fn in fields:
-                    fn = fn_base + str(c)
+                    fn = fn_base + bytes(c)
                     c += 1
             fields.append(fn)
 
@@ -618,14 +602,14 @@ class Table(smartsql.Table):
 
     def __getattr__(self, name):
         """Added some specific functional."""
-        if name[0] == '_':
+        if name[0] == b'_':
             raise AttributeError
         parts = name.split(smartsql.LOOKUP_SEP, 1)
         field = parts[0]
         result = {'field': field, }
-        signals.send_signal(signal='field_conversion', sender=self, result=result, field=field, model=self.model)
+        signals.send_signal(signal=b'field_conversion', sender=self, result=result, field=field, model=self.model)
         field = result['field']
-        if field == 'pk':
+        if field == b'pk':
             field = self.model._meta.pk
         if isinstance(self.model._meta.relations.get(field, None), ForeignKey):
             field = self.model._meta.relations.get(field).field

@@ -44,18 +44,15 @@ def connect(signal, name=None, sender=None):
         return fn
     return decorator
 
+signals = {}
+for name in [b'pre_save', b'post_save', b'pre_delete', b'post_delete',
+             b'pre_init', b'post_init', b'class_prepared', b'field_conversion']:
+    signals[name] = Signal()
 
-pre_save = Signal()
-post_save = Signal()
-pre_delete = Signal()
-post_delete = Signal()
-pre_init = Signal()
-post_init = Signal()
-class_prepared = Signal()
-field_conversion = Signal()
+globals().update(signals)
 
 
-def send_signal(*a, **kw):
+def send_signal(signal, *a, **kw):
     """Send signal abstract handler.
 
     You can to override it by settings.SIGNAL_SEND_HANDLER
@@ -67,7 +64,7 @@ def send_signal(*a, **kw):
     https://github.com/olivierverdier/dispatch
     and others.
     """
-    return globals().get(kw.pop('signal')).send(*a, **kw)
+    return signals[signal].send(*a, **kw)
 
 from . import settings
 from .utils import resolve
