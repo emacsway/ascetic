@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from .. import models
+from .. import models, validators
 from . import gfk
 
 # Not tested yet!!!
@@ -102,17 +102,21 @@ class PolymorphicModel(PolymorphicModelBase(b"NewBase", (models.Model, ), {})):
             self.parent_model_instance._set_data(data)
         return self
 
-    def is_valid(self, *a, **kw):
-        valid = super(PolymorphicModel, self).is_valid(*a, **kw)
-        if self.parent_model_instance:
-            valid = valid and self.parent_model_instance.is_valid(*a, **kw)
-        return valid
+    def validate(self, *a, **kw):
+        errors = {}
+        try:
+            super(PolymorphicModel, self).validate(*a, **kw)
+        except validators.ValidationError as e:
+            errors.update(e.message)
 
-    def _validate(self, *a, **kw):
-        super(PolymorphicModel, self)._validate(*a, **kw)
         if self.parent_model_instance:
-            self.parent_model_instance._validate(*a, **kw)
-            self._errors.update(self.parent_model_instance._errors)
+            try:
+                self.parent_model_instance.validate(*a, **kw)
+            except validators.ValidationError as e:
+                errors.update(e.message)
+
+        if errors:
+            raise validators.ValidationError(errors)
 
     def save(self, *a, **kw):
         if self.parent_model_instance:

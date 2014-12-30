@@ -11,7 +11,7 @@ import unittest
 from autumn import validators
 from autumn import utils
 from autumn.connections import get_db
-from autumn.models import Model, QS, qn
+from autumn.models import QS, qn
 from autumn.tests.models import Book, Author
 
 
@@ -137,7 +137,7 @@ class TestModels(unittest.TestCase):
         self.assertEqual(a.id, b.author_id)
 
         a = Author.get(id=b.id)[:]
-        #self.assert_(isinstance(a, list))
+        # self.assert_(isinstance(a, list))
         self.assert_(isinstance(a, QS))
 
         # Test update
@@ -161,14 +161,15 @@ class TestModels(unittest.TestCase):
 
         # Test validation
         a = Author(first_name='', last_name='Ted')
-        self.assertFalse(a.is_valid())
+        self.assertRaises(validators.ValidationError, a.validate)
 
         # Test defaults
         a.first_name = 'Bill and'
         a.save()
         self.assertEqual(a.bio, 'No bio available')
 
-        self.assertFalse(Author(first_name='I am a', last_name='BadGuy!').is_valid())
+        a = Author(first_name='I am a', last_name='BadGuy!')
+        self.assertRaises(validators.ValidationError, a.validate)
 
         print '### Testing for smartsql integration'
         t = Author.s
@@ -222,7 +223,6 @@ class TestModels(unittest.TestCase):
             self.assertEqual(len(obj.books_prefetch), len(obj.books))
             for i in obj.books_prefetch:
                 self.assertEqual(i.author_prefetch, obj)
-
 
     def testvalidators(self):
         ev = validators.Email()

@@ -6,6 +6,7 @@ from sqlbuilder import smartsql
 from . import signals
 from .connections import get_db
 from .utils import classproperty
+from .validators import ValidationError
 
 try:
     str = unicode  # Python 2.* compatible
@@ -174,7 +175,6 @@ class ModelBase(type):
 class Model(ModelBase(b"NewBase", (object, ), {})):
     """Model class"""
 
-    _errors = False
     _new_record = True
     _s = None
 
@@ -210,6 +210,10 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     pk = property(_get_pk, _set_pk)
 
+    def to_python(self):
+        for f in self._meta.fields.values():
+            setattr(self, f.name, f.to_python())
+
     def _set_defaults(self):
         """Sets attribute defaults based on ``defaults`` dict"""
         for k, v in getattr(self._meta, 'defaults', {}).items():
@@ -221,15 +225,10 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
                         v = v()
                 setattr(self, k, v)
 
-    def is_valid(self, exclude=frozenset(), fields=frozenset()):
-        """Returns boolean on whether all ``validations`` pass"""
-        self._validate(exclude, fields)
-        return not self._errors
-
-    def _validate(self, exclude=frozenset(), fields=frozenset()):
+    def validate(self, exclude=frozenset(), fields=frozenset()):
         """Tests all ``validations``"""
         self._set_defaults()
-        self._errors = {}
+        errors = {}
         for key, validators in self._meta.validations.items():
             if key in exclude or (fields and key not in fields):
                 continue
@@ -245,9 +244,11 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
                         valid_or_msg = validator(value)
                 if valid_or_msg is not True:
                     # Don't need message code. To rewrite message simple wrap (or extend) validator.
-                    self._errors.setdefault(key, []).append(
+                    errors.setdefault(key, []).append(
                         valid_or_msg or 'Improper value "{0}" for "{1}"'.format(value, key)
                     )
+        if errors:
+            raise ValidationError(errors)
 
     def _set_data(self, data):
         for column, value in data.items():
@@ -267,6 +268,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def save(self, using=None):
         """Sets defaults, validates and inserts into or updates database"""
+        self._set_defaults()
         using = using or self._meta.using
         self._send_signal(signal=b'pre_save', using=using)
         result = self._insert(using) if self._new_record else self._update(using)
@@ -338,9 +340,6 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
             return qs
 
         return cls.qs.clone()
-
-    class ValidationError(Exception):
-        pass
 
     def __repr__(self):
         return "<{0}.{1}: {2}>".format(type(self).__module__, type(self).__name__, self.pk)

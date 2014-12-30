@@ -10,6 +10,10 @@ except NameError:
     integer_types = (int,)
 
 
+class ValidationError(Exception):
+    pass
+
+
 class Validator(object):
     pass
 
