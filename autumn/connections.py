@@ -82,7 +82,11 @@ class Database(object):
 
     def _execute(self, sql, params=()):
         cursor = self.cursor()
-        cursor.execute(sql, params)
+        try:
+            cursor.execute(sql, params)
+        except Exception:
+            cursor = self.reconnect().cursor()
+            cursor.execute(sql, params)
         return cursor
 
     def execute(self, sql, params=()):
@@ -104,7 +108,7 @@ class Database(object):
     def cursor(self):
         try:
             return self.conn.cursor()
-        except:
+        except Exception:
             return self.reconnect().cursor()
 
     def last_insert_id(self, cursor):
