@@ -763,11 +763,14 @@ class ForeignKey(Relation):
     def __get__(self, instance, owner):
         if not instance:
             return self
-        fk_val = getattr(instance, self.field)
-        if fk_val is None:
+        field = self.field if type(self.field) == tuple else (self.field,)
+        rel_field = self.rel_field if type(self.rel_field) == tuple else (self.rel_field,)
+        fk_val = tuple(getattr(instance, f) for f in field)
+        if not [i for i in fk_val if i is not None]:
             return None
+
         if getattr(instance._cache.get(self.name, None), self.rel_field, None) != fk_val:
-            instance._cache[self.name] = self.filter(**{self.rel_field: fk_val})[0]
+            instance._cache[self.name] = self.filter(**dict(zip(rel_field, fk_val)))[0]
         return instance._cache[self.name]
 
     def __set__(self, instance, value):
@@ -781,11 +784,19 @@ class ForeignKey(Relation):
                 )
             instance._cache[self.name] = value
             value = value._get_pk()
-        setattr(instance, self.field, value)
+        if type(self.field) == tuple:
+            for a, v in zip(self.field, value):
+                setattr(instance, a, v)
+        else:
+            setattr(instance, self.field, value)
 
     def __delete__(self, instance):
         instance._cache.pop(self.name, None)
-        setattr(instance, self.field, None)
+        if type(self.field) == tuple:
+            for a in self.field:
+                setattr(instance, a, None)
+        else:
+            setattr(instance, self.field, None)
 
 
 class OneToOne(ForeignKey):
@@ -827,8 +838,11 @@ class OneToMany(Relation):
     def __get__(self, instance, owner):
         if not instance:
             return self
+        field = self.field if type(self.field) == tuple else (self.field,)
+        rel_field = self.rel_field if type(self.rel_field) == tuple else (self.rel_field,)
+        val = tuple(getattr(instance, f) for f in field)
         # Cache attr already exists in QS, so, can be even setable.
-        return self.filter(**{self.rel_field: getattr(instance, self.field)})
+        return self.filter(**dict(zip(rel_field, val)))
 
 
 data_registry = DataRegistry()
