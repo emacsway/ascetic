@@ -2,6 +2,8 @@ from __future__ import absolute_import, unicode_literals
 import re
 import copy
 import collections
+import operator
+from functools import reduce
 from sqlbuilder import smartsql
 from . import signals
 from .connections import get_db
@@ -182,7 +184,12 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         """Allows setting of fields using kwargs"""
         self._send_signal(signal=b'pre_init', args=args, kwargs=kwargs, using=self._meta.using)
         self._cache = {}
-        self.__dict__[self._meta.pk] = None
+        pk = self._meta.pk
+        if type(pk) == tuple:
+            for k in pk:
+                self.__dict__[k] = None
+        else:
+            self.__dict__[pk] = None
         if args:
             for i, arg in enumerate(args):
                 setattr(self, self._meta.fields.keys()[i], arg)
@@ -202,11 +209,19 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def _get_pk(self):
         """Sets the current value of the primary key"""
-        return getattr(self, self._meta.pk, None)
+        pk = self._meta.pk
+        if type(pk) == tuple:
+            return tuple(getattr(self, k, None) for k in pk)
+        return getattr(self, pk, None)
 
     def _set_pk(self, value):
         """Sets the primary key"""
-        return setattr(self, self._meta.pk, value)
+        pk = self._meta.pk
+        if type(pk) == tuple:
+            for k, v in zip(pk, value):
+                setattr(self, k, v)
+        else:
+            setattr(self, self._meta.pk, value)
 
     pk = property(_get_pk, _set_pk)
 
@@ -287,7 +302,14 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def _update(self, using):
         """Uses SQL UPDATE to update record"""
-        type(self).qs.using(using).where(type(self).s.pk == self.pk).update(self._get_data())
+        pk = (self)._meta.pk
+        if type(pk) == tuple:
+            cond = reduce(operator.and_, (getattr(type(self).s, k) == v for k, v in zip(pk, self.pk)))
+        else:
+            cond = self.s.pk == self.pk
+        type(self).qs.using(using).where(
+            cond
+        ).update(self._get_data())
 
     def delete(self, using=None):
         """Deletes record from database"""
@@ -299,7 +321,14 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
                     rel.on_delete(self, child, rel)
             elif isinstance(rel, OneToOne):
                 rel.on_delete(self, getattr(self, key), rel)
-        type(self).qs.using(using).where(type(self).s.pk == self.pk).delete()
+
+        pk = (self)._meta.pk
+        if type(pk) == tuple:
+            cond = reduce(operator.and_, (getattr(self.s, k) == v for k, v in zip(pk, self.pk)))
+        else:
+            cond = type(self).s.pk == self.pk
+
+        type(self).qs.using(using).where(cond).delete()
         self._send_signal(signal=b'post_delete', using=using)
         return True
 
@@ -609,6 +638,8 @@ class Table(smartsql.Table):
         field = result['field']
         if field == b'pk':
             field = self.model._meta.pk
+            if type(field) == tuple:
+                return tuple(self.__getattr__(k) for k in field)
         if isinstance(self.model._meta.relations.get(field, None), ForeignKey):
             field = self.model._meta.relations.get(field).field
         if field in self.model._meta.fields:
