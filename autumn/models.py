@@ -18,15 +18,6 @@ except NameError:
     string_types = (str,)
     integer_types = (int,)
 
-SMARTSQL_DIALECTS = {
-    'sqlite3': 'sqlite',
-    'mysql': 'mysql',
-    'postgresql': 'postgres',
-    'postgresql_psycopg2': 'postgres',
-    'postgis': 'postgres',
-    'oracle': 'oracle',
-}
-
 cr = copy.copy(smartsql.cr)
 
 
@@ -52,13 +43,6 @@ class Field(object):
     def __init__(self, **kw):
         for k, v in kw.items():
             setattr(self, k, v)
-
-    def to_python(self, value):
-        # Is it need to force type when value received from python, not from database?
-        return data_registry.convert_to_python(self.model.qs._dialect, self.type_code, value)
-
-    def to_string(self, value):
-        data_registry.convert_to_string(value)
 
 
 class ModelOptions(object):
@@ -108,7 +92,7 @@ class ModelOptions(object):
         # self.all(whole, total)_fields = collections.OrderedDict()  # with parents, MTI
         self.fields = collections.OrderedDict()
         self.columns = collections.OrderedDict()
-        q = db.execute('SELECT * FROM {0} LIMIT 1'.format(qn(self.db_table)))
+        q = db.execute('SELECT * FROM {0} LIMIT 1'.format(db.qn(self.db_table)))
         # See cursor.description http://www.python.org/dev/peps/pep-0249/
         for row in q.description:
             column = row[0]
@@ -374,51 +358,6 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         return "<{0}.{1}: {2}>".format(type(self).__module__, type(self).__name__, self.pk)
 
 
-class DataRegistry(object):
-    """
-    Stores data convertors
-    """
-    def __init__(self):
-        """Constructor, initial registry."""
-        self._register = {}
-
-    def register(self, *args):
-        """Registers callbacks."""
-        def decorator(func):
-            self._register[args] = func
-            return func
-        return decorator
-
-    def to_python(self, dialect, code):
-        return self.register('to_python', dialect, code)
-
-    def to_sql(self, dialect, type):
-        return self.register('to_sql', dialect, type)
-
-    def to_string(self, type):
-        return self.register('to_string', type)
-
-    def convert_to_python(self, dialect, code, value):
-        key = ('to_python', dialect, code)
-        if key in self._register:
-            return self._register[key](value)
-        return value
-
-    def convert_to_sql(self, dialect, value):
-        for t in type(value).mro():
-            key = ('to_sql', dialect, t)
-            if key in self._register:
-                return self._register[key](value)
-        return value
-
-    def convert_to_string(self, value):
-        for t in type(value).mro():
-            key = ('to_string', t)
-            if key in self._register:
-                return self._register[key](value)
-        return value
-
-
 @cr('QuerySet')
 class QS(smartsql.QS):
     """Query Set adapted."""
@@ -435,7 +374,6 @@ class QS(smartsql.QS):
         if isinstance(tables, Table):
             self.model = tables.model
             self._using = self.model._meta.using
-            self._set_dialect()
 
     def raw(self, sql, *params):
         self = self.clone()
@@ -519,7 +457,6 @@ class QS(smartsql.QS):
             fields.append(fn)
 
         for row in cursor.fetchall():
-            row = [data_registry.convert_to_python(self._dialect, descr[i][1], v) for i, v in enumerate(row)]
             data = dict(zip(fields, row))
             yield self.model()._set_data(data) if self.model else data
 
@@ -545,16 +482,7 @@ class QS(smartsql.QS):
             return self._using
         self = self.clone()
         self._using = alias
-        self._set_dialect()
         return self
-
-    def _set_dialect(self):
-        engine = self.db.engine
-        SMARTSQL_DIALECTS.get(engine, engine)
-        self._dialect = SMARTSQL_DIALECTS.get(engine, engine)
-
-    def dialect(self):
-        return self._dialect
 
     def is_base(self, value=None):
         if value is None:
@@ -562,21 +490,11 @@ class QS(smartsql.QS):
         self._is_base = value
         return self
 
-    def sqlrepr(self, expr=None):
-        return smartsql.sqlrepr(expr or self, self._dialect)
-
-    def sqlparams(self, expr=None):
-        params = smartsql.sqlparams(expr or self)
-        for i, v in enumerate(params[:]):
-            params[i] = data_registry.convert_to_sql(self._dialect, v)
-        return params
-
     def execute(self):
         """Implementation of query execution"""
-        sql = self._build_sql()
-        return self._execute(self.sqlrepr(sql), self.sqlparams(sql))
+        return self._execute(self)
 
-    def _execute(self, sql, params):
+    def _execute(self, sql, params=()):
         return self.db.execute(sql, params)
 
     def result(self):
@@ -654,12 +572,6 @@ class TableAlias(smartsql.TableAlias, Table):
     @property
     def model(self):
         return getattr(self._table, 'model', None)  # Can be subquery
-
-
-def qn(name, using='default'):
-    """Quotes DB name"""
-    engine = get_db(using).engine
-    return smartsql.qn(name, SMARTSQL_DIALECTS.get(engine, engine))
 
 
 def cascade(parent, child, parent_rel):
@@ -843,13 +755,3 @@ class OneToMany(Relation):
         val = tuple(getattr(instance, f) for f in field)
         # Cache attr already exists in QS, so, can be even setable.
         return self.filter(**dict(zip(rel_field, val)))
-
-
-data_registry = DataRegistry()
-
-
-@data_registry.to_sql('sqlite', Model)
-@data_registry.to_sql('mysql', Model)
-@data_registry.to_sql('postgres', Model)
-def model_to_sql(val):
-    return val.pk

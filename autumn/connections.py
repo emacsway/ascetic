@@ -3,6 +3,8 @@ import collections
 import logging
 from functools import wraps
 from threading import local
+from sqlbuilder import smartsql
+from sqlbuilder.smartsql.compilers import mysql, sqlite
 from autumn import settings
 
 PLACEHOLDER = '%s'
@@ -53,6 +55,7 @@ class Transaction(object):
 class Database(object):
 
     placeholder = '%s'
+    compile = smartsql.compile
 
     def __init__(self, **kwargs):
         self.using = kwargs.pop('using')
@@ -90,6 +93,8 @@ class Database(object):
         return cursor
 
     def execute(self, sql, params=()):
+        if isinstance(sql, smartsql.QuerySet):
+            sql, params = self.compile(sql)
         if self.debug:
             self.logger.debug("%s - %s", sql, params)
         if self.placeholder != PLACEHOLDER:
@@ -152,6 +157,9 @@ class Database(object):
     def describe_table(self, table_name):
         return {}
 
+    def qn(self, name):
+        return self.compile(smartsql.Name(name))[0]
+
     @classmethod
     def factory(cls, **kwargs):
         relations = {
@@ -199,6 +207,7 @@ class DjangoMixin(object):
 class SqliteDatabase(Database):
 
     placeholder = '?'
+    compile = sqlite.compile
 
     def _connect(self, *args, **kwargs):
         import sqlite3
@@ -206,6 +215,8 @@ class SqliteDatabase(Database):
 
 
 class MySQLDatabase(Database):
+
+    compile = mysql.compile
 
     def _connect(self, *args, **kwargs):
         import MySQLdb
