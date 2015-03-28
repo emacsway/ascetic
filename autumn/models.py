@@ -358,7 +358,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         return "<{0}.{1}: {2}>".format(type(self).__module__, type(self).__name__, self.pk)
 
 
-@cr('QuerySet')
+@cr('Query')
 class QS(smartsql.QS):
     """Query Set adapted."""
 
@@ -443,7 +443,7 @@ class QS(smartsql.QS):
 
     def iterator(self):
         """iterator"""
-        cursor = self.execute()
+        cursor = self.execute(self)
         descr = cursor.description
         fields = []
         for f in descr:
@@ -490,33 +490,31 @@ class QS(smartsql.QS):
         self._is_base = value
         return self
 
-    def execute(self):
+    def execute(self, expr):
         """Implementation of query execution"""
-        return self._execute(self)
+        return self.db.execute(expr)
 
-    def _execute(self, sql, params=()):
-        return self.db.execute(sql, params)
-
-    def result(self):
+    def result(self, expr=None):
         """Result"""
-        if self._action == 'select':
+        expr = self if expr is None else expr
+        if isinstance(expr, smartsql.SelectCount):
+            return self.execute(expr).fetchone()[0]
+        elif isinstance(expr, smartsql.Query):
             return self
-        if self._action == 'count':
-            return self.execute().fetchone()[0]
-        return self.execute()
+        return self.execute(expr)
 
     @property
     def db(self):
-        return get_db(self.using())
+        return get_db(self._using)
 
 
 @cr
-class UnionQuerySet(smartsql.UnionQuerySet, QS):
+class Set(smartsql.Set, QS):
     """Union query class"""
-    def __init__(self, qs):
-        super(UnionQuerySet, self).__init__(qs)
-        self.model = qs.model
-        self._using = qs.using()
+    def __init__(self, exprs, *a, **kw):
+        super(Set, self).__init__(exprs, *a, **kw)
+        self.model = exprs[0].model
+        self._using = exprs[0]._using
 
 
 @cr

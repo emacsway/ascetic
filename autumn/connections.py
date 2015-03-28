@@ -7,6 +7,14 @@ from sqlbuilder import smartsql
 from sqlbuilder.smartsql.compilers import mysql, sqlite
 from autumn import settings
 
+try:
+    str = unicode  # Python 2.* compatible
+    string_types = (basestring,)
+    integer_types = (int, long)
+except NameError:
+    string_types = (str,)
+    integer_types = (int,)
+
 PLACEHOLDER = '%s'
 
 # TODO: thread safe dict emulating?
@@ -93,7 +101,7 @@ class Database(object):
         return cursor
 
     def execute(self, sql, params=()):
-        if isinstance(sql, smartsql.QuerySet):
+        if not isinstance(sql, string_types):
             sql, params = self.compile(sql)
         if self.debug:
             self.logger.debug("%s - %s", sql, params)
