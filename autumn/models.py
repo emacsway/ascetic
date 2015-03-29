@@ -383,8 +383,7 @@ class QS(smartsql.QS):
     def clone(self, *attrs):
         c = smartsql.QS.clone(self, *attrs)
         c._cache = None
-        c._prefetch = self._prefetch.copy()
-        c.is_base(False)
+        c._is_base = False
         return c
 
     def __len__(self):
@@ -428,7 +427,7 @@ class QS(smartsql.QS):
 
     def prefetch(self, *a, **kw):
         """Prefetch relations"""
-        c = self.clone()
+        c = self.clone('_prefetch')
         if a and not a[0]:
             c._prefetch = {}
         else:
