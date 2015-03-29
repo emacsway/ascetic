@@ -362,7 +362,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 class QS(smartsql.QS):
     """Query Set adapted."""
 
-    _expr = None
+    _raw = None
     _cache = None
     _using = 'default'
     model = None
@@ -377,11 +377,11 @@ class QS(smartsql.QS):
 
     def raw(self, sql, *params):
         self = self.clone()
-        self._expr = smartsql.OmitParentheses(smartsql.E(sql, *params))
+        self._raw = smartsql.OmitParentheses(smartsql.E(sql, *params))
         return self
 
-    def clone(self):
-        c = super(QS, self).clone()
+    def clone(self, *attrs):
+        c = smartsql.QS.clone(self, *attrs)
         c._cache = None
         c._prefetch = self._prefetch.copy()
         c.is_base(False)
@@ -469,14 +469,6 @@ class QS(smartsql.QS):
             return list(self)[0]
         return super(QS, self).__getitem__(key)
 
-    def _build_sql(self):
-        if not (self._action == "select" and self._expr):
-            return super(QS, self)._build_sql()
-        sql = smartsql.ExprList(self._expr)
-        if self._limit:
-            sql.append(self._limit)
-        return sql
-
     def using(self, alias=None):
         if alias is None:
             return self._using
@@ -506,6 +498,20 @@ class QS(smartsql.QS):
     @property
     def db(self):
         return get_db(self._using)
+
+
+@smartsql.compile.when(QS)
+def compile_qs(compile, expr, state):
+    if expr._raw is None:
+        smartsql.compile_query(compile, expr, state)
+    else:
+        compile(expr._raw, state)
+        if expr._limit is not None:
+            state.sql.append(" LIMIT ")
+            compile(expr._limit, state)
+        if expr._offset:
+            state.sql.append(" OFFSET ")
+            compile(expr._offset, state)
 
 
 @cr
