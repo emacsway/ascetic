@@ -11,6 +11,8 @@ try:
 except ImportError:
     import pickle
 
+# Use json instead pickle?
+
 from difflib import SequenceMatcher
 
 if sys.version_info > (3, ):

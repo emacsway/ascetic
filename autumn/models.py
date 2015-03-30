@@ -459,6 +459,19 @@ class QS(smartsql.QS):
             data = dict(zip(fields, row))
             yield self.model()._set_data(data) if self.model else data
 
+    def map(self, fields, row, group_by, groups):
+        models = {}
+        for i, field in enumerate(self._fields):
+            model = self.model
+            try:
+                model = field._prefix.model
+            except AttributeError:
+                pass
+            if model not in models:
+                models[model] = {}
+            models[model][fields[i]] = row[i]
+        # TODO: What next?
+
     def __getitem__(self, key):
         """Returns sliced self or item."""
         if self._cache:
