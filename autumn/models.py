@@ -453,21 +453,31 @@ class QS(smartsql.QS):
         for key, qs in self._prefetch.items():
             rel = self.model._meta.relations[key]
             # recursive handle prefetch
-            # TODO: add support for composite relations.
-            rows = list(qs.where(
-                smartsql.Field(rel.rel_field, rel.rel_model.s).in_(
-                    filter(None, [getattr(i, rel.field) for i in self._cache])
-                )
-            ))
+            field = rel.field if type(rel.field) == tuple else (rel.field,)
+            rel_field = rel.rel_field if type(rel.rel_field) == tuple else (rel.rel_field,)
+
+            cond = None
             for obj in self._cache:
-                val = [i for i in rows if getattr(i, rel.rel_field) == getattr(obj, rel.field)]
+                cond1 = None
+                for f, rf in zip(field, rel_field):
+                    val = getattr(obj, f)
+                    if val is None:
+                        break
+                    cond2 = smartsql.Field(rf, rel.rel_model.s) == val
+                    cond1 = cond2 if cond1 is None else cond1 & cond2
+                else:
+                    cond = cond if cond is None else cond | cond1
+
+            rows = list(qs.where(cond))
+            for obj in self._cache:
+                val = [i for i in rows if tuple(getattr(i, f) for f in rel_field) == tuple(getattr(obj, f) for f in field)]
                 if isinstance(rel, (ForeignKey, OneToOne)):
                     val = val[0] if val else None
                     if val and isinstance(rel, OneToOne):
                         setattr(val, "{}_prefetch".format(rel.rel_name), obj)
                 elif isinstance(rel, OneToMany):
                     for i in val:
-                        setattr(i, "{}_prefetch".format(rel.rel_name), obj)  # TODO: fix me
+                        setattr(i, "{}_prefetch".format(rel.rel_name), obj)
                 setattr(obj, "{}_prefetch".format(key), val)
 
     def prefetch(self, *a, **kw):
