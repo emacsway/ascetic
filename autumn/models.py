@@ -372,6 +372,56 @@ def default_mapping(qs, row, state):
     return qs.model()._set_data(data) if qs.model else data
 
 
+class RelatedMapping(object):
+
+    def get_model_rows(self, models, row):
+        rows = []
+        start = 0
+        for m in models:
+            length = len(m.s.get_fields())
+            rows.append(row[start:length])
+            start += length
+        return rows
+
+    def get_objects(self, models, rows, state):
+        objs = []
+        for model, model_row in zip(models, rows):
+            pk = model._meta.pk
+            if type(pk) != tuple:
+                pk = (pk,)
+            key = (model, tuple(model_row[f] for f in pk))
+            if key not in state:
+                state[key] = model()._set_data(model_row)
+            objs.append(state[key])
+        return objs
+
+    def build_relations(self, relations, objs):
+        for i, rel in enumerate(relations):
+            obj, rel_obj = objs[i], objs[i + 1]
+            name = '{}_related'.format(rel.name)
+            rel_name = '{}_related'.format(rel.rel_name)
+            if isinstance(rel, (ForeignKey, OneToOne)):
+                setattr(obj, name, rel_obj)
+                if not hasattr(rel_obj, rel_name):
+                    setattr(rel_obj, rel_name, [])
+                getattr(rel_obj, rel_name).append[obj]
+            elif isinstance(rel, OneToMany):
+                if not hasattr(obj, name):
+                    setattr(obj, name, [])
+                getattr(obj, name).append[rel_obj]
+                setattr(rel_obj, rel_name, obj)
+
+    def __call__(self, qs, row, state):
+        models = [qs.model]
+        relations = qs._select_related
+        for rel in relations:
+            models.append(rel.rel_model)
+        rows = self.get_model_rows(models, row)
+        objs = self.get_objects(models, rows)
+        self.build_relations(relations, objs)
+        return objs[0]
+
+
 @cr('Query')
 class QS(smartsql.QS):
     """Query Set adapted."""
@@ -384,6 +434,7 @@ class QS(smartsql.QS):
     def __init__(self, tables=None):
         super(QS, self).__init__(tables=tables)
         self._prefetch = {}
+        self._select_related = {}
         self.is_base(True)
         self._mapping = default_mapping
         if isinstance(tables, Table):
@@ -483,7 +534,7 @@ class QS(smartsql.QS):
     def prefetch(self, *a, **kw):
         """Prefetch relations"""
         c = self.clone('_prefetch')
-        if a and not a[0]:
+        if a and not a[0]:  # .prefetch(False)
             c._prefetch = {}
         else:
             c._prefetch.update(kw)
