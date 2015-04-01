@@ -358,6 +358,20 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         return "<{0}.{1}: {2}>".format(type(self).__module__, type(self).__name__, self.pk)
 
 
+def default_mapping(qs, row, state):
+    data = {}
+    for k, v in row:
+        fn = k
+        if fn in data:
+            c = 2
+            fn_base = fn
+            while fn in data:
+                fn = fn_base + c
+                c += 1
+        data[fn] = v
+    return qs.model()._set_data(data) if qs.model else data
+
+
 @cr('Query')
 class QS(smartsql.QS):
     """Query Set adapted."""
@@ -371,6 +385,7 @@ class QS(smartsql.QS):
         super(QS, self).__init__(tables=tables)
         self._prefetch = {}
         self.is_base(True)
+        self._mapping = default_mapping
         if isinstance(tables, Table):
             self.model = tables.model
             self._using = self.model._meta.using
@@ -397,6 +412,35 @@ class QS(smartsql.QS):
             return len(self._cache)
         return super(QS, self).count()
 
+    def map(self, mapping):
+        """Sets mapping.
+
+        Example of usage:
+        >>> def custom_mapping(qs, row, state):
+        ...     row1, row2, row3 = dict(row[:5]), dict(row[5:8]), dict(row[8:])
+        ...
+        ...     key1 = (model1, tuple(row1[k] for k in model1.pk))
+        ...     if key1 not in state:
+        ...         state[key1] = model1()._set_data(row1)
+        ...     obj1 = state[key1]
+        ...
+        ...     key2 = (model2, tuple(row2[k] for k in model2.pk))
+        ...     if key2 not in state:
+        ...         state[key2] = model2()._set_data(row2)
+        ...     obj2 = state[key2]
+        ...     obj3 = model3()._set_data(row3)
+        ...     obj3.fk_to_obj2 = obj2
+        ...     obj2.o2m_obj3.append(obj3)
+        ...     obj2.fk_to_obj1 = obj1
+        ...     obj1.o2m_obj2.append(obj2)
+        ...     return obj1
+        ...
+        >>> object_list = qs.map(custom_mapping)
+        """
+        c = self
+        c._mapping = mapping
+        return c
+
     def fill_cache(self):
         if self.is_base():
             raise Exception('You should clone base queryset before query.')
@@ -409,8 +453,9 @@ class QS(smartsql.QS):
         for key, qs in self._prefetch.items():
             rel = self.model._meta.relations[key]
             # recursive handle prefetch
+            # TODO: add support for composite relations.
             rows = list(qs.where(
-                smartsql.Field(rel.rel_field).in_(
+                smartsql.Field(rel.rel_field, rel.rel_model.s).in_(
                     filter(None, [getattr(i, rel.field) for i in self._cache])
                 )
             ))
@@ -422,7 +467,7 @@ class QS(smartsql.QS):
                         setattr(val, "{}_prefetch".format(rel.rel_name), obj)
                 elif isinstance(rel, OneToMany):
                     for i in val:
-                        setattr(i, "{}_prefetch".format(rel.rel_name), obj)
+                        setattr(i, "{}_prefetch".format(rel.rel_name), obj)  # TODO: fix me
                 setattr(obj, "{}_prefetch".format(key), val)
 
     def prefetch(self, *a, **kw):
@@ -444,20 +489,10 @@ class QS(smartsql.QS):
         """iterator"""
         cursor = self.execute(self)
         descr = cursor.description
-        fields = []
-        for f in descr:
-            fn = f[0]
-            if fn in fields:
-                c = 2
-                fn_base = fn
-                while fn in fields:
-                    fn = fn_base + bytes(c)
-                    c += 1
-            fields.append(fn)
-
+        fields = tuple(f[0] for f in descr)
+        state = {}
         for row in cursor.fetchall():
-            data = dict(zip(fields, row))
-            yield self.model()._set_data(data) if self.model else data
+            yield self._mapping(self, zip(fields, row), state)
 
     def __getitem__(self, key):
         """Returns sliced self or item."""
