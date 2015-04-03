@@ -1,26 +1,26 @@
 import copy
 import collections
-from .. import models, signals, validators
+from .. import models, signals
 
-# Not testet yet!!!
-
-
-class Required(validators.Required):
-
-    def __call__(self, obj, key, val):
-        reg = TranslationRegistry.registry
-        current_key = reg.translated_field(reg.original_field(key))
-        return key == current_key and val not in self.empty_values or self.msg
+# Not testet yet!!! It's just a draft!!!
 
 
 class TranslationDictMixIn(object):
 
     def __getitem__(self, key):
-        reg = TranslationRegistry.registry
         try:
             return super(TranslationDictMixIn, self).__getitem__(key)
         except KeyError:
-            return super(TranslationDictMixIn, self).__getitem__(reg.translated_field(key))
+            return super(TranslationDictMixIn, self).__getitem__(TranslationRegistry.registry.translated_field(self.model, key))
+
+
+class OriginalDictMixIn(object):
+
+    def __getitem__(self, key):
+        try:
+            return super(TranslationDictMixIn, self).__getitem__(key)
+        except KeyError:
+            return super(TranslationDictMixIn, self).__getitem__(TranslationRegistry.registry.original_field(self.model, key))
 
 
 class TranslationOrderedDict(TranslationDictMixIn, collections.OrderedDict):
@@ -28,6 +28,14 @@ class TranslationOrderedDict(TranslationDictMixIn, collections.OrderedDict):
 
 
 class TranslationDict(TranslationDictMixIn, dict):
+    pass
+
+
+class OriginalOrderedDict(OriginalDictMixIn, collections.OrderedDict):
+    pass
+
+
+class OriginalDict(OriginalDictMixIn, dict):
     pass
 
 
@@ -59,24 +67,9 @@ class TranslationMixIn(models.Model):
 
     def _validate(self, exclude=frozenset(), fields=frozenset()):
         reg = TranslationRegistry.registry
-
-        exclude = set(exclude)
-        for field in exclude.copy():
-            if field in reg[type(self)._meta.name]:
-                exclude |= reg[type(self)._meta.name].get(field)
-            fields.remove(field)
-
-        fields = set(fields)
-        for field in fields.copy():
-            if field in reg[type(self)._meta.name]:
-                fields |= reg[type(self)._meta.name].get(field)
-            fields.remove(field)
-
+        exclude = frozenset(reg.original_field(self.__class__, f) for f in exclude)
+        fields = frozenset(reg.original_field(self.__class__, f) for f in fields)
         super(TranslationMixIn, self)._validate(exclude, fields)
-
-        for key, val in self._errors.items():
-            # mirrors errors to original keys
-            self._errors[reg.translated_field(key)] = val
 
 
 class TranslationRegistry(dict):
@@ -105,13 +98,9 @@ class TranslationRegistry(dict):
                 model._meta.fields[translated_name].original_name = name
 
         model._meta.fields.__class__ = TranslationOrderedDict
-        model._meta.validators.__class__ = TranslationOrderedDict
-
-        for name, val in model._meta.validations.copy().items():
-            if name in d:
-                for trans_name in d[name]:
-                    model._meta.validations[trans_name] = val
-                model._meta.validations.pop(name)
+        model._meta.fields.model = model
+        model._meta.validations.__class__ = OriginalDict
+        model._meta.validations.model = model
 
         for name, field in self.declared_fields.items():
             if hasattr(field, 'column') and field.column not in model._meta.columns:
@@ -122,11 +111,6 @@ class TranslationRegistry(dict):
                     new_field.__dict__.update(trans_field.__dict__)
                     model._meta.add_field(new_field, name)
 
-        for name, values in model._meta.validations.copy().items():
-            for val in values:
-                if type(val) is validators.Required:
-                    val.__class__ = Required
-
     def translated_field(self, model, field, lang=None):
         lang = lang or self.get_language()
         if field in self[model._meta.name]:
@@ -135,7 +119,7 @@ class TranslationRegistry(dict):
 
     def original_field(self, model, field, lang=None, only_current=True):
         lang = lang or self.get_language()
-        for key, values in self[model._meta.name]:
+        for key, values in self[model._meta.name].items():
             if field in values:
                 if not only_current or field.rsplit('_', 1).pop() == lang:
                     return key
