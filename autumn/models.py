@@ -60,37 +60,53 @@ class ModelOptions(object):
             setattr(self, k, v)
 
         self.model = model
-        if not hasattr(self, b'name'):
+        self.set_name()
+        self.set_db_table()
+        self.set_declared_fields()
+        self.set_fields()
+
+    def set_name(self):
+        if not hasattr(self, 'name'):
             self.name = ".".join((self.model.__module__, self.model.__name__))
-        if not hasattr(self, b'db_table'):
+
+    def set_db_table(self):
+        if not hasattr(self, 'db_table'):
             self.db_table = "_".join([
                 re.sub(r"[^a-z0-9]", "", i.lower())
                 for i in (self.model.__module__.split(".") + [self.model.__name__, ])
             ])
 
-        if not hasattr(self, 'validations'):
-            self.validations = {}
-        for k, v in self.validations.items():
-            if not isinstance(v, (list, tuple)):
-                self.validations[k] = (v, )
-
-        db = get_db(self.using)
-
-        schema = db.describe_table(self.db_table)
-
-        if not hasattr(self, 'map'):
-            self.map = {}
-        rmap = dict([(v, k) for k, v in self.map.items()])
-        # fileds and columns can be a descriptor for multilingual mapping.
-
+    def set_declared_fields(self):
         self.declared_fields = {}
         for name in self.model.__dict__:
             field = getattr(self.model, name, None)
             if isinstance(field, Field):
                 self.declared_fields[name] = field
                 delattr(self.model, name)
-                if getattr(field, b'column', None):
-                    rmap[field.column] = name
+
+        if hasattr(self, 'map'):
+            for name, column in self.map.items():
+                if name not in self.declared_fields:
+                    self.declared_fields[name] = Field()
+                self.declared_fields[name].column = column
+
+        if hasattr(self, 'validations'):
+            for name, validators in self.validations.items():
+                if not isinstance(validators, (list, tuple)):
+                    validators = [validators, ]
+                if name not in self.declared_fields:
+                    self.declared_fields[name] = Field()
+                field = self.declared_fields[name]
+                if not hasattr(field, 'validators'):
+                    self.declared_fields[name].validators = []
+                field.validators.extend(validators)
+
+    def set_fields(self):
+        db = get_db(self.using)
+        schema = db.describe_table(self.db_table)
+
+        rmap = {field.column: name for name, field in self.declared_fields.items() if hasattr(field, 'column')}
+        # fileds and columns can be a descriptor for multilingual mapping.
 
         # self.all(whole, total)_fields = collections.OrderedDict()  # with parents, MTI
         self.fields = collections.OrderedDict()
@@ -103,7 +119,7 @@ class ModelOptions(object):
             data = schema.get(column, {})
             data.update({b'column': column, b'type_code': row[1]})
             if name in self.declared_fields:
-                field = self.declared_fields.get(name)
+                field = copy.deepcopy(self.declared_fields[name])
                 field.__dict__.update(data)
             else:
                 field = self.field_class(**data)
@@ -231,23 +247,22 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         """Tests all ``validations``"""
         self._set_defaults()
         errors = {}
-        for key, validators in self._meta.validations.items():
-            if key in exclude or (fields and key not in fields):
+        for name, field in self._meta.fields.items():
+            if name in exclude or (fields and name not in fields):
                 continue
-            for validator in validators:
+            if not hasattr(field, 'validators'):
+                continue
+            for validator in field.validators:
                 assert isinstance(validator, collections.Callable), 'The validator must be callable'
-                value = getattr(self, key)
-                if key == '__model__':
-                    valid_or_msg = validator(self)
-                else:
-                    try:
-                        valid_or_msg = validator(self, key, value)
-                    except TypeError:
-                        valid_or_msg = validator(value)
+                value = getattr(self, name)
+                try:
+                    valid_or_msg = validator(self, name, value)
+                except TypeError:
+                    valid_or_msg = validator(value)
                 if valid_or_msg is not True:
                     # Don't need message code. To rewrite message simple wrap (or extend) validator.
-                    errors.setdefault(key, []).append(
-                        valid_or_msg or 'Improper value "{0}" for "{1}"'.format(value, key)
+                    errors.setdefault(name, []).append(
+                        valid_or_msg or 'Improper value "{0}" for "{1}"'.format(value, name)
                     )
         if errors:
             raise ValidationError(errors)
