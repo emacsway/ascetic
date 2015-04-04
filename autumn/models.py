@@ -77,7 +77,10 @@ class ModelOptions(object):
         db = get_db(self.using)
 
         schema = db.describe_table(self.db_table)
-        map_ = dict([(v, k) for k, v in getattr(self, b'map', {}).items()])
+
+        if not hasattr(self, 'map'):
+            self.map = {}
+        rmap = dict([(v, k) for k, v in self.map.items()])
         # fileds and columns can be a descriptor for multilingual mapping.
 
         self.declared_fields = {}
@@ -87,7 +90,7 @@ class ModelOptions(object):
                 self.declared_fields[name] = field
                 delattr(self.model, name)
                 if getattr(field, b'column', None):
-                    map_[field.column] = name
+                    rmap[field.column] = name
 
         # self.all(whole, total)_fields = collections.OrderedDict()  # with parents, MTI
         self.fields = collections.OrderedDict()
@@ -96,7 +99,7 @@ class ModelOptions(object):
         # See cursor.description http://www.python.org/dev/peps/pep-0249/
         for row in q.description:
             column = row[0]
-            name = map_.get(column, column).encode('utf-8')
+            name = rmap.get(column, column).encode('utf-8')
             data = schema.get(column, {})
             data.update({b'column': column, b'type_code': row[1]})
             if name in self.declared_fields:
@@ -332,6 +335,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     @classproperty
     def s(cls):
+        # TODO: Use Model class descriptor without setter.
         if '_s' not in cls.__dict__:
             cls._s = Table(cls)
         return cls._s

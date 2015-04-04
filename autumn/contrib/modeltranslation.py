@@ -1,135 +1,112 @@
-import copy
 import collections
-from .. import models, signals
+from .. import models
 
 # Not testet yet!!! It's just a draft!!!
 
 
-class TranslationDictMixIn(object):
+class TranslationColumnDescriptor(object):
 
-    def __getitem__(self, key):
-        try:
-            return super(TranslationDictMixIn, self).__getitem__(key)
-        except KeyError:
-            return super(TranslationDictMixIn, self).__getitem__(TranslationRegistry.registry.translated_field(self.model, key))
+    def __get__(self, instance, owner):
+        if not instance:
+            return self
+        return TranslationRegistry().translate_column(instance._column)
 
-
-class OriginalDictMixIn(object):
-
-    def __getitem__(self, key):
-        try:
-            return super(TranslationDictMixIn, self).__getitem__(key)
-        except KeyError:
-            return super(TranslationDictMixIn, self).__getitem__(TranslationRegistry.registry.original_field(self.model, key))
+    def __set__(self, instance, value):
+        instance._column = value
 
 
-class TranslationOrderedDict(TranslationDictMixIn, collections.OrderedDict):
-    pass
+class OriginalColumnDescriptor(object):
+
+    def __get__(self, instance, owner):
+        if not instance:
+            return self
+        return instance._column
+
+    def __set__(self, instance, value):
+        instance._column = value
 
 
-class TranslationDict(TranslationDictMixIn, dict):
-    pass
-
-
-class OriginalOrderedDict(OriginalDictMixIn, collections.OrderedDict):
-    pass
-
-
-class OriginalDict(OriginalDictMixIn, dict):
-    pass
-
-
-class TranslationMixIn(models.Model):
-
-    def __setattr__(self, name, value):
-        reg = TranslationRegistry.registry
-        translated_name = reg.translated_field(type(self), name)
-        super(TranslationMixIn, self).__setattr__(translated_name, value)
-
-    def __getattr__(self, name):
-        reg = TranslationRegistry.registry
-        translated_name = reg.translated_field(type(self), name)
-        super(TranslationMixIn, self).__getattr__(translated_name)
-
-    def _set_data(self, data):
-        reg = TranslationRegistry.registry
-        for column, value in data.items():
-            name = self._meta.columns[column].name
-            original_name = reg.original_field(type(self), name, only_current=True)
-            if original_name != name and value is None:
-                    for lang in reg.get_languages():
-                        try_name = reg.translated_field(type(self), original_name, lang=lang)
-                        try_column = type(self)._meta.fields[try_name].column
-                        if data.get(try_column) is not None:
-                            data[column] = data[try_column]
-                            break
-        return super(TranslationMixIn, self)._set_data(data)
-
-    def _validate(self, exclude=frozenset(), fields=frozenset()):
-        reg = TranslationRegistry.registry
-        exclude = frozenset(reg.original_field(self.__class__, f) for f in exclude)
-        fields = frozenset(reg.original_field(self.__class__, f) for f in fields)
-        super(TranslationMixIn, self)._validate(exclude, fields)
+class TranslationField(models.Field):
+    column = TranslationColumnDescriptor()
+    original_column = OriginalColumnDescriptor()
 
 
 class TranslationRegistry(dict):
 
-    def __init__(self):
-        if hasattr(TranslationRegistry, 'registry'):
-            raise Exception("Already registered {}".format(
-                type(TranslationRegistry.registry).__name__)
-            )
-        TranslationRegistry.registry = self
-        self.connect_field_conversion()
+    _singleton = None
+
+    def __new__(cls, *args, **kwargs):
+        if not TranslationRegistry._singleton:
+            if cls is TranslationRegistry:
+                raise Exception("Can not create instance of abstract class {}".format(cls))
+            TranslationRegistry._singleton = super(TranslationRegistry, cls).__new__(cls, *args, **kwargs)
+        return TranslationRegistry._singleton
 
     def __call__(self, model, fields):
         if model._meta.name in self:
             raise Exception("Already registered {}".format(
                 model.__name__)
             )
+        opts = model._meta
+        self[opts.name] = fields
+        opts.fields = collections.OrderedDict()
 
-        model.__bases__ = (TranslationMixIn, ) + model.__bases__
-        self[model._meta.name] = d = {}
-        for name in fields:
-            d[name] = s = set()
+        columns = set()
+        for field in fields:
+            if field in self.map:
+                columns.add(self.map[field])
+            else:
+                columns.add(field)
+
+        expected_translated_field_names = {}
+        for field in fields:
             for lang in self.get_languages():
-                translated_name = "{}_{}".format(name, lang)
-                s.add(translated_name)
-                model._meta.fields[translated_name].original_name = name
+                expected_translated_field_names[self.translate_column(field, lang)] = field
 
-        model._meta.fields.__class__ = TranslationOrderedDict
-        model._meta.fields.model = model
-        model._meta.validations.__class__ = OriginalDict
-        model._meta.validations.model = model
+        # TODO: lost names from map. Kill map, create declared field on fly?
+        for name, field in opts.declared_fields.copy().items():
+            if field.name in fields and field.column not in opts.columns:   # Declared with specific column, i.e. lost mapping
 
-        for name, field in self.declared_fields.items():
-            if hasattr(field, 'column') and field.column not in model._meta.columns:
-                for lang in self.get_languages():
-                    trans_column = "{}_{}".format(field.column, lang)
-                    trans_field = model._meta.columns[trans_column]
-                    new_field = copy.copy(field)
-                    new_field.__dict__.update(trans_field.__dict__)
-                    model._meta.add_field(new_field, name)
+                class NewTranslationField(TranslationField, field.__class__):
+                    pass
 
-    def translated_field(self, model, field, lang=None):
-        lang = lang or self.get_language()
-        if field in self[model._meta.name]:
-            return "{}_{}".format(field, lang)
-        return field
+                new_field = NewTranslationField(**vars(field))
+                real_field = opts.columns[new_field.column]
+                real_data = vars(real_field)
+                real_data.pop('name')
+                real_data.pop('column')
+                new_field.__dict__.update(real_data)
+                opts.declared_fields[name] = new_field
+                self.add_field(model, new_field, name)  # Rewrite field name to maped name
 
-    def original_field(self, model, field, lang=None, only_current=True):
-        lang = lang or self.get_language()
-        for key, values in self[model._meta.name].items():
-            if field in values:
-                if not only_current or field.rsplit('_', 1).pop() == lang:
-                    return key
-        return field
+        for column, field in opts.columns:
+            if field.name in expected_translated_field_names and not isinstance(field, TranslationField):
+                original_field_name = expected_translated_field_names[field.name]
 
-    def field_conversion_receiver(self, sender, result, field, model):
-        result['field'] = self.translated_field(model, field)
+                class NewTranslationField(TranslationField, field.__class__):
+                    pass
 
-    def connect_field_conversion(self):
-        signals.field_conversion.connect(self.field_conversion_receiver)
+                data = vars(field)
+                data['column'] = column.rsplit('_', 1)[0]
+                new_field = NewTranslationField(**data)
+                if original_field_name in opts.declared_fields:  # Declared without specific column
+                    new_field = opts.declared_fields[original_field_name]
+                self.add_field(model, new_field, original_field_name)
+
+    def add_field(self, model, field, name):
+        field.name = name
+        field.model = model
+        if getattr(field, b'validators', None):
+            model._meta.validations[name] = field.validators
+        model._meta.fields[name] = field
+        if isinstance(field, TranslationField):
+            for lang in self.get_languages():
+                model._meta.columns[self.translate_column(field.original_column, lang)] = field
+        else:
+            model._meta.columns[field.column] = field
+
+    def translate_column(self, name, lang=None):
+        return '{}_{}'.format(name, lang or self.get_language())
 
     def get_language(self):
         raise NotImplementedError
