@@ -12,7 +12,7 @@ class TranslationColumnDescriptor(object):
         return TranslationRegistry().translate_column(instance._column)
 
     def __set__(self, instance, value):
-        instance._column = value
+        instance._column = value.rsplit('_', 1)[0]
 
 
 class OriginalColumnDescriptor(object):
@@ -51,47 +51,28 @@ class TranslationRegistry(dict):
         self[opts.name] = fields
         opts.fields = collections.OrderedDict()
 
-        columns = set()
-        for field in fields:
-            if field in self.map:
-                columns.add(self.map[field])
+        rmap = {field.column: name for name, field in opts.declared_fields.items() if hasattr(field, 'column')}
+        columns = {}
+        for name in fields:
+            if name in opts.declared_fields and hasattr(opts.declared_fields[name], 'column'):
+                column = opts.declared_fields[name].column
             else:
-                columns.add(field)
-
-        expected_translated_field_names = {}
-        for field in fields:
+                column = column
             for lang in self.get_languages():
-                expected_translated_field_names[self.translate_column(field, lang)] = field
-
-        # TODO: lost names from map. Kill map, create declared field on fly?
-        for name, field in opts.declared_fields.copy().items():
-            if field.name in fields and field.column not in opts.columns:   # Declared with specific column, i.e. lost mapping
-
-                class NewTranslationField(TranslationField, field.__class__):
-                    pass
-
-                new_field = NewTranslationField(**vars(field))
-                real_field = opts.columns[new_field.column]
-                real_data = vars(real_field)
-                real_data.pop('name')
-                real_data.pop('column')
-                new_field.__dict__.update(real_data)
-                opts.declared_fields[name] = new_field
-                self.add_field(model, new_field, name)  # Rewrite field name to maped name
+                columns[self.translate_column(column, lang)] = column
 
         for column, field in opts.columns:
-            if field.name in expected_translated_field_names and not isinstance(field, TranslationField):
-                original_field_name = expected_translated_field_names[field.name]
+            if column in columns and not isinstance(field, TranslationField):
+                original_column = columns[column]
+                name = rmap.get(original_column, original_column)
 
                 class NewTranslationField(TranslationField, field.__class__):
                     pass
 
-                data = vars(field)
-                data['column'] = column.rsplit('_', 1)[0]
+                data = vars(opts.declared_fields[name]) if name in opts.declared_fields else {}
+                data.update(vars(field))
                 new_field = NewTranslationField(**data)
-                if original_field_name in opts.declared_fields:  # Declared without specific column
-                    new_field = opts.declared_fields[original_field_name]
-                self.add_field(model, new_field, original_field_name)
+                self.add_field(model, new_field, name)
 
     def add_field(self, model, field, name):
         field.name = name
