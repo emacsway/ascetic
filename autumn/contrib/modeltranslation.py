@@ -61,7 +61,8 @@ class TranslationRegistry(dict):
             for lang in self.get_languages():
                 columns[self.translate_column(column, lang)] = column
 
-        for column, field in opts.columns:
+        for column in opts.columns:
+            field = opts.columns[column]
             if column in columns and not isinstance(field, TranslationField):
                 original_column = columns[column]
                 name = rmap.get(original_column, original_column)
@@ -73,6 +74,8 @@ class TranslationRegistry(dict):
                 data.update(vars(field))
                 new_field = NewTranslationField(**data)
                 self.add_field(model, new_field, name)
+            elif field.name not in opts.fields:
+                self.add_field(model, field, field.name)
 
     def add_field(self, model, field, name):
         field.name = name
