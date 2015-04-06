@@ -799,7 +799,7 @@ class ForeignKey(Relation):
         if not [i for i in fk_val if i is not None]:
             return None
 
-        if getattr(instance._cache.get(self.name, None), self.rel_field, None) != fk_val:
+        if (getattr(instance._cache.get(self.name, None), f, None) for f in self.rel_field) != fk_val:
             instance._cache[self.name] = self.filter(**dict(zip(rel_field, fk_val)))[0]
         return instance._cache[self.name]
 
