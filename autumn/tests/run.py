@@ -28,61 +28,64 @@ class TestModels(unittest.TestCase):
 
     maxDiff = None
 
+    create_sql = {
+        'postgresql': """
+            DROP TABLE IF EXISTS autumn_tests_models_author CASCADE;
+            CREATE TABLE autumn_tests_models_author (
+                id serial NOT NULL PRIMARY KEY,
+                first_name VARCHAR(40) NOT NULL,
+                last_name VARCHAR(40) NOT NULL,
+                bio TEXT
+            );
+            DROP TABLE IF EXISTS books CASCADE;
+            CREATE TABLE books (
+                id serial NOT NULL PRIMARY KEY,
+                title VARCHAR(255),
+                author_id integer REFERENCES autumn_tests_models_author(id) ON DELETE CASCADE
+            );
+         """,
+        'mysql': """
+            DROP TABLE IF EXISTS autumn_tests_models_author CASCADE;
+            CREATE TABLE autumn_tests_models_author (
+                id INT(11) NOT NULL auto_increment,
+                first_name VARCHAR(40) NOT NULL,
+                last_name VARCHAR(40) NOT NULL,
+                bio TEXT,
+                PRIMARY KEY (id)
+            );
+            DROP TABLE IF EXISTS books CASCADE;
+            CREATE TABLE books (
+                id INT(11) NOT NULL auto_increment,
+                title VARCHAR(255),
+                author_id INT(11),
+                FOREIGN KEY (author_id) REFERENCES autumn_tests_models_author(id),
+                PRIMARY KEY (id)
+            );
+         """,
+        'sqlite3': """
+            DROP TABLE IF EXISTS autumn_tests_models_author;
+            DROP TABLE IF EXISTS books;
+            CREATE TABLE autumn_tests_models_author (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              first_name VARCHAR(40) NOT NULL,
+              last_name VARCHAR(40) NOT NULL,
+              bio TEXT
+            );
+            CREATE TABLE books (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              title VARCHAR(255),
+              author_id INT(11),
+              FOREIGN KEY (author_id) REFERENCES autumn_tests_models_author(id)
+            );
+        """
+    }
+
     def testmodel(self):
         # Create tables
 
-        create_sql = {
-            'postgresql': """
-                DROP TABLE IF EXISTS autumn_tests_models_author;
-                CREATE TABLE autumn_tests_models_author (
-                    id serial NOT NULL PRIMARY KEY,
-                    first_name VARCHAR(40) NOT NULL,
-                    last_name VARCHAR(40) NOT NULL,
-                    bio TEXT
-                );
-                DROP TABLE IF EXISTS books;
-                CREATE TABLE books (
-                    id serial NOT NULL PRIMARY KEY,
-                    title VARCHAR(255),
-                    author_id integer REFERENCES autumn_tests_models_author(id) ON DELETE CASCADE
-                );
-             """,
-            'mysql': """
-                DROP TABLE IF EXISTS autumn_tests_models_author;
-                CREATE TABLE autumn_tests_models_author (
-                    id INT(11) NOT NULL auto_increment,
-                    first_name VARCHAR(40) NOT NULL,
-                    last_name VARCHAR(40) NOT NULL,
-                    bio TEXT,
-                    PRIMARY KEY (id)
-                );
-                DROP TABLE IF EXISTS books;
-                CREATE TABLE books (
-                    id INT(11) NOT NULL auto_increment,
-                    title VARCHAR(255),
-                    author_id INT(11),
-                    FOREIGN KEY (author_id) REFERENCES autumn_tests_models_author(id),
-                    PRIMARY KEY (id)
-                );
-             """,
-            'sqlite3': """
-                DROP TABLE IF EXISTS autumn_tests_models_author;
-                DROP TABLE IF EXISTS books;
-                CREATE TABLE autumn_tests_models_author (
-                  id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  first_name VARCHAR(40) NOT NULL,
-                  last_name VARCHAR(40) NOT NULL,
-                  bio TEXT
-                );
-                CREATE TABLE books (
-                  id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  title VARCHAR(255),
-                  author_id INT(11),
-                  FOREIGN KEY (author_id) REFERENCES autumn_tests_models_author(id)
-                );
-            """
-        }
         db = get_db()
+        db.cursor().execute(self.create_sql[db.engine])
+
         for table in ('autumn_tests_models_author', 'books'):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 
