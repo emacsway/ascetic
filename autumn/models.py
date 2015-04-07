@@ -1,4 +1,4 @@
-from __future__ import absolute_import, unicode_literals
+from __future__ import absolute_import
 import re
 import copy
 import collections
@@ -48,7 +48,7 @@ class Field(object):
 class ModelOptions(object):
     """Model options"""
 
-    pk = b'id'
+    pk = 'id'
     using = 'default'
     field_class = Field
 
@@ -115,9 +115,9 @@ class ModelOptions(object):
         # See cursor.description http://www.python.org/dev/peps/pep-0249/
         for row in q.description:
             column = row[0]
-            name = rmap.get(column, column).encode('utf-8')
+            name = rmap.get(column, column)
             data = schema.get(column, {})
-            data.update({b'column': column, b'type_code': row[1]})
+            data.update({'column': column, 'type_code': row[1]})
             if name in self.declared_fields:
                 field = copy.deepcopy(self.declared_fields[name])
                 field.__dict__.update(data)
@@ -128,7 +128,7 @@ class ModelOptions(object):
     def add_field(self, field, name):
         field.name = name
         field.model = self.model
-        if getattr(field, b'validators', None):
+        if getattr(field, 'validators', None):
             self.validations[name] = field.validators
         self.fields[name] = field
         self.columns[field.column] = field
@@ -173,7 +173,7 @@ class ModelBase(type):
                 except ModelNotRegistered:
                     pass
 
-        signals.send_signal(signal=b'class_prepared', sender=new_cls, using=new_cls._meta.using)
+        signals.send_signal(signal='class_prepared', sender=new_cls, using=new_cls._meta.using)
         return new_cls
 
 
@@ -185,7 +185,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def __init__(self, *args, **kwargs):
         """Allows setting of fields using kwargs"""
-        self._send_signal(signal=b'pre_init', args=args, kwargs=kwargs, using=self._meta.using)
+        self._send_signal(signal='pre_init', args=args, kwargs=kwargs, using=self._meta.using)
         self._cache = {}
         pk = self._meta.pk
         if type(pk) == tuple:
@@ -199,7 +199,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         if kwargs:
             for k, v in kwargs.items():
                 setattr(self, k, v)
-        self._send_signal(signal=b'post_init', using=self._meta.using)
+        self._send_signal(signal='post_init', using=self._meta.using)
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self._get_pk() == other._get_pk()
@@ -287,9 +287,9 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         """Sets defaults, validates and inserts into or updates database"""
         self._set_defaults()
         using = using or self._meta.using
-        self._send_signal(signal=b'pre_save', using=using)
+        self._send_signal(signal='pre_save', using=using)
         result = self._insert(using) if self._new_record else self._update(using)
-        self._send_signal(signal=b'post_save', created=self._new_record, using=using)
+        self._send_signal(signal='post_save', created=self._new_record, using=using)
         self._new_record = False
         return result
 
@@ -316,7 +316,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
     def delete(self, using=None):
         """Deletes record from database"""
         using = using or self._meta.using
-        self._send_signal(signal=b'pre_delete', using=using)
+        self._send_signal(signal='pre_delete', using=using)
         for key, rel in self._meta.relations.items():
             if isinstance(rel, OneToMany):
                 for child in getattr(self, key).iterator():
@@ -331,7 +331,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
             cond = type(self).s.pk == self.pk
 
         type(self).qs.using(using).where(cond).delete()
-        self._send_signal(signal=b'post_delete', using=using)
+        self._send_signal(signal='post_delete', using=using)
         return True
 
     def serialize(self, fields=frozenset(), exclude=frozenset()):
@@ -345,7 +345,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def _send_signal(self, *a, **kw):
         """Sends signal"""
-        kw.update({b'sender': type(self), b'instance': self})
+        kw.update({'sender': type(self), 'instance': self})
         return signals.send_signal(*a, **kw)
 
     @classproperty
@@ -665,14 +665,14 @@ class Table(smartsql.Table):
 
     def __getattr__(self, name):
         """Added some specific functional."""
-        if name[0] == b'_':
+        if name[0] == '_':
             raise AttributeError
         parts = name.split(smartsql.LOOKUP_SEP, 1)
         field = parts[0]
         result = {'field': field, }
-        signals.send_signal(signal=b'field_conversion', sender=self, result=result, field=field, model=self.model)
+        signals.send_signal(signal='field_conversion', sender=self, result=result, field=field, model=self.model)
         field = result['field']
-        if field == b'pk':
+        if field == 'pk':
             field = self.model._meta.pk
             if type(field) == tuple:
                 return tuple(self.__getattr__(k) for k in field)

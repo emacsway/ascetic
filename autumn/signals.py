@@ -1,7 +1,7 @@
 """
 Extracted from https://github.com/coleifer/peewee
 """
-from __future__ import absolute_import, unicode_literals
+from __future__ import absolute_import
 
 
 class Signal(object):
@@ -45,8 +45,8 @@ def connect(signal, name=None, sender=None):
     return decorator
 
 signals = {}
-for name in [b'pre_save', b'post_save', b'pre_delete', b'post_delete',
-             b'pre_init', b'post_init', b'class_prepared', b'field_conversion']:
+for name in ['pre_save', 'post_save', 'pre_delete', 'post_delete',
+             'pre_init', 'post_init', 'class_prepared', 'field_conversion']:
     signals[name] = Signal()
 
 globals().update(signals)
