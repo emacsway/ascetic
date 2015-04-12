@@ -665,12 +665,15 @@ class Table(smartsql.Table):
         result = {'field': field, }
         signals.send_signal(signal='field_conversion', sender=self, result=result, field=field, model=self.model)
         field = result['field']
+
         if field == 'pk':
             field = self.model._meta.pk
-            if type(field) == tuple:
-                return tuple(self.__getattr__(k) for k in field)
-        if isinstance(self.model._meta.relations.get(field, None), ForeignKey):
+        elif isinstance(self.model._meta.relations.get(field, None), ForeignKey):
             field = self.model._meta.relations.get(field).field
+
+        if type(field) == tuple:
+            return tuple(self.__getattr__(smartsql.LOOKUP_SEP.join([k] + parts[1:])) for k in field)
+
         if field in self.model._meta.fields:
             field = self.model._meta.fields[field].column
         parts[0] = field
