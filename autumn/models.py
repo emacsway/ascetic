@@ -526,18 +526,11 @@ class QS(smartsql.QS):
             field = rel.field if type(rel.field) == tuple else (rel.field,)
             rel_field = rel.rel_field if type(rel.rel_field) == tuple else (rel.rel_field,)
 
-            cond = None
-            for obj in self._cache:
-                cond1 = None
-                for f, rf in zip(field, rel_field):
-                    val = getattr(obj, f)
-                    if val is None:
-                        break
-                    cond2 = smartsql.Field(rf, rel.rel_model.s) == val
-                    cond1 = cond2 if cond1 is None else cond1 & cond2
-                else:
-                    cond = cond if cond is None else cond | cond1
-
+            cond = reduce(operator.or_,
+                          (reduce(operator.and_,
+                                  ((smartsql.Field(rf, rel.rel_model.s) == getattr(obj, f))
+                                   for f, rf in zip(field, rel_field)))
+                           for obj in self._cache))
             rows = list(qs.where(cond))
             for obj in self._cache:
                 val = [i for i in rows if tuple(getattr(i, f) for f in rel_field) == tuple(getattr(obj, f) for f in field)]
