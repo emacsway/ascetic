@@ -662,9 +662,9 @@ class Table(smartsql.Table):
             raise AttributeError
         parts = name.split(smartsql.LOOKUP_SEP, 1)
         field = parts[0]
-        result = {'field': field, }
-        signals.send_signal(signal='field_conversion', sender=self, result=result, field=field, model=self.model)
-        field = result['field']
+        # result = {'field': field, }
+        # signals.send_signal(signal='field_conversion', sender=self, result=result, field=field, model=self.model)
+        # field = result['field']
 
         if field == 'pk':
             field = self.model._meta.pk
@@ -674,7 +674,7 @@ class Table(smartsql.Table):
         if type(field) == tuple:
             if len(parts) > 1:
                 raise Exception("Can't set single alias for multiple fields of composite key {}.{}".format(self.model, name))
-            return tuple(self.__getattr__(k) for k in field)
+            return smartsql.CompositeExpr(*(self.__getattr__(k) for k in field))
 
         if field in self.model._meta.fields:
             field = self.model._meta.fields[field].column
