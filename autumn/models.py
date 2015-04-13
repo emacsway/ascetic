@@ -672,7 +672,9 @@ class Table(smartsql.Table):
             field = self.model._meta.relations.get(field).field
 
         if type(field) == tuple:
-            return tuple(self.__getattr__(smartsql.LOOKUP_SEP.join([k] + parts[1:])) for k in field)
+            if len(parts) > 1:
+                raise Exception("Can't set single alias for multiple fields of composite key {}.{}".format(self.model, name))
+            return tuple(self.__getattr__(k) for k in field)
 
         if field in self.model._meta.fields:
             field = self.model._meta.fields[field].column
