@@ -11,8 +11,8 @@ import unittest
 from autumn import validators
 from autumn import utils
 from autumn.connections import get_db
-from autumn.models import QS
 from autumn.tests.models import Book, Author
+from sqlbuilder import smartsql
 
 
 class TestUtils(unittest.TestCase):
@@ -142,7 +142,7 @@ class TestModels(unittest.TestCase):
 
         a = Author.get(id=b.id)[:]
         # self.assert_(isinstance(a, list))
-        self.assert_(isinstance(a, QS))
+        self.assert_(isinstance(a, smartsql.QS))
 
         # Test update
         new_last_name = 'Vonnegut, Jr.'
@@ -177,7 +177,7 @@ class TestModels(unittest.TestCase):
 
         print '### Testing for smartsql integration'
         t = Author.s
-        fields = [t.qs.db.compile(i)[0] for i in t.get_fields()]
+        fields = [t.qs.result.db.compile(i)[0] for i in t.get_fields()]
         if get_db().engine == 'postgresql':
             self.assertListEqual(
                 fields,
@@ -202,18 +202,18 @@ class TestModels(unittest.TestCase):
 
         qs = t.qs
         if get_db().engine == 'postgresql':
-            self.assertEqual(qs.db.compile(qs)[0], '''SELECT "autumn_tests_models_author"."id", "autumn_tests_models_author"."first_name", "autumn_tests_models_author"."last_name", "autumn_tests_models_author"."bio" FROM "autumn_tests_models_author"''')
+            self.assertEqual(qs.result.db.compile(qs)[0], '''SELECT "autumn_tests_models_author"."id", "autumn_tests_models_author"."first_name", "autumn_tests_models_author"."last_name", "autumn_tests_models_author"."bio" FROM "autumn_tests_models_author"''')
         else:
-            self.assertEqual(qs.db.compile(qs)[0], """SELECT `autumn_tests_models_author`.`id`, `autumn_tests_models_author`.`first_name`, `autumn_tests_models_author`.`last_name`, `autumn_tests_models_author`.`bio` FROM `autumn_tests_models_author`""")
+            self.assertEqual(qs.result.db.compile(qs)[0], """SELECT `autumn_tests_models_author`.`id`, `autumn_tests_models_author`.`first_name`, `autumn_tests_models_author`.`last_name`, `autumn_tests_models_author`.`bio` FROM `autumn_tests_models_author`""")
         self.assertEqual(len(qs), 3)
         for obj in qs:
             self.assertTrue(isinstance(obj, Author))
 
         qs = qs.where(t.id == b.author_id)
         if get_db().engine == 'postgresql':
-            self.assertEqual(qs.db.compile(qs)[0], """SELECT "autumn_tests_models_author"."id", "autumn_tests_models_author"."first_name", "autumn_tests_models_author"."last_name", "autumn_tests_models_author"."bio" FROM "autumn_tests_models_author" WHERE ("autumn_tests_models_author"."id" = %s)""")
+            self.assertEqual(qs.result.db.compile(qs)[0], """SELECT "autumn_tests_models_author"."id", "autumn_tests_models_author"."first_name", "autumn_tests_models_author"."last_name", "autumn_tests_models_author"."bio" FROM "autumn_tests_models_author" WHERE "autumn_tests_models_author"."id" = %s""")
         else:
-            self.assertEqual(qs.db.compile(qs)[0], """SELECT `autumn_tests_models_author`.`id`, `autumn_tests_models_author`.`first_name`, `autumn_tests_models_author`.`last_name`, `autumn_tests_models_author`.`bio` FROM `autumn_tests_models_author` WHERE (`autumn_tests_models_author`.`id` = %s)""")
+            self.assertEqual(qs.result.db.compile(qs)[0], """SELECT `autumn_tests_models_author`.`id`, `autumn_tests_models_author`.`first_name`, `autumn_tests_models_author`.`last_name`, `autumn_tests_models_author`.`bio` FROM `autumn_tests_models_author` WHERE `autumn_tests_models_author`.`id` = %s""")
         self.assertEqual(len(qs), 1)
         self.assertTrue(isinstance(qs[0], Author))
 

@@ -299,7 +299,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         exclude = set([self._meta.pk]) if auto_pk else set()
         cursor = type(self).qs.using(using).insert(self._get_data(exclude=exclude))
         if auto_pk:
-            self._set_pk(type(self).qs.db.last_insert_id(cursor))
+            self._set_pk(type(self).qs.result.db.last_insert_id(cursor))
         return True
 
     def _update(self, using):
@@ -430,9 +430,9 @@ class RelatedMapping(object):
                 getattr(obj, name).append[rel_obj]
                 setattr(rel_obj, rel_name, obj)
 
-    def __call__(self, qs, row, state):
-        models = [qs.model]
-        relations = qs._select_related
+    def __call__(self, result, row, state):
+        models = [result.model]
+        relations = result._select_related
         for rel in relations:
             models.append(rel.rel_model)
         rows = self.get_model_rows(models, row)
@@ -441,52 +441,100 @@ class RelatedMapping(object):
         return objs[0]
 
 
-@cr('Query')
-class QS(smartsql.QS):
-    """Query Set adapted."""
+class Result(smartsql.Result):
+    """Result adapted."""
 
     _raw = None
     _cache = None
     _using = 'default'
     model = None
 
-    def __init__(self, tables=None):
-        super(QS, self).__init__(tables=tables)
+    def __init__(self, model):
         self._prefetch = {}
         self._select_related = {}
         self.is_base(True)
         self._mapping = default_mapping
-        if isinstance(tables, Table):
-            self.model = tables.model
-            self._using = self.model._meta.using
-
-    def raw(self, sql, *params):
-        self = self.clone()
-        self._raw = smartsql.OmitParentheses(smartsql.E(sql, *params))
-        return self
-
-    def clone(self, *attrs):
-        c = smartsql.QS.clone(self, *attrs)
-        c._cache = None
-        c._is_base = False
-        return c
+        self.model = model
+        self._using = self.model._meta.using
 
     def __len__(self):
         """Returns length or list."""
         self.fill_cache()
         return len(self._cache)
 
+    def __iter__(self):
+        """Returns iterator."""
+        self.fill_cache()
+        return iter(self._cache)
+
+    def __getitem__(self, key):
+        """Returns sliced self or item."""
+        if self._cache:
+            return self._cache[key]
+        if isinstance(key, integer_types):
+            self._query = super(Result, self).__getitem__(key)
+            return list(self)[0]
+        return super(Result, self).__getitem__(key)
+
+    def execute(self):
+        """Implementation of query execution"""
+        return self.db.execute(self._query)
+
+    insert = update = delete = execute
+
+    def select(self):
+        return self
+
     def count(self):
         """Returns length or list."""
         if self._cache is not None:
             return len(self._cache)
-        return super(QS, self).count()
+        return self.execute().fetchone()[0]
+
+    def clone(self):
+        c = smartsql.Result.clone(self)
+        c._cache = None
+        c._is_base = False
+        return c
+
+    def fill_cache(self):
+        if self.is_base():
+            raise Exception('You should clone base queryset before query.')
+        if self._cache is None:
+            self._cache = list(self.iterator())
+            self.populate_prefetch()
+        return self
+
+    def iterator(self):
+        """iterator"""
+        cursor = self.execute()
+        descr = cursor.description
+        fields = tuple(f[0] for f in descr)
+        state = {}
+        for row in cursor.fetchall():
+            yield self._mapping(self, zip(fields, row), state)
+
+    def using(self, alias=None):
+        if alias is None:
+            return self._using
+        self._using = alias
+        return self
+
+    def is_base(self, value=None):
+        if value is None:
+            return self._is_base
+        self._is_base = value
+        return self
+
+    @property
+    def db(self):
+        return get_db(self._using)
 
     def map(self, mapping):
         """Sets mapping.
 
         Example of usage:
-        >>> def custom_mapping(qs, row, state):
+        >>> def custom_mapping(result, row, state):
         ...     row1, row2, row3 = dict(row[:5]), dict(row[5:8]), dict(row[8:])
         ...
         ...     key1 = (model1, tuple(row1[k] for k in model1.pk))
@@ -511,12 +559,14 @@ class QS(smartsql.QS):
         c._mapping = mapping
         return c
 
-    def fill_cache(self):
-        if self.is_base():
-            raise Exception('You should clone base queryset before query.')
-        if self._cache is None:
-            self._cache = list(self.iterator())
-            self.populate_prefetch()
+    def prefetch(self, *a, **kw):
+        """Prefetch relations"""
+        if a and not a[0]:  # .prefetch(False)
+            self._prefetch = {}
+        else:
+            self._prefetch = copy.copy(self._prefetch)
+            self._prefetch.update(kw)
+            self._prefetch.update({i: self.model._meta.relations[i].qs for i in a})
         return self
 
     def populate_prefetch(self):
@@ -543,93 +593,6 @@ class QS(smartsql.QS):
                         setattr(i, "{}_prefetch".format(rel.rel_name), obj)
                 setattr(obj, "{}_prefetch".format(key), val)
 
-    def prefetch(self, *a, **kw):
-        """Prefetch relations"""
-        c = self.clone('_prefetch')
-        if a and not a[0]:  # .prefetch(False)
-            c._prefetch = {}
-        else:
-            c._prefetch.update(kw)
-            c._prefetch.update({i: self.model._meta.relations[i].qs for i in a})
-        return c
-
-    def __iter__(self):
-        """Returns iterator."""
-        self.fill_cache()
-        return iter(self._cache)
-
-    def iterator(self):
-        """iterator"""
-        cursor = self.execute(self)
-        descr = cursor.description
-        fields = tuple(f[0] for f in descr)
-        state = {}
-        for row in cursor.fetchall():
-            yield self._mapping(self, zip(fields, row), state)
-
-    def __getitem__(self, key):
-        """Returns sliced self or item."""
-        if self._cache:
-            return self._cache[key]
-        if isinstance(key, integer_types):
-            self = super(QS, self).__getitem__(key)
-            return list(self)[0]
-        return super(QS, self).__getitem__(key)
-
-    def using(self, alias=None):
-        if alias is None:
-            return self._using
-        self = self.clone()
-        self._using = alias
-        return self
-
-    def is_base(self, value=None):
-        if value is None:
-            return self._is_base
-        self._is_base = value
-        return self
-
-    def execute(self, expr):
-        """Implementation of query execution"""
-        return self.db.execute(expr)
-
-    def result(self, expr=None):
-        """Result"""
-        expr = self if expr is None else expr
-        if isinstance(expr, smartsql.SelectCount):
-            return self.execute(expr).fetchone()[0]
-        elif isinstance(expr, smartsql.Query):
-            return self
-        return self.execute(expr)
-
-    @property
-    def db(self):
-        return get_db(self._using)
-
-
-@smartsql.compile.when(QS)
-def compile_qs(compile, expr, state):
-    if expr._raw is None:
-        smartsql.compile_query(compile, expr, state)
-    else:
-        compile(expr._raw, state)
-        if expr._limit is not None:
-            state.sql.append(" LIMIT ")
-            compile(expr._limit, state)
-        if expr._offset:
-            state.sql.append(" OFFSET ")
-            compile(expr._offset, state)
-
-
-@cr
-class Set(smartsql.Set, QS):
-    """Union query class"""
-    def __init__(self, exprs, *a, **kw):
-        super(Set, self).__init__(exprs, *a, **kw)
-        self.model = exprs[0].model
-        self._using = exprs[0]._using
-
-
 @cr
 class Table(smartsql.Table):
     """Table class"""
@@ -644,7 +607,7 @@ class Table(smartsql.Table):
         if isinstance(self._qs, collections.Callable):
             self._qs = self._qs(self)
         elif self._qs is None:
-            self._qs = QS(self).fields(self.get_fields())
+            self._qs = smartsql.QS(self, result=Result(self.model)).fields(self.get_fields())
         return self._qs
 
     def _set_qs(self, val):
@@ -680,14 +643,6 @@ class Table(smartsql.Table):
             field = self.model._meta.fields[field].column
         parts[0] = field
         return super(Table, self).__getattr__(smartsql.LOOKUP_SEP.join(parts))
-
-
-@cr
-class TableAlias(smartsql.TableAlias, Table):
-    """Table alias class"""
-    @property
-    def model(self):
-        return getattr(self._table, 'model', None)  # Can be subquery
 
 
 def cascade(parent, child, parent_rel):
