@@ -593,6 +593,7 @@ class Result(smartsql.Result):
                         setattr(i, "{}_prefetch".format(rel.rel_name), obj)
                 setattr(obj, "{}_prefetch".format(key), val)
 
+
 @cr
 class Table(smartsql.Table):
     """Table class"""
