@@ -1,44 +1,12 @@
 #!/usr/bin/env python
-from __future__ import absolute_import
-if __name__ == '__main__':
-    import os
-    import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.abspath(__file__))
-    )))
-
 import unittest
 from autumn import validators
 from autumn import utils
 from autumn.connections import get_db
-from autumn.models import Model, ForeignKey, OneToMany
+from autumn.models import Model, ForeignKey
 from sqlbuilder import smartsql
 
-
-class Author(Model):
-    # books = OneToMany('autumn.tests.models.Book')
-
-    class Meta:
-        db_table = 'autumn_tests_models_author'
-        defaults = {'bio': 'No bio available'}
-        validations = {'first_name': validators.Length(),
-                       'last_name': (validators.Length(), lambda x: x != 'BadGuy!' or 'Bad last name', )}
-
-
-class Book(Model):
-    author = ForeignKey(Author, rel_name='books')
-
-    class Meta:
-        db_table = 'books'
-
-
-class TestUtils(unittest.TestCase):
-
-    maxDiff = None
-
-    def test_resolve(self):
-        from autumn.connections import DummyCtx
-        self.assertTrue(utils.resolve('autumn.connections.DummyCtx') is DummyCtx)
+Author = Book = None
 
 
 class TestModels(unittest.TestCase):
@@ -97,14 +65,39 @@ class TestModels(unittest.TestCase):
         """
     }
 
-    def testmodel(self):
-        # Create tables
+    @classmethod
+    def create_models(cls):
+        class Author(Model):
+            # books = OneToMany('autumn.tests.models.Book')
 
+            class Meta:
+                db_table = 'autumn_tests_models_author'
+                defaults = {'bio': 'No bio available'}
+                validations = {'first_name': validators.Length(),
+                               'last_name': (validators.Length(), lambda x: x != 'BadGuy!' or 'Bad last name', )}
+
+        class Book(Model):
+            author = ForeignKey(Author, rel_name='books')
+
+            class Meta:
+                db_table = 'books'
+
+        return locals()
+
+    @classmethod
+    def setUpClass(cls):
         db = get_db()
-        db.cursor().execute(self.create_sql[db.engine])
+        db.cursor().execute(cls.create_sql[db.engine])
+        for model_name, model in cls.create_models().items():
+            globals()[model_name] = model
 
+    def setUp(self):
+        db = get_db()
         for table in ('autumn_tests_models_author', 'books'):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
+
+    def test_model(self):
+        # Create tables
 
         # Test Creation
         james = Author(first_name='James', last_name='Joyce')
@@ -245,7 +238,12 @@ class TestModels(unittest.TestCase):
             for i in obj.books_prefetch:
                 self.assertEqual(i.author_prefetch, obj)
 
-    def testvalidators(self):
+
+class TestValidators(unittest.TestCase):
+
+    maxDiff = None
+
+    def test_validators(self):
         ev = validators.Email()
         assert ev('test@example.com')
         assert not ev('adsf@.asdf.asdf')
@@ -265,5 +263,11 @@ class TestModels(unittest.TestCase):
         assert not vc('a@a.com')
         assert not vc('asdfasdfasdfasdfasdf')
 
-if __name__ == '__main__':
-    unittest.main()
+
+class TestUtils(unittest.TestCase):
+
+    maxDiff = None
+
+    def test_resolve(self):
+        from autumn.connections import DummyCtx
+        self.assertTrue(utils.resolve('autumn.connections.DummyCtx') is DummyCtx)
