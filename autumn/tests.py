@@ -11,8 +11,25 @@ import unittest
 from autumn import validators
 from autumn import utils
 from autumn.connections import get_db
-from autumn.tests.models import Book, Author
+from autumn.models import Model, ForeignKey, OneToMany
 from sqlbuilder import smartsql
+
+
+class Author(Model):
+    # books = OneToMany('autumn.tests.models.Book')
+
+    class Meta:
+        db_table = 'autumn_tests_models_author'
+        defaults = {'bio': 'No bio available'}
+        validations = {'first_name': validators.Length(),
+                       'last_name': (validators.Length(), lambda x: x != 'BadGuy!' or 'Bad last name', )}
+
+
+class Book(Model):
+    author = ForeignKey(Author, rel_name='books')
+
+    class Meta:
+        db_table = 'books'
 
 
 class TestUtils(unittest.TestCase):
