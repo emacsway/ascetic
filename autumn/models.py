@@ -377,6 +377,22 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         return "<{0}.{1}: {2}>".format(type(self).__module__, type(self).__name__, self.pk)
 
 
+class CompositeModel(object):
+    """Composite model.
+
+    Exaple of usage:
+    >>> rows = CompositeModel(Model1, Model2).qs...filter(...)
+    >>> type(rows[0]):
+        CompositeModel
+    >>> list(rows[0])
+        [<Model1: 1>, <Model2: 2>]
+    """
+    def __init__(self, *models):
+        self.models = models
+
+    # TODO: build me.
+
+
 def default_mapping(qs, row, state):
     data = {}
     for k, v in row:
