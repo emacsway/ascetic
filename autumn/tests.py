@@ -15,8 +15,8 @@ class TestModels(unittest.TestCase):
 
     create_sql = {
         'postgresql': """
-            DROP TABLE IF EXISTS autumn_tests_models_author CASCADE;
-            CREATE TABLE autumn_tests_models_author (
+            DROP TABLE IF EXISTS autumn_tests_author CASCADE;
+            CREATE TABLE autumn_tests_author (
                 id serial NOT NULL PRIMARY KEY,
                 first_name VARCHAR(40) NOT NULL,
                 last_name VARCHAR(40) NOT NULL,
@@ -26,12 +26,12 @@ class TestModels(unittest.TestCase):
             CREATE TABLE books (
                 id serial NOT NULL PRIMARY KEY,
                 title VARCHAR(255),
-                author_id integer REFERENCES autumn_tests_models_author(id) ON DELETE CASCADE
+                author_id integer REFERENCES autumn_tests_author(id) ON DELETE CASCADE
             );
          """,
         'mysql': """
-            DROP TABLE IF EXISTS autumn_tests_models_author CASCADE;
-            CREATE TABLE autumn_tests_models_author (
+            DROP TABLE IF EXISTS autumn_tests_author CASCADE;
+            CREATE TABLE autumn_tests_author (
                 id INT(11) NOT NULL auto_increment,
                 first_name VARCHAR(40) NOT NULL,
                 last_name VARCHAR(40) NOT NULL,
@@ -43,24 +43,24 @@ class TestModels(unittest.TestCase):
                 id INT(11) NOT NULL auto_increment,
                 title VARCHAR(255),
                 author_id INT(11),
-                FOREIGN KEY (author_id) REFERENCES autumn_tests_models_author(id),
+                FOREIGN KEY (author_id) REFERENCES autumn_tests_author(id),
                 PRIMARY KEY (id)
             );
          """,
         'sqlite3': """
-            DROP TABLE IF EXISTS autumn_tests_models_author;
-            DROP TABLE IF EXISTS books;
-            CREATE TABLE autumn_tests_models_author (
+            DROP TABLE IF EXISTS autumn_tests_author;
+            CREATE TABLE autumn_tests_author (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               first_name VARCHAR(40) NOT NULL,
               last_name VARCHAR(40) NOT NULL,
               bio TEXT
             );
+            DROP TABLE IF EXISTS books;
             CREATE TABLE books (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               title VARCHAR(255),
               author_id INT(11),
-              FOREIGN KEY (author_id) REFERENCES autumn_tests_models_author(id)
+              FOREIGN KEY (author_id) REFERENCES autumn_tests_author(id)
             );
         """
     }
@@ -71,7 +71,7 @@ class TestModels(unittest.TestCase):
             # books = OneToMany('autumn.tests.models.Book')
 
             class Meta:
-                db_table = 'autumn_tests_models_author'
+                db_table = 'autumn_tests_author'
                 defaults = {'bio': 'No bio available'}
                 validations = {'first_name': validators.Length(),
                                'last_name': (validators.Length(), lambda x: x != 'BadGuy!' or 'Bad last name', )}
@@ -93,7 +93,7 @@ class TestModels(unittest.TestCase):
 
     def setUp(self):
         db = get_db()
-        for table in ('autumn_tests_models_author', 'books'):
+        for table in ('autumn_tests_author', 'books'):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 
     def test_model(self):
@@ -191,18 +191,18 @@ class TestModels(unittest.TestCase):
         if get_db().engine == 'postgresql':
             self.assertListEqual(
                 fields,
-                ['"autumn_tests_models_author"."id"',
-                 '"autumn_tests_models_author"."first_name"',
-                 '"autumn_tests_models_author"."last_name"',
-                 '"autumn_tests_models_author"."bio"', ]
+                ['"autumn_tests_author"."id"',
+                 '"autumn_tests_author"."first_name"',
+                 '"autumn_tests_author"."last_name"',
+                 '"autumn_tests_author"."bio"', ]
             )
         else:
             self.assertListEqual(
                 fields,
-                ['`autumn_tests_models_author`.`id`',
-                 '`autumn_tests_models_author`.`first_name`',
-                 '`autumn_tests_models_author`.`last_name`',
-                 '`autumn_tests_models_author`.`bio`', ]
+                ['`autumn_tests_author`.`id`',
+                 '`autumn_tests_author`.`first_name`',
+                 '`autumn_tests_author`.`last_name`',
+                 '`autumn_tests_author`.`bio`', ]
             )
 
         if get_db().engine == 'postgresql':
@@ -212,18 +212,18 @@ class TestModels(unittest.TestCase):
 
         qs = t.qs
         if get_db().engine == 'postgresql':
-            self.assertEqual(qs.result.db.compile(qs)[0], '''SELECT "autumn_tests_models_author"."id", "autumn_tests_models_author"."first_name", "autumn_tests_models_author"."last_name", "autumn_tests_models_author"."bio" FROM "autumn_tests_models_author"''')
+            self.assertEqual(qs.result.db.compile(qs)[0], '''SELECT "autumn_tests_author"."id", "autumn_tests_author"."first_name", "autumn_tests_author"."last_name", "autumn_tests_author"."bio" FROM "autumn_tests_author"''')
         else:
-            self.assertEqual(qs.result.db.compile(qs)[0], """SELECT `autumn_tests_models_author`.`id`, `autumn_tests_models_author`.`first_name`, `autumn_tests_models_author`.`last_name`, `autumn_tests_models_author`.`bio` FROM `autumn_tests_models_author`""")
+            self.assertEqual(qs.result.db.compile(qs)[0], """SELECT `autumn_tests_author`.`id`, `autumn_tests_author`.`first_name`, `autumn_tests_author`.`last_name`, `autumn_tests_author`.`bio` FROM `autumn_tests_author`""")
         self.assertEqual(len(qs), 3)
         for obj in qs:
             self.assertTrue(isinstance(obj, Author))
 
         qs = qs.where(t.id == b.author_id)
         if get_db().engine == 'postgresql':
-            self.assertEqual(qs.result.db.compile(qs)[0], """SELECT "autumn_tests_models_author"."id", "autumn_tests_models_author"."first_name", "autumn_tests_models_author"."last_name", "autumn_tests_models_author"."bio" FROM "autumn_tests_models_author" WHERE "autumn_tests_models_author"."id" = %s""")
+            self.assertEqual(qs.result.db.compile(qs)[0], """SELECT "autumn_tests_author"."id", "autumn_tests_author"."first_name", "autumn_tests_author"."last_name", "autumn_tests_author"."bio" FROM "autumn_tests_author" WHERE "autumn_tests_author"."id" = %s""")
         else:
-            self.assertEqual(qs.result.db.compile(qs)[0], """SELECT `autumn_tests_models_author`.`id`, `autumn_tests_models_author`.`first_name`, `autumn_tests_models_author`.`last_name`, `autumn_tests_models_author`.`bio` FROM `autumn_tests_models_author` WHERE `autumn_tests_models_author`.`id` = %s""")
+            self.assertEqual(qs.result.db.compile(qs)[0], """SELECT `autumn_tests_author`.`id`, `autumn_tests_author`.`first_name`, `autumn_tests_author`.`last_name`, `autumn_tests_author`.`bio` FROM `autumn_tests_author` WHERE `autumn_tests_author`.`id` = %s""")
         self.assertEqual(len(qs), 1)
         self.assertTrue(isinstance(qs[0], Author))
 
