@@ -313,16 +313,24 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
             cond
         ).update(self._get_data())
 
-    def delete(self, using=None):
+    def delete(self, using=None, visited=None):
         """Deletes record from database"""
         using = using or self._meta.using
+
+        if visited is None:
+            visited = set()
+        if self in visited:
+            return False
+        visited.add(self)
+
         self._send_signal(signal='pre_delete', using=using)
         for key, rel in self._meta.relations.items():
             if isinstance(rel, OneToMany):
                 for child in getattr(self, key).iterator():
-                    rel.on_delete(self, child, rel)
+                    rel.on_delete(self, child, rel, visited)
             elif isinstance(rel, OneToOne):
-                rel.on_delete(self, getattr(self, key), rel)
+                child = getattr(self, key)
+                rel.on_delete(self, child, rel, visited)
 
         pk = (self)._meta.pk
         if type(pk) == tuple:
@@ -662,16 +670,16 @@ class Table(smartsql.Table):
         return super(Table, self).__getattr__(smartsql.LOOKUP_SEP.join(parts))
 
 
-def cascade(parent, child, parent_rel):
-    child.delete()
+def cascade(parent, child, parent_rel, visited):
+    child.delete(visited=visited)
 
 
-def set_null(parent, child, parent_rel):
+def set_null(parent, child, parent_rel, visited):
     setattr(child, parent_rel.rel_field, None)
     child.save()
 
 
-def do_nothing(parent, child, parent_rel):
+def do_nothing(parent, child, parent_rel, visited):
     pass
 
 # TODO: descriptor for FileField? Or custom postgresql data type? See http://www.postgresql.org/docs/8.4/static/sql-createtype.html
