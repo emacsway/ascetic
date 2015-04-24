@@ -228,10 +228,6 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     pk = property(_get_pk, _set_pk)
 
-    def to_python(self):
-        for f in self._meta.fields.values():
-            setattr(self, f.name, f.to_python())
-
     def _set_defaults(self):
         """Sets attribute defaults based on ``defaults`` dict"""
         for k, v in getattr(self._meta, 'defaults', {}).items():
@@ -268,7 +264,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
             raise ValidationError(errors)
 
     def _set_data(self, data):
-        for column, value in data.items():
+        for column, value in data:
             try:
                 attr = self._meta.columns[column].name
             except KeyError:
@@ -279,9 +275,9 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         return self
 
     def _get_data(self, fields=frozenset(), exclude=frozenset()):
-        return {f.column: getattr(self, f.name, None)
-                for f in self._meta.fields.values()
-                if not (f.name in exclude or (fields and f.name not in fields))}
+        return tuple((f.column, getattr(self, f.name, None))
+                     for f in self._meta.fields.values()
+                     if not (f.name in exclude or (fields and f.name not in fields)))
 
     def save(self, using=None):
         """Sets defaults, validates and inserts into or updates database"""
@@ -297,7 +293,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         """Uses SQL INSERT to create new record"""
         auto_pk = self._get_pk() is None
         exclude = set([self._meta.pk]) if auto_pk else set()
-        cursor = type(self).qs.using(using).insert(self._get_data(exclude=exclude))
+        cursor = type(self).qs.using(using).insert(dict(self._get_data(exclude=exclude)))
         if auto_pk:
             self._set_pk(type(self).qs.result.db.last_insert_id(cursor))
         return True
@@ -311,7 +307,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
             cond = self.s.pk == self.pk
         type(self).qs.using(using).where(
             cond
-        ).update(self._get_data())
+        ).update(dict(self._get_data()))
 
     def delete(self, using=None, visited=None):
         """Deletes record from database"""
@@ -341,15 +337,6 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         type(self).qs.using(using).where(cond).delete()
         self._send_signal(signal='post_delete', using=using)
         return True
-
-    def serialize(self, fields=frozenset(), exclude=frozenset()):
-        self._set_defaults()
-        result = {}
-        for field in self._meta.fields.values():
-            if field.name in exclude or (fields and field.name not in fields):
-                continue
-            result[fields.name] = field.to_string(getattr(self, field.name, None))
-        return result
 
     def _send_signal(self, *a, **kw):
         """Sends signal"""
@@ -401,7 +388,7 @@ class CompositeModel(object):
     # TODO: build me.
 
 
-def default_mapping(qs, row, state):
+def suffix_mapping(result, row, state):
     data = {}
     for k, v in row:
         fn = k
@@ -412,7 +399,11 @@ def default_mapping(qs, row, state):
                 fn = fn_base + c
                 c += 1
         data[fn] = v
-    return qs.model()._set_data(data) if qs.model else data
+    return default_mapping(result, data.items(), state)
+
+
+def default_mapping(result, row, state):
+    return result.model()._set_data(row) if result.model else dict(row)
 
 
 class RelatedMapping(object):
@@ -429,10 +420,11 @@ class RelatedMapping(object):
     def get_objects(self, models, rows, state):
         objs = []
         for model, model_row in zip(models, rows):
+            model_row_dict = dict(model_row)
             pk = model._meta.pk
             if type(pk) != tuple:
                 pk = (pk,)
-            key = (model, tuple(model_row[f] for f in pk))
+            key = (model, tuple(model_row_dict[f] for f in pk))
             if key not in state:
                 state[key] = model()._set_data(model_row)
             objs.append(state[key])
@@ -555,30 +547,7 @@ class Result(smartsql.Result):
         return get_db(self._using)
 
     def map(self, mapping):
-        """Sets mapping.
-
-        Example of usage:
-        >>> def custom_mapping(result, row, state):
-        ...     row1, row2, row3 = dict(row[:5]), dict(row[5:8]), dict(row[8:])
-        ...
-        ...     key1 = (model1, tuple(row1[k] for k in model1.pk))
-        ...     if key1 not in state:
-        ...         state[key1] = model1()._set_data(row1)
-        ...     obj1 = state[key1]
-        ...
-        ...     key2 = (model2, tuple(row2[k] for k in model2.pk))
-        ...     if key2 not in state:
-        ...         state[key2] = model2()._set_data(row2)
-        ...     obj2 = state[key2]
-        ...     obj3 = model3()._set_data(row3)
-        ...     obj3.fk_to_obj2 = obj2
-        ...     obj2.o2m_obj3.append(obj3)
-        ...     obj2.fk_to_obj1 = obj1
-        ...     obj1.o2m_obj2.append(obj2)
-        ...     return obj1
-        ...
-        >>> object_list = qs.map(custom_mapping)
-        """
+        """Sets mapping."""
         c = self
         c._mapping = mapping
         return c
