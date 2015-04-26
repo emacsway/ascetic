@@ -145,18 +145,18 @@ class TestModels(unittest.TestCase):
         del(james, kurt, tom, slww)
 
         # Test retrieval
-        b = Book.get(title='Ulysses')[0]
+        b = Book.get(title='Ulysses')
 
-        a = Author.get(id=b.author_id)[0]
+        a = Author.get(id=b.author_id)
         self.assertEqual(a.id, b.author_id)
 
-        a = Author.get(id=b.id)[:]
+        a = Author.qs.where(Author.s.id == b.id)[:]
         # self.assert_(isinstance(a, list))
         self.assert_(isinstance(a, smartsql.QS))
 
         # Test update
         new_last_name = 'Vonnegut, Jr.'
-        a = Author.get(id=kid)[0]
+        a = Author.get(id=kid)
         a.last_name = new_last_name
         a.save()
 
@@ -164,14 +164,14 @@ class TestModels(unittest.TestCase):
         self.assertEqual(a.last_name, new_last_name)
 
         # Test count
-        self.assertEqual(Author.get().count(), 3)
-        self.assertEqual(len(Book.get()), 4)
-        self.assertEqual(len(Book.get()[1:4]), 3)
+        self.assertEqual(Author.qs.count(), 3)
+        self.assertEqual(len(Book.qs.clone()), 4)
+        self.assertEqual(len(Book.qs.clone()[1:4]), 3)
 
         # Test delete
         a.delete()
-        self.assertEqual(Author.get().count(), 2)
-        self.assertEqual(len(Book.get()), 3)
+        self.assertEqual(Author.qs.count(), 2)
+        self.assertEqual(len(Book.qs.clone()), 3)
 
         # Test validation
         a = Author(first_name='', last_name='Ted')

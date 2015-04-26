@@ -141,6 +141,53 @@ class TableResult(smartsql.Result):
         return c
 
 
+class ModelResultMixIn(object):
+    """Result adapted for model."""
+
+    def fill_cache(self):
+        self = super(ModelResultMixIn, self).fill_cache()
+        self.populate_prefetch()
+        return self
+
+    def prefetch(self, *a, **kw):
+        """Prefetch relations"""
+        if a and not a[0]:  # .prefetch(False)
+            self._prefetch = {}
+        else:
+            self._prefetch = copy.copy(self._prefetch)
+            self._prefetch.update(kw)
+            self._prefetch.update({i: self.gateway.relations[i].qs for i in a})
+        return self
+
+    def populate_prefetch(self):
+        for key, qs in self._prefetch.items():
+            rel = self.gateway.relations[key]
+            # recursive handle prefetch
+            field = rel.field if type(rel.field) == tuple else (rel.field,)
+            rel_field = rel.rel_field if type(rel.rel_field) == tuple else (rel.rel_field,)
+
+            cond = reduce(operator.or_,
+                          (reduce(operator.and_,
+                                  ((smartsql.Field(rf, rel.rel_model.s) == getattr(obj, f))
+                                   for f, rf in zip(field, rel_field)))
+                           for obj in self._cache))
+            rows = list(qs.where(cond))
+            for obj in self._cache:
+                val = [i for i in rows if tuple(getattr(i, f) for f in rel_field) == tuple(getattr(obj, f) for f in field)]
+                if isinstance(rel, (ForeignKey, OneToOne)):
+                    val = val[0] if val else None
+                    if val and isinstance(rel, OneToOne):
+                        setattr(val, "{}_prefetch".format(rel.rel_name), obj)
+                elif isinstance(rel, OneToMany):
+                    for i in val:
+                        setattr(i, "{}_prefetch".format(rel.rel_name), obj)
+                setattr(obj, "{}_prefetch".format(key), val)
+
+
+class ModelResult(ModelResultMixIn, TableResult):
+    pass
+
+
 class TableGateway(object):
     """Model options"""
 
@@ -242,6 +289,7 @@ class TableGateway(object):
         return [smartsql.Field(f.column, prefix if prefix is not None else self.sql_table) for f in self.fields.values()]
 
     def insert(self, data, using=None):
+        """Inserts record"""
         using = using or self.using
         query = self.query.using(using)
         if type(data) == tuple:
@@ -254,57 +302,19 @@ class TableGateway(object):
             return query.result.db.last_insert_id(cursor)
 
     def update(self, data, cond, using=None):
-        """Uses SQL UPDATE to update record"""
+        """Updates record"""
         using = using or self.using
         query = self.query.using(using)
         if type(data) == tuple:
             data = dict(data)
-        pk = self.pk if type(self.pk) == tuple else (self.pk,)
-        data = {self.fields[name].column: value for name, value in data.items() if name not in pk}
+        data = {self.fields[name].column: value for name, value in data.items()}
         return query.where(cond).update(data)
 
-
-class ModelResultMixIn(object):
-    """Result adapted for model."""
-
-    def fill_cache(self):
-        self = super(ModelResultMixIn, self).fill_cache()
-        self.populate_prefetch()
-        return self
-
-    def prefetch(self, *a, **kw):
-        """Prefetch relations"""
-        if a and not a[0]:  # .prefetch(False)
-            self._prefetch = {}
-        else:
-            self._prefetch = copy.copy(self._prefetch)
-            self._prefetch.update(kw)
-            self._prefetch.update({i: self.gateway.relations[i].qs for i in a})
-        return self
-
-    def populate_prefetch(self):
-        for key, qs in self._prefetch.items():
-            rel = self.gateway.relations[key]
-            # recursive handle prefetch
-            field = rel.field if type(rel.field) == tuple else (rel.field,)
-            rel_field = rel.rel_field if type(rel.rel_field) == tuple else (rel.rel_field,)
-
-            cond = reduce(operator.or_,
-                          (reduce(operator.and_,
-                                  ((smartsql.Field(rf, rel.rel_model.s) == getattr(obj, f))
-                                   for f, rf in zip(field, rel_field)))
-                           for obj in self._cache))
-            rows = list(qs.where(cond))
-            for obj in self._cache:
-                val = [i for i in rows if tuple(getattr(i, f) for f in rel_field) == tuple(getattr(obj, f) for f in field)]
-                if isinstance(rel, (ForeignKey, OneToOne)):
-                    val = val[0] if val else None
-                    if val and isinstance(rel, OneToOne):
-                        setattr(val, "{}_prefetch".format(rel.rel_name), obj)
-                elif isinstance(rel, OneToMany):
-                    for i in val:
-                        setattr(i, "{}_prefetch".format(rel.rel_name), obj)
-                setattr(obj, "{}_prefetch".format(key), val)
+    def delete(self, cond, using=None):
+        """Deletes record"""
+        using = using or self.using
+        query = self.query.using(using)
+        return query.where(cond).delete()
 
 
 class ModelGatewayMixIn(object):
@@ -381,6 +391,61 @@ class ModelGatewayMixIn(object):
             return set(self.fields)
         return set(k for k, v in obj._original_data.items() if getattr(obj, k, None) != v)
 
+    def send_signal(self, sender, *a, **kw):
+        """Sends signal"""
+        kw.update({'sender': type(sender), 'instance': sender})
+        return signals.send_signal(*a, **kw)
+
+    def set_defaults(self, obj):
+        """Sets attribute defaults."""
+        for name, field in self.fields.items():
+            if not hasattr(field, 'default'):
+                continue
+            default = field.default
+            if getattr(obj, name, None) is None:
+                if isinstance(default, collections.Callable):
+                    try:
+                        default(obj, name)
+                    except TypeError:
+                        default = default()
+                setattr(obj, name, default)
+        return obj
+
+    def validate(self, obj, fields=frozenset(), exclude=frozenset()):
+        """Tests all ``validations``"""
+        self.set_defaults(obj)
+        errors = {}
+        for name, field in self.fields.items():
+            if name in exclude or (fields and name not in fields):
+                continue
+            if not hasattr(field, 'validators'):
+                continue
+            for validator in field.validators:
+                assert isinstance(validator, collections.Callable), 'The validator must be callable'
+                value = getattr(obj, name)
+                try:
+                    valid_or_msg = validator(obj, name, value)
+                except TypeError:
+                    valid_or_msg = validator(value)
+                if valid_or_msg is not True:
+                    # Don't need message code. To rewrite message simple wrap (or extend) validator.
+                    errors.setdefault(name, []).append(
+                        valid_or_msg or 'Improper value "{0}" for "{1}"'.format(value, name)
+                    )
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, obj, using=None):
+        """Sets defaults, validates and inserts into or updates database"""
+        self.set_defaults(obj)
+        self.validate(obj, fields=self.get_changed(obj))
+        using = using or self.using
+        self.send_signal(obj, signal='pre_save', using=using)
+        result = self.insert(obj, using) if obj._new_record else self.update(obj, using)
+        self.send_signal(obj, signal='post_save', created=obj._new_record, using=using)
+        obj._new_record = False
+        return result
+
     def insert(self, obj, using=None):
         pk = super(ModelGatewayMixIn, self).insert(self.get_data(obj), using)
         if pk:
@@ -388,12 +453,48 @@ class ModelGatewayMixIn(object):
 
     def update(self, obj, using=None):
         pk = self.pk if type(self.pk) == tuple else (self.pk,)
-        cond = reduce(operator.and_, (smartsql.Field(k, self.sql_table) == getattr(obj, k) for k in pk))
+        cond = reduce(operator.and_, (smartsql.Field(self.fields[k].column, self.sql_table) == getattr(obj, k) for k in pk))
         return super(ModelGatewayMixIn, self).update(self.get_data(obj, fields=self.get_changed(obj)), cond, using)
 
+    def delete(self, obj, using=None, visited=None):
+        """Deletes record from database"""
+        using = using or self.using
 
-class ModelResult(ModelResultMixIn, TableResult):
-    pass
+        if visited is None:
+            visited = set()
+        if self in visited:
+            return False
+        visited.add(self)
+
+        self.send_signal(obj, signal='pre_delete', using=using)
+        for key, rel in self.relations.items():
+            if isinstance(rel, OneToMany):
+                for child in getattr(obj, key).iterator():
+                    rel.on_delete(obj, child, rel, using, visited)
+            elif isinstance(rel, OneToOne):
+                child = getattr(obj, key)
+                rel.on_delete(obj, child, rel, using, visited)
+
+        pk = self.pk if type(self.pk) == tuple else (self.pk,)
+        cond = reduce(operator.and_, (smartsql.Field(self.fields[k].column, self.sql_table) == getattr(obj, k) for k in pk))
+        super(ModelGatewayMixIn, self).delete(cond, using)
+        self.send_signal(obj, signal='post_delete', using=using)
+        return True
+
+    def get(self, _obj_pk=None, **kwargs):
+        """Returns QS object"""
+        if _obj_pk is not None:
+            pk = self.pk
+            if type(self.pk) != tuple:
+                pk = (self.pk,)
+                _obj_pk = (_obj_pk,)
+            return self.get(**{k: v for k, v in zip(pk, _obj_pk)})
+
+        if kwargs:
+            qs = self.query
+            for k, v in kwargs.items():
+                qs = qs.where(smartsql.Field(self.fields[k].column, self.sql_table) == v)
+            return qs[0]
 
 
 class ModelGateway(ModelGatewayMixIn, TableGateway):
@@ -450,7 +551,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def __init__(self, *args, **kwargs):
         """Allows setting of fields using kwargs"""
-        self._send_signal(signal='pre_init', args=args, kwargs=kwargs, using=self._gateway.using)
+        self._gateway.send_signal(self, signal='pre_init', args=args, kwargs=kwargs, using=self._gateway.using)
         self._cache = {}
         pk = self._gateway.pk
         if type(pk) == tuple:
@@ -464,7 +565,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         if kwargs:
             for k, v in kwargs.items():
                 setattr(self, k, v)
-        self._send_signal(signal='post_init', using=self._gateway.using)
+        self._gateway.send_signal(self, signal='post_init', using=self._gateway.using)
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self._get_pk() == other._get_pk()
@@ -493,87 +594,14 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     pk = property(_get_pk, _set_pk)
 
-    def _set_defaults(self):
-        """Sets attribute defaults based on ``defaults`` dict"""
-        for name, field in self._gateway.fields.items():
-            if not hasattr(field, 'default'):
-                continue
-            default = field.default
-            if getattr(self, name, None) is None:
-                if isinstance(default, collections.Callable):
-                    try:
-                        default(self, name)
-                    except TypeError:
-                        default = default()
-                setattr(self, name, default)
-
-    def validate(self, exclude=frozenset(), fields=frozenset()):
-        """Tests all ``validations``"""
-        self._set_defaults()
-        errors = {}
-        for name, field in self._gateway.fields.items():
-            if name in exclude or (fields and name not in fields):
-                continue
-            if not hasattr(field, 'validators'):
-                continue
-            for validator in field.validators:
-                assert isinstance(validator, collections.Callable), 'The validator must be callable'
-                value = getattr(self, name)
-                try:
-                    valid_or_msg = validator(self, name, value)
-                except TypeError:
-                    valid_or_msg = validator(value)
-                if valid_or_msg is not True:
-                    # Don't need message code. To rewrite message simple wrap (or extend) validator.
-                    errors.setdefault(name, []).append(
-                        valid_or_msg or 'Improper value "{0}" for "{1}"'.format(value, name)
-                    )
-        if errors:
-            raise ValidationError(errors)
+    def validate(self, fields=frozenset(), exclude=frozenset()):
+        return self._gateway.validate(self, fields=fields, exclude=exclude)
 
     def save(self, using=None):
-        """Sets defaults, validates and inserts into or updates database"""
-        self._set_defaults()
-        using = using or self._gateway.using
-        self._send_signal(signal='pre_save', using=using)
-        result = self._gateway.insert(self, using) if self._new_record else self._gateway.update(self, using)
-        self._send_signal(signal='post_save', created=self._new_record, using=using)
-        self._new_record = False
-        return result
+        return self._gateway.save(self, using)
 
     def delete(self, using=None, visited=None):
-        """Deletes record from database"""
-        using = using or self._gateway.using
-
-        if visited is None:
-            visited = set()
-        if self in visited:
-            return False
-        visited.add(self)
-
-        self._send_signal(signal='pre_delete', using=using)
-        for key, rel in self._gateway.relations.items():
-            if isinstance(rel, OneToMany):
-                for child in getattr(self, key).iterator():
-                    rel.on_delete(self, child, rel, visited)
-            elif isinstance(rel, OneToOne):
-                child = getattr(self, key)
-                rel.on_delete(self, child, rel, visited)
-
-        pk = (self)._gateway.pk
-        if type(pk) == tuple:
-            cond = reduce(operator.and_, (getattr(self.s, k) == v for k, v in zip(pk, self.pk)))
-        else:
-            cond = type(self).s.pk == self.pk
-
-        type(self).qs.using(using).where(cond).delete()
-        self._send_signal(signal='post_delete', using=using)
-        return True
-
-    def _send_signal(self, *a, **kw):
-        """Sends signal"""
-        kw.update({'sender': type(self), 'instance': self})
-        return signals.send_signal(*a, **kw)
+        return self._gateway.delete(self, using)
 
     @classproperty
     def s(cls):
@@ -586,17 +614,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     @classmethod
     def get(cls, _obj_pk=None, **kwargs):
-        'Returns QS object'
-        if _obj_pk is not None:
-            return cls.get(**{cls._gateway.pk: _obj_pk})[0]
-
-        if kwargs:
-            qs = cls.qs
-            for k, v in kwargs.items():
-                qs = qs.where(smartsql.Field(k, cls.s) == v)
-            return qs
-
-        return cls.qs.clone()
+        return cls._gateway.get(_obj_pk, **kwargs)
 
     def __repr__(self):
         return "<{0}.{1}: {2}>".format(type(self).__module__, type(self).__name__, self.pk)
@@ -733,16 +751,16 @@ class Table(smartsql.Table):
         return super(Table, self).__getattr__(smartsql.LOOKUP_SEP.join(parts))
 
 
-def cascade(parent, child, parent_rel, visited):
-    child.delete(visited=visited)
+def cascade(parent, child, parent_rel, using, visited):
+    child._gateway.delete(child, using, visited=visited)
 
 
-def set_null(parent, child, parent_rel, visited):
+def set_null(parent, child, parent_rel, using, visited):
     setattr(child, parent_rel.rel_field, None)
-    child.save()
+    child._gateway.save(child, using)
 
 
-def do_nothing(parent, child, parent_rel, visited):
+def do_nothing(parent, child, parent_rel, using, visited):
     pass
 
 # TODO: descriptor for FileField? Or custom postgresql data type? See http://www.postgresql.org/docs/8.4/static/sql-createtype.html
