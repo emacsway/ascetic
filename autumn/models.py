@@ -349,7 +349,7 @@ class ModelGatewayMixIn(object):
             setattr(obj, attr, value)
         obj._original_data = dict(data)
         obj._new_record = False
-        return self
+        return obj
 
     def get_data(self, obj, fields=frozenset(), exclude=frozenset()):
         return tuple((name, getattr(obj, name, None))
@@ -510,22 +510,6 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         if errors:
             raise ValidationError(errors)
 
-    def _set_data(self, data):
-        for column, value in data:
-            try:
-                attr = self._gateway.columns[column].name
-            except KeyError:
-                attr = column
-            self.__dict__[attr] = value
-        self._new_record = False
-        # Do use this method for sets File fields and other special data types?
-        return self
-
-    def _get_data(self, fields=frozenset(), exclude=frozenset()):
-        return tuple((f.column, getattr(self, f.name, None))
-                     for f in self._gateway.fields.values()
-                     if not (f.name in exclude or (fields and f.name not in fields)))
-
     def save(self, using=None):
         """Sets defaults, validates and inserts into or updates database"""
         self._set_defaults()
@@ -629,7 +613,7 @@ def suffix_mapping(result, row, state):
 
 def default_mapping(result, row, state):
     try:
-        return result.gateway.model()._set_data(row)
+        return result.gateway.set_data(result.gateway.model(), row)
     except AttributeError:
         dict(row)
 
@@ -645,7 +629,7 @@ class RelatedMapping(object):
             start += length
         return rows
 
-    def get_objects(self, models, rows, state):
+    def get_objects(self, result, models, rows, state):
         objs = []
         for model, model_row in zip(models, rows):
             model_row_dict = dict(model_row)
@@ -654,7 +638,7 @@ class RelatedMapping(object):
                 pk = (pk,)
             key = (model, tuple(model_row_dict[f] for f in pk))
             if key not in state:
-                state[key] = model()._set_data(model_row)
+                state[key] = result.gateway.set_data(result.gateway.model(), model_row)
             objs.append(state[key])
         return objs
 
@@ -680,7 +664,7 @@ class RelatedMapping(object):
         for rel in relations:
             models.append(rel.rel_model)
         rows = self.get_model_rows(models, row)
-        objs = self.get_objects(models, rows)
+        objs = self.get_objects(result, models, rows, state)
         self.build_relations(relations, objs)
         return objs[0]
 
