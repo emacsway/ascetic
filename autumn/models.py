@@ -248,14 +248,13 @@ class TableGateway(object):
         if auto_pk:
             return query.result.db.last_insert_id(cursor)
 
-    def update(self, data, using):
+    def update(self, data, cond, using=None):
         """Uses SQL UPDATE to update record"""
         using = using or self.using
         query = self.query.using(using)
         if type(data) == tuple:
             data = dict(data)
         pk = self.pk if type(self.pk) == tuple else (self.pk,)
-        cond = reduce(operator.and_, (smartsql.Field(k, self.sql_table) == data.get(k) for k in pk))
         data = {self.fields[name].column: value for name, value in data.items() if name not in pk}
         return query.where(cond).update(data)
 
@@ -348,7 +347,8 @@ class ModelGatewayMixIn(object):
     def set_data(self, obj, data):
         for attr, value in data:
             setattr(obj, attr, value)
-        self._new_record = False
+        obj._original_data = dict(data)
+        obj._new_record = False
         return self
 
     def get_data(self, obj, fields=frozenset(), exclude=frozenset()):
@@ -356,13 +356,18 @@ class ModelGatewayMixIn(object):
                      for name in self.fields
                      if not (name in exclude or (fields and name not in fields)))
 
-    def insert(self, obj, using):
+    def insert(self, obj, using=None):
         pk = super(ModelGatewayMixIn, self).insert(self.get_data(obj), using)
         if pk:
             obj.pk = pk
 
-    def update(self, obj, using):
-        return super(ModelGatewayMixIn, self).update(self.get_data(obj), using)
+    def update(self, obj, using=None):
+        data = dict(self.get_data(obj))
+        pk = self.pk if type(self.pk) == tuple else (self.pk,)
+        cond = reduce(operator.and_, (smartsql.Field(k, self.sql_table) == data.get(k) for k in pk))
+        if getattr(obj, '_original_data', None):
+            data = {k: v for k, v in data.items() if v != obj._original_data[k]}
+        return super(ModelGatewayMixIn, self).update(data, cond, using)
 
 
 class ModelResult(ModelResultMixIn, TableResult):
