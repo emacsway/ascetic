@@ -238,14 +238,15 @@ class TableGateway(object):
 
     def insert(self, data, using=None):
         using = using or self.using
+        query = self.query.using(using)
+        if type(data) == tuple:
+            data = dict(data)
         pk = self.pk if type(self.pk) == tuple else (self.pk,)
-        auto_pk = all(*(data.get(k) for k in pk))
+        auto_pk = not all(data.get(k) for k in pk)
+        data = {self.fields[name].column: value for name, value in data.items() if not auto_pk or name not in pk}
+        cursor = query.insert(data)
         if auto_pk:
-            data = {k: v for k, v in data.items() if k not in pk}
-        cursor = self.query.using(using).insert(dict(self._get_data()))
-        if auto_pk:
-            self._set_pk(type(self).qs.result.db.last_insert_id(cursor))
-        return True
+            return query.result.db.last_insert_id(cursor)
 
 
 class ModelResultMixIn(object):
@@ -332,6 +333,22 @@ class ModelGatewayMixIn(object):
 
     def create_sql_table(self):
         return Table(self)
+
+    def set_data(self, obj, data):
+        for attr, value in data:
+            setattr(obj, attr, value)
+        self._new_record = False
+        return self
+
+    def get_data(self, obj, fields=frozenset(), exclude=frozenset()):
+        return tuple((name, getattr(obj, name, None))
+                     for name in self.fields
+                     if not (name in exclude or (fields and name not in fields)))
+
+    def insert(self, obj, using):
+        pk = super(ModelGatewayMixIn, self).insert(self.get_data(obj), using)
+        if pk:
+            obj.pk = pk
 
 
 class ModelResult(ModelResultMixIn, TableResult):
@@ -495,19 +512,10 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         self._set_defaults()
         using = using or self._gateway.using
         self._send_signal(signal='pre_save', using=using)
-        result = self._insert(using) if self._new_record else self._update(using)
+        result = self._gateway.insert(self, using) if self._new_record else self._update(using)
         self._send_signal(signal='post_save', created=self._new_record, using=using)
         self._new_record = False
         return result
-
-    def _insert(self, using):
-        """Uses SQL INSERT to create new record"""
-        auto_pk = self._get_pk() is None
-        exclude = set([self._gateway.pk]) if auto_pk else set()
-        cursor = type(self).qs.using(using).insert(dict(self._get_data(exclude=exclude)))
-        if auto_pk:
-            self._set_pk(type(self).qs.result.db.last_insert_id(cursor))
-        return True
 
     def _update(self, using):
         """Uses SQL UPDATE to update record"""
