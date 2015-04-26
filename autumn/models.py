@@ -352,9 +352,15 @@ class ModelGatewayMixIn(object):
         return obj
 
     def get_data(self, obj, fields=frozenset(), exclude=frozenset()):
-        return tuple((name, getattr(obj, name, None))
+        data = tuple((name, getattr(obj, name, None))
                      for name in self.fields
                      if not (name in exclude or (fields and name not in fields)))
+        return data
+
+    def get_changed(self, obj):
+        if not hasattr(obj, '_original_data'):
+            return set(self.fields)
+        return set(k for k, v in obj._original_data.items() if getattr(obj, k, None) != v)
 
     def insert(self, obj, using=None):
         pk = super(ModelGatewayMixIn, self).insert(self.get_data(obj), using)
@@ -362,12 +368,9 @@ class ModelGatewayMixIn(object):
             obj.pk = pk
 
     def update(self, obj, using=None):
-        data = dict(self.get_data(obj))
         pk = self.pk if type(self.pk) == tuple else (self.pk,)
-        cond = reduce(operator.and_, (smartsql.Field(k, self.sql_table) == data.get(k) for k in pk))
-        if getattr(obj, '_original_data', None):
-            data = {k: v for k, v in data.items() if v != obj._original_data[k]}
-        return super(ModelGatewayMixIn, self).update(data, cond, using)
+        cond = reduce(operator.and_, (smartsql.Field(k, self.sql_table) == getattr(obj, k) for k in pk))
+        return super(ModelGatewayMixIn, self).update(self.get_data(obj, fields=self.get_changed(obj)), cond, using)
 
 
 class ModelResult(ModelResultMixIn, TableResult):
