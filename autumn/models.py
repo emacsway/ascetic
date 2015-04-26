@@ -248,6 +248,16 @@ class TableGateway(object):
         if auto_pk:
             return query.result.db.last_insert_id(cursor)
 
+    def update(self, data, using):
+        """Uses SQL UPDATE to update record"""
+        using = using or self.using
+        query = self.query.using(using)
+        if type(data) == tuple:
+            data = dict(data)
+        pk = self.pk if type(self.pk) == tuple else (self.pk,)
+        cond = reduce(operator.and_, (smartsql.Field(k, self.sql_table) == data.get(k) for k in pk))
+        return query.where(cond).update(data)
+
 
 class ModelResultMixIn(object):
     """Result adapted for model."""
@@ -349,6 +359,9 @@ class ModelGatewayMixIn(object):
         pk = super(ModelGatewayMixIn, self).insert(self.get_data(obj), using)
         if pk:
             obj.pk = pk
+
+    def update(self, obj, using):
+        return super(ModelGatewayMixIn, self).update(self.get_data(obj), using)
 
 
 class ModelResult(ModelResultMixIn, TableResult):
@@ -512,21 +525,10 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         self._set_defaults()
         using = using or self._gateway.using
         self._send_signal(signal='pre_save', using=using)
-        result = self._gateway.insert(self, using) if self._new_record else self._update(using)
+        result = self._gateway.insert(self, using) if self._new_record else self._gateway.update(self, using)
         self._send_signal(signal='post_save', created=self._new_record, using=using)
         self._new_record = False
         return result
-
-    def _update(self, using):
-        """Uses SQL UPDATE to update record"""
-        pk = (self)._gateway.pk
-        if type(pk) == tuple:
-            cond = reduce(operator.and_, (getattr(type(self).s, k) == v for k, v in zip(pk, self.pk)))
-        else:
-            cond = self.s.pk == self.pk
-        type(self).qs.using(using).where(
-            cond
-        ).update(dict(self._get_data()))
 
     def delete(self, using=None, visited=None):
         """Deletes record from database"""
