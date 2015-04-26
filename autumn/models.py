@@ -45,98 +45,302 @@ class Field(object):
             setattr(self, k, v)
 
 
-class ModelOptions(object):
+class TableResult(smartsql.Result):
+    """Result adapted for table."""
+
+    gateway = None
+    _raw = None
+    _cache = None
+    _using = 'default'
+
+    def __init__(self, gateway):
+        self._prefetch = {}
+        self._select_related = {}
+        self.is_base(True)
+        self._mapping = default_mapping
+        self.gateway = gateway
+        self._using = gateway.using
+
+    def __len__(self):
+        """Returns length or list."""
+        self.fill_cache()
+        return len(self._cache)
+
+    def __iter__(self):
+        """Returns iterator."""
+        self.fill_cache()
+        return iter(self._cache)
+
+    def __getitem__(self, key):
+        """Returns sliced self or item."""
+        if self._cache:
+            return self._cache[key]
+        if isinstance(key, integer_types):
+            self._query = super(TableResult, self).__getitem__(key)
+            return list(self)[0]
+        return super(TableResult, self).__getitem__(key)
+
+    def execute(self):
+        """Implementation of query execution"""
+        return self.db.execute(self._query)
+
+    insert = update = delete = execute
+
+    def select(self):
+        return self
+
+    def count(self):
+        """Returns length or list."""
+        if self._cache is not None:
+            return len(self._cache)
+        return self.execute().fetchone()[0]
+
+    def clone(self):
+        c = smartsql.Result.clone(self)
+        c._cache = None
+        c._is_base = False
+        return c
+
+    def fill_cache(self):
+        if self.is_base():
+            raise Exception('You should clone base queryset before query.')
+        if self._cache is None:
+            self._cache = list(self.iterator())
+            self.populate_prefetch()
+        return self
+
+    def iterator(self):
+        """iterator"""
+        cursor = self.execute()
+        descr = cursor.description
+        fields = tuple(f[0] for f in descr)
+        state = {}
+        for row in cursor.fetchall():
+            yield self._mapping(self, zip(fields, row), state)
+
+    def using(self, alias=None):
+        if alias is None:
+            return self._using
+        self._using = alias
+        return self
+
+    def is_base(self, value=None):
+        if value is None:
+            return self._is_base
+        self._is_base = value
+        return self
+
+    @property
+    def db(self):
+        return get_db(self._using)
+
+    def map(self, mapping):
+        """Sets mapping."""
+        c = self
+        c._mapping = mapping
+        return c
+
+
+class TableGateway(object):
     """Model options"""
 
     pk = 'id'
     using = 'default'
-    field_class = Field
+    field_factory = Field
+    result_factory = TableResult
 
-    def __init__(self, model, **kw):
+    def __init__(self, db_table=None, **kw):
         """Instance constructor"""
-        self.relations = {}
 
         for k, v in kw:
             setattr(self, k, v)
 
-        self.model = model
-        self.set_name()
-        self.set_db_table()
-        self.set_declared_fields()
-        self.set_fields()
+        if db_table:
+            self.db_table = db_table
 
-    def set_name(self):
-        if not hasattr(self, 'name'):
-            self.name = ".".join((self.model.__module__, self.model.__name__))
-
-    def set_db_table(self):
-        if not hasattr(self, 'db_table'):
-            self.db_table = "_".join([
-                re.sub(r"[^a-z0-9]", "", i.lower())
-                for i in (self.model.__module__.split(".") + [self.model.__name__, ])
-            ])
-
-    def set_declared_fields(self):
-        self.declared_fields = {}
-        for name in self.model.__dict__:
-            field = getattr(self.model, name, None)
-            if isinstance(field, Field):
-                self.declared_fields[name] = field
-                delattr(self.model, name)
-
-        if hasattr(self, 'map'):
-            for name, column in self.map.items():
-                if name not in self.declared_fields:
-                    self.declared_fields[name] = Field()
-                self.declared_fields[name].column = column
-
-        if hasattr(self, 'validations'):
-            for name, validators in self.validations.items():
-                if not isinstance(validators, (list, tuple)):
-                    validators = [validators, ]
-                if name not in self.declared_fields:
-                    self.declared_fields[name] = Field()
-                field = self.declared_fields[name]
-                if not hasattr(field, 'validators'):
-                    self.declared_fields[name].validators = []
-                field.validators.extend(validators)
-
-    def set_fields(self):
-        db = get_db(self.using)
-        schema = db.describe_table(self.db_table)
-
-        rmap = {field.column: name for name, field in self.declared_fields.items() if hasattr(field, 'column')}
+        self.declared_fields = self.create_declared_fields(
+            getattr(self, 'map', {}),
+            getattr(self, 'validations', {}),
+            getattr(self, 'declared_fields', {})
+        )
         # fileds and columns can be a descriptor for multilingual mapping.
-
-        # self.all(whole, total)_fields = collections.OrderedDict()  # with parents, MTI
         self.fields = collections.OrderedDict()
         self.columns = collections.OrderedDict()
+
+        for name, field in self.create_fields(self.read_columns(self.db_table, self.using), self.declared_fields).items():
+            self.add_field(name, field)
+
+        self.sql_table = self.create_sql_table()
+        self.query = self.create_query()
+
+    def create_declared_fields(self, map, validations, declared_fields):
+        result = {}
+
+        for name, column in map.items():
+            result[name] = self.create_field(name, {'column': column}, declared_fields)
+
+        for name, validators in validations.items():
+            if not isinstance(validators, (list, tuple)):
+                validators = [validators, ]
+            result[name] = self.create_field(name, {'validators': validators}, declared_fields)
+
+        return result
+
+    def read_columns(self, db_table, using):
+        db = get_db(using)
+        schema = db.describe_table(db_table)
         q = db.execute('SELECT * FROM {0} LIMIT 1'.format(db.qn(self.db_table)))
         # See cursor.description http://www.python.org/dev/peps/pep-0249/
+        result = []
         for row in q.description:
             column = row[0]
-            name = rmap.get(column, column)
-            data = schema.get(column, {})
+            data = schema.get(column) or {}
             data.update({'column': column, 'type_code': row[1]})
-            if name in self.declared_fields:
-                field = copy.deepcopy(self.declared_fields[name])
-                field.__dict__.update(data)
-            else:
-                field = self.field_class(**data)
-            self.add_field(field, name)
+            result.append(data)
+        return result
 
-    def add_field(self, field, name):
+    def create_field(self, name, data, declared_fields=None):
+        if declared_fields and name in declared_fields:
+            field = copy.deepcopy(declared_fields[name])
+            field.__dict__.update(data)
+        else:
+            field = self.field_factory(**data)
+        return field
+
+    def create_fields(self, columns, declared_fields):
+        fields = collections.OrderedDict()
+        rmap = {field.column: name for name, field in declared_fields.items() if hasattr(field, 'column')}
+        for data in columns:
+            column_name = data['column']
+            name = rmap.get(column_name, column_name)
+            fields[name] = self.create_field(name, data, declared_fields)
+        return fields
+
+    def add_field(self, name, field):
         field.name = name
         field.model = self.model
-        if getattr(field, 'validators', None):
-            self.validations[name] = field.validators
         self.fields[name] = field
         self.columns[field.column] = field
+
+    def create_sql_table(self):
+        return smartsql.Table(self.db_table)
+
+    def create_query(self):
+        return smartsql.QS(self.sql_table, result=self.result_factory(self)).fields(self.get_sql_fields())
+
+    def get_sql_fields(self, prefix=None):
+        """Returns field list."""
+        return [smartsql.Field(f.column, prefix if prefix is not None else self.sql_table) for f in self.fields.values()]
+
+    def insert(self, data, using=None):
+        using = using or self.using
+        pk = self.pk if type(self.pk) == tuple else (self.pk,)
+        auto_pk = all(*(data.get(k) for k in pk))
+        if auto_pk:
+            data = {k: v for k, v in data.items() if k not in pk}
+        cursor = self.query.using(using).insert(dict(self._get_data()))
+        if auto_pk:
+            self._set_pk(type(self).qs.result.db.last_insert_id(cursor))
+        return True
+
+
+class ModelResultMixIn(object):
+    """Result adapted for model."""
+
+    def fill_cache(self):
+        self = super(ModelResultMixIn, self).fill_cache()
+        self.populate_prefetch()
+        return self
+
+    def prefetch(self, *a, **kw):
+        """Prefetch relations"""
+        if a and not a[0]:  # .prefetch(False)
+            self._prefetch = {}
+        else:
+            self._prefetch = copy.copy(self._prefetch)
+            self._prefetch.update(kw)
+            self._prefetch.update({i: self.gateway.relations[i].qs for i in a})
+        return self
+
+    def populate_prefetch(self):
+        for key, qs in self._prefetch.items():
+            rel = self.gateway.relations[key]
+            # recursive handle prefetch
+            field = rel.field if type(rel.field) == tuple else (rel.field,)
+            rel_field = rel.rel_field if type(rel.rel_field) == tuple else (rel.rel_field,)
+
+            cond = reduce(operator.or_,
+                          (reduce(operator.and_,
+                                  ((smartsql.Field(rf, rel.rel_model.s) == getattr(obj, f))
+                                   for f, rf in zip(field, rel_field)))
+                           for obj in self._cache))
+            rows = list(qs.where(cond))
+            for obj in self._cache:
+                val = [i for i in rows if tuple(getattr(i, f) for f in rel_field) == tuple(getattr(obj, f) for f in field)]
+                if isinstance(rel, (ForeignKey, OneToOne)):
+                    val = val[0] if val else None
+                    if val and isinstance(rel, OneToOne):
+                        setattr(val, "{}_prefetch".format(rel.rel_name), obj)
+                elif isinstance(rel, OneToMany):
+                    for i in val:
+                        setattr(i, "{}_prefetch".format(rel.rel_name), obj)
+                setattr(obj, "{}_prefetch".format(key), val)
+
+
+class ModelGatewayMixIn(object):
+
+    def __init__(self, model, **kw):
+        """Instance constructor"""
+        self.model = model
+        self.relations = {}
+
+        if not hasattr(self, 'name'):
+            self.name = self.create_default_name(model)
+
+        self.declared_fields = self.create_model_declared_fields(model)
+
+        db_table = getattr(self, 'db_table', None) or self.create_default_db_table(model)
+        super(ModelGatewayMixIn, self).__init__(db_table=db_table, **kw)
+
+    def create_default_name(self, model):
+        return ".".join((model.__module__, model.__name__))
+
+    def create_default_db_table(self, model):
+        return "_".join([
+            re.sub(r"[^a-z0-9]", "", i.lower())
+            for i in (self.model.__module__.split(".") + [self.model.__name__, ])
+        ])
+
+    def create_model_declared_fields(self, model):
+        declared_fields = {}
+        # TODO: FIXME for inheritance
+        for name in dir(self.model):
+            field = getattr(self.model, name, None)
+            if isinstance(field, Field):
+                declared_fields[name] = field
+                delattr(self.model, name)
+
+        return declared_fields
+
+    def add_field(self, name, field):
+        field.model = self.model
+        super(ModelGatewayMixIn, self).add_field(name, field)
+
+    def create_sql_table(self):
+        return Table(self)
+
+
+class ModelResult(ModelResultMixIn, TableResult):
+    pass
+
+
+class ModelGateway(ModelGatewayMixIn, TableGateway):
+    result_factory = ModelResult
 
 
 class ModelBase(type):
     """Metaclass for Model"""
-    options_class = ModelOptions
+    gateway_class = ModelGateway
 
     def __new__(cls, name, bases, attrs):
 
@@ -150,14 +354,14 @@ class ModelBase(type):
             return new_cls
 
         if hasattr(new_cls, 'Meta'):
-            if isinstance(new_cls.Meta, new_cls.options_class):
-                NewOptions = new_cls.Meta
+            if isinstance(new_cls.Meta, new_cls.gateway_class):
+                NewGateway = new_cls.Meta
             else:
-                class NewOptions(new_cls.Meta, new_cls.options_class):
+                class NewGateway(new_cls.Meta, new_cls.gateway_class):
                     pass
         else:
-            NewOptions = new_cls.options_class
-        opts = new_cls._meta = NewOptions(new_cls)
+            NewGateway = new_cls.gateway_class
+        new_cls._meta = NewGateway(new_cls)
 
         for key, rel in new_cls.__dict__.items():
             if isinstance(rel, Relation):
@@ -346,13 +550,11 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
     @classproperty
     def s(cls):
         # TODO: Use Model class descriptor without setter.
-        if '_s' not in cls.__dict__:
-            cls._s = Table(cls)
-        return cls._s
+        return cls._meta.sql_table
 
     @classproperty
     def qs(cls):
-        return cls.s.qs
+        return cls._meta.query
 
     @classmethod
     def get(cls, _obj_pk=None, **kwargs):
@@ -403,7 +605,10 @@ def suffix_mapping(result, row, state):
 
 
 def default_mapping(result, row, state):
-    return result.model()._set_data(row) if result.model else dict(row)
+    try:
+        return result.gateway.model()._set_data(row)
+    except AttributeError:
+        dict(row)
 
 
 class RelatedMapping(object):
@@ -457,161 +662,22 @@ class RelatedMapping(object):
         return objs[0]
 
 
-class Result(smartsql.Result):
-    """Result adapted."""
-
-    _raw = None
-    _cache = None
-    _using = 'default'
-    model = None
-
-    def __init__(self, model):
-        self._prefetch = {}
-        self._select_related = {}
-        self.is_base(True)
-        self._mapping = default_mapping
-        self.model = model
-        self._using = self.model._meta.using
-
-    def __len__(self):
-        """Returns length or list."""
-        self.fill_cache()
-        return len(self._cache)
-
-    def __iter__(self):
-        """Returns iterator."""
-        self.fill_cache()
-        return iter(self._cache)
-
-    def __getitem__(self, key):
-        """Returns sliced self or item."""
-        if self._cache:
-            return self._cache[key]
-        if isinstance(key, integer_types):
-            self._query = super(Result, self).__getitem__(key)
-            return list(self)[0]
-        return super(Result, self).__getitem__(key)
-
-    def execute(self):
-        """Implementation of query execution"""
-        return self.db.execute(self._query)
-
-    insert = update = delete = execute
-
-    def select(self):
-        return self
-
-    def count(self):
-        """Returns length or list."""
-        if self._cache is not None:
-            return len(self._cache)
-        return self.execute().fetchone()[0]
-
-    def clone(self):
-        c = smartsql.Result.clone(self)
-        c._cache = None
-        c._is_base = False
-        return c
-
-    def fill_cache(self):
-        if self.is_base():
-            raise Exception('You should clone base queryset before query.')
-        if self._cache is None:
-            self._cache = list(self.iterator())
-            self.populate_prefetch()
-        return self
-
-    def iterator(self):
-        """iterator"""
-        cursor = self.execute()
-        descr = cursor.description
-        fields = tuple(f[0] for f in descr)
-        state = {}
-        for row in cursor.fetchall():
-            yield self._mapping(self, zip(fields, row), state)
-
-    def using(self, alias=None):
-        if alias is None:
-            return self._using
-        self._using = alias
-        return self
-
-    def is_base(self, value=None):
-        if value is None:
-            return self._is_base
-        self._is_base = value
-        return self
-
-    @property
-    def db(self):
-        return get_db(self._using)
-
-    def map(self, mapping):
-        """Sets mapping."""
-        c = self
-        c._mapping = mapping
-        return c
-
-    def prefetch(self, *a, **kw):
-        """Prefetch relations"""
-        if a and not a[0]:  # .prefetch(False)
-            self._prefetch = {}
-        else:
-            self._prefetch = copy.copy(self._prefetch)
-            self._prefetch.update(kw)
-            self._prefetch.update({i: self.model._meta.relations[i].qs for i in a})
-        return self
-
-    def populate_prefetch(self):
-        for key, qs in self._prefetch.items():
-            rel = self.model._meta.relations[key]
-            # recursive handle prefetch
-            field = rel.field if type(rel.field) == tuple else (rel.field,)
-            rel_field = rel.rel_field if type(rel.rel_field) == tuple else (rel.rel_field,)
-
-            cond = reduce(operator.or_,
-                          (reduce(operator.and_,
-                                  ((smartsql.Field(rf, rel.rel_model.s) == getattr(obj, f))
-                                   for f, rf in zip(field, rel_field)))
-                           for obj in self._cache))
-            rows = list(qs.where(cond))
-            for obj in self._cache:
-                val = [i for i in rows if tuple(getattr(i, f) for f in rel_field) == tuple(getattr(obj, f) for f in field)]
-                if isinstance(rel, (ForeignKey, OneToOne)):
-                    val = val[0] if val else None
-                    if val and isinstance(rel, OneToOne):
-                        setattr(val, "{}_prefetch".format(rel.rel_name), obj)
-                elif isinstance(rel, OneToMany):
-                    for i in val:
-                        setattr(i, "{}_prefetch".format(rel.rel_name), obj)
-                setattr(obj, "{}_prefetch".format(key), val)
-
-
 @cr
 class Table(smartsql.Table):
     """Table class"""
 
-    def __init__(self, model, qs=None, *args, **kwargs):
+    def __init__(self, gateway, qs=None, *args, **kwargs):
         """Constructor"""
-        super(Table, self).__init__(model._meta.db_table, *args, **kwargs)
-        self.model = model
-        self._qs = qs
+        super(Table, self).__init__(gateway.db_table, *args, **kwargs)
+        self.gateway = gateway
 
-    def _get_qs(self):
-        if isinstance(self._qs, collections.Callable):
-            self._qs = self._qs(self)
-        elif self._qs is None:
-            self._qs = smartsql.QS(self, result=Result(self.model)).fields(self.get_fields())
-        return self._qs
-
-    def _set_qs(self, val):
-        self._qs = val
-
-    qs = property(_get_qs, _set_qs)
+    @property
+    def qs(self):
+        return self.gateway.query
 
     def get_fields(self, prefix=None):
         """Returns field list."""
-        return [smartsql.Field(f.column, prefix if prefix is not None else self) for f in self.model._meta.fields.values()]
+        return self.gateway.get_sql_fields()
 
     def __getattr__(self, name):
         """Added some specific functional."""
@@ -624,17 +690,17 @@ class Table(smartsql.Table):
         # field = result['field']
 
         if field == 'pk':
-            field = self.model._meta.pk
-        elif isinstance(self.model._meta.relations.get(field, None), ForeignKey):
-            field = self.model._meta.relations.get(field).field
+            field = self.gateway.pk
+        elif isinstance(self.gateway.relations.get(field, None), ForeignKey):
+            field = self.gateway.relations.get(field).field
 
         if type(field) == tuple:
             if len(parts) > 1:
                 raise Exception("Can't set single alias for multiple fields of composite key {}.{}".format(self.model, name))
             return smartsql.CompositeExpr(*(self.__getattr__(k) for k in field))
 
-        if field in self.model._meta.fields:
-            field = self.model._meta.fields[field].column
+        if field in self.gateway.fields:
+            field = self.gateway.fields[field].column
         parts[0] = field
         return super(Table, self).__getattr__(smartsql.LOOKUP_SEP.join(parts))
 
@@ -686,7 +752,7 @@ class Relation(object):
         if isinstance(self._qs, collections.Callable):
             self._qs = self._qs(self)
         elif self._qs is None:
-            self._qs = self.rel_model.s.qs
+            self._qs = self.rel_model._meta.query
         return self._qs.clone()
 
     def _set_qs(self, val):
