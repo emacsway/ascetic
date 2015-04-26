@@ -344,10 +344,10 @@ class ModelGatewayMixIn(object):
     def create_sql_table(self):
         return Table(self)
 
-    def set_data(self, obj, data):
-        for attr, value in data:
-            setattr(obj, attr, value)
-        obj._original_data = dict(data)
+    def create_instance(self, data):
+        data = dict(data)
+        obj = self.model(**data)
+        obj._original_data = data
         obj._new_record = False
         return obj
 
@@ -616,7 +616,7 @@ def suffix_mapping(result, row, state):
 
 def default_mapping(result, row, state):
     try:
-        return result.gateway.set_data(result.gateway.model(), row)
+        return result.gateway.create_instance(row)
     except AttributeError:
         dict(row)
 
@@ -632,7 +632,7 @@ class RelatedMapping(object):
             start += length
         return rows
 
-    def get_objects(self, result, models, rows, state):
+    def get_objects(self, models, rows, state):
         objs = []
         for model, model_row in zip(models, rows):
             model_row_dict = dict(model_row)
@@ -641,7 +641,7 @@ class RelatedMapping(object):
                 pk = (pk,)
             key = (model, tuple(model_row_dict[f] for f in pk))
             if key not in state:
-                state[key] = result.gateway.set_data(result.gateway.model(), model_row)
+                state[key] = model._gateway.create_instance(model_row)
             objs.append(state[key])
         return objs
 
@@ -667,7 +667,7 @@ class RelatedMapping(object):
         for rel in relations:
             models.append(rel.rel_model)
         rows = self.get_model_rows(models, row)
-        objs = self.get_objects(result, models, rows, state)
+        objs = self.get_objects(models, rows, state)
         self.build_relations(relations, objs)
         return objs[0]
 
