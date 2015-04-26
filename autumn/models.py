@@ -28,7 +28,7 @@ class ModelNotRegistered(Exception):
 class ModelRegistry(dict):
 
     def add(self, model):
-        self[model._meta.name] = model
+        self[model._gateway.name] = model
 
     def __getitem__(self, model_name):
         try:
@@ -365,7 +365,7 @@ class ModelBase(type):
                     pass
         else:
             NewGateway = new_cls.gateway_class
-        new_cls._meta = NewGateway(new_cls)
+        new_cls._meta = new_cls._gateway = NewGateway(new_cls)
 
         for key, rel in new_cls.__dict__.items():
             if isinstance(rel, Relation):
@@ -374,14 +374,14 @@ class ModelBase(type):
         registry.add(new_cls)
 
         for m in registry.values():
-            for key, rel in m._meta.relations.items():
+            for key, rel in m._gateway.relations.items():
                 try:
                     if hasattr(rel, 'add_related') and rel.rel_model is new_cls:
                         rel.add_related()
                 except ModelNotRegistered:
                     pass
 
-        signals.send_signal(signal='class_prepared', sender=new_cls, using=new_cls._meta.using)
+        signals.send_signal(signal='class_prepared', sender=new_cls, using=new_cls._gateway.using)
         return new_cls
 
 
@@ -393,9 +393,9 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def __init__(self, *args, **kwargs):
         """Allows setting of fields using kwargs"""
-        self._send_signal(signal='pre_init', args=args, kwargs=kwargs, using=self._meta.using)
+        self._send_signal(signal='pre_init', args=args, kwargs=kwargs, using=self._gateway.using)
         self._cache = {}
-        pk = self._meta.pk
+        pk = self._gateway.pk
         if type(pk) == tuple:
             for k in pk:
                 self.__dict__[k] = None
@@ -403,11 +403,11 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
             self.__dict__[pk] = None
         if args:
             for i, arg in enumerate(args):
-                setattr(self, self._meta.fields.keys()[i], arg)
+                setattr(self, self._gateway.fields.keys()[i], arg)
         if kwargs:
             for k, v in kwargs.items():
                 setattr(self, k, v)
-        self._send_signal(signal='post_init', using=self._meta.using)
+        self._send_signal(signal='post_init', using=self._gateway.using)
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self._get_pk() == other._get_pk()
@@ -420,25 +420,25 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def _get_pk(self):
         """Sets the current value of the primary key"""
-        pk = self._meta.pk
+        pk = self._gateway.pk
         if type(pk) == tuple:
             return tuple(getattr(self, k, None) for k in pk)
         return getattr(self, pk, None)
 
     def _set_pk(self, value):
         """Sets the primary key"""
-        pk = self._meta.pk
+        pk = self._gateway.pk
         if type(pk) == tuple:
             for k, v in zip(pk, value):
                 setattr(self, k, v)
         else:
-            setattr(self, self._meta.pk, value)
+            setattr(self, self._gateway.pk, value)
 
     pk = property(_get_pk, _set_pk)
 
     def _set_defaults(self):
         """Sets attribute defaults based on ``defaults`` dict"""
-        for name, field in self._meta.fields.items():
+        for name, field in self._gateway.fields.items():
             if not hasattr(field, 'default'):
                 continue
             default = field.default
@@ -454,7 +454,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         """Tests all ``validations``"""
         self._set_defaults()
         errors = {}
-        for name, field in self._meta.fields.items():
+        for name, field in self._gateway.fields.items():
             if name in exclude or (fields and name not in fields):
                 continue
             if not hasattr(field, 'validators'):
@@ -477,7 +477,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
     def _set_data(self, data):
         for column, value in data:
             try:
-                attr = self._meta.columns[column].name
+                attr = self._gateway.columns[column].name
             except KeyError:
                 attr = column
             self.__dict__[attr] = value
@@ -487,13 +487,13 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def _get_data(self, fields=frozenset(), exclude=frozenset()):
         return tuple((f.column, getattr(self, f.name, None))
-                     for f in self._meta.fields.values()
+                     for f in self._gateway.fields.values()
                      if not (f.name in exclude or (fields and f.name not in fields)))
 
     def save(self, using=None):
         """Sets defaults, validates and inserts into or updates database"""
         self._set_defaults()
-        using = using or self._meta.using
+        using = using or self._gateway.using
         self._send_signal(signal='pre_save', using=using)
         result = self._insert(using) if self._new_record else self._update(using)
         self._send_signal(signal='post_save', created=self._new_record, using=using)
@@ -503,7 +503,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
     def _insert(self, using):
         """Uses SQL INSERT to create new record"""
         auto_pk = self._get_pk() is None
-        exclude = set([self._meta.pk]) if auto_pk else set()
+        exclude = set([self._gateway.pk]) if auto_pk else set()
         cursor = type(self).qs.using(using).insert(dict(self._get_data(exclude=exclude)))
         if auto_pk:
             self._set_pk(type(self).qs.result.db.last_insert_id(cursor))
@@ -511,7 +511,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def _update(self, using):
         """Uses SQL UPDATE to update record"""
-        pk = (self)._meta.pk
+        pk = (self)._gateway.pk
         if type(pk) == tuple:
             cond = reduce(operator.and_, (getattr(type(self).s, k) == v for k, v in zip(pk, self.pk)))
         else:
@@ -522,7 +522,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def delete(self, using=None, visited=None):
         """Deletes record from database"""
-        using = using or self._meta.using
+        using = using or self._gateway.using
 
         if visited is None:
             visited = set()
@@ -531,7 +531,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         visited.add(self)
 
         self._send_signal(signal='pre_delete', using=using)
-        for key, rel in self._meta.relations.items():
+        for key, rel in self._gateway.relations.items():
             if isinstance(rel, OneToMany):
                 for child in getattr(self, key).iterator():
                     rel.on_delete(self, child, rel, visited)
@@ -539,7 +539,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
                 child = getattr(self, key)
                 rel.on_delete(self, child, rel, visited)
 
-        pk = (self)._meta.pk
+        pk = (self)._gateway.pk
         if type(pk) == tuple:
             cond = reduce(operator.and_, (getattr(self.s, k) == v for k, v in zip(pk, self.pk)))
         else:
@@ -557,17 +557,17 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
     @classproperty
     def s(cls):
         # TODO: Use Model class descriptor without setter.
-        return cls._meta.sql_table
+        return cls._gateway.sql_table
 
     @classproperty
     def qs(cls):
-        return cls._meta.query
+        return cls._gateway.query
 
     @classmethod
     def get(cls, _obj_pk=None, **kwargs):
         'Returns QS object'
         if _obj_pk is not None:
-            return cls.get(**{cls._meta.pk: _obj_pk})[0]
+            return cls.get(**{cls._gateway.pk: _obj_pk})[0]
 
         if kwargs:
             qs = cls.qs
@@ -633,7 +633,7 @@ class RelatedMapping(object):
         objs = []
         for model, model_row in zip(models, rows):
             model_row_dict = dict(model_row)
-            pk = model._meta.pk
+            pk = model._gateway.pk
             if type(pk) != tuple:
                 pk = (pk,)
             key = (model, tuple(model_row_dict[f] for f in pk))
@@ -743,7 +743,7 @@ class Relation(object):
     def add_to_class(self, model_class, name):
         self.model = model_class
         self.name = name
-        self.model._meta.relations[name] = self
+        self.model._gateway.relations[name] = self
         setattr(self.model, name, self)
 
     @property
@@ -751,7 +751,7 @@ class Relation(object):
         if isinstance(self.rel_model_or_name, string_types):
             name = self.rel_model_or_name
             if name == 'self':
-                name = self.model._meta.name
+                name = self.model._gateway.name
             return registry[name]
         return self.rel_model_or_name
 
@@ -759,7 +759,7 @@ class Relation(object):
         if isinstance(self._qs, collections.Callable):
             self._qs = self._qs(self)
         elif self._qs is None:
-            self._qs = self.rel_model._meta.query
+            self._qs = self.rel_model._gateway.query
         return self._qs.clone()
 
     def _set_qs(self, val):
@@ -780,11 +780,11 @@ class ForeignKey(Relation):
 
     @property
     def field(self):
-        return self._field or '{0}_id'.format(self.rel_model._meta.db_table.rsplit("_", 1).pop())
+        return self._field or '{0}_id'.format(self.rel_model._gateway.db_table.rsplit("_", 1).pop())
 
     @property
     def rel_field(self):
-        return self._rel_field or self.rel_model._meta.pk
+        return self._rel_field or self.rel_model._gateway.pk
 
     @property
     def rel_name(self):
@@ -800,7 +800,7 @@ class ForeignKey(Relation):
         except ModelNotRegistered:
             return
 
-        if self.rel_name in rel_model._meta.relations:
+        if self.rel_name in rel_model._gateway.relations:
             return
 
         OneToMany(
@@ -829,7 +829,7 @@ class ForeignKey(Relation):
                 raise Exception(
                     ('Value should be an instance of "{0}" ' +
                      'or primary key of related instance.').format(
-                        self.rel_model._meta.name
+                        self.rel_model._gateway.name
                     )
                 )
             instance._cache[self.name] = value
@@ -857,7 +857,7 @@ class OneToOne(ForeignKey):
         except ModelNotRegistered:
             return
 
-        if self.rel_name in rel_model._meta.relations:
+        if self.rel_name in rel_model._gateway.relations:
             return
 
         OneToOne(
@@ -875,11 +875,11 @@ class OneToMany(Relation):
 
     @property
     def field(self):
-        return self._field or self.model._meta.pk
+        return self._field or self.model._gateway.pk
 
     @property
     def rel_field(self):
-        return self._rel_field or '{0}_id'.format(self.model._meta.db_table.rsplit("_", 1).pop())
+        return self._rel_field or '{0}_id'.format(self.model._gateway.db_table.rsplit("_", 1).pop())
 
     @property
     def rel_name(self):
