@@ -160,6 +160,7 @@ class TableGateway(object):
 
         self.declared_fields = self.create_declared_fields(
             getattr(self, 'map', {}),
+            getattr(self, 'defaults', {}),
             getattr(self, 'validations', {}),
             getattr(self, 'declared_fields', {})
         )
@@ -173,11 +174,14 @@ class TableGateway(object):
         self.sql_table = self.create_sql_table()
         self.query = self.create_query()
 
-    def create_declared_fields(self, map, validations, declared_fields):
+    def create_declared_fields(self, map, defaults, validations, declared_fields):
         result = {}
 
         for name, column in map.items():
             result[name] = self.create_field(name, {'column': column}, declared_fields)
+
+        for name, default in defaults.items():
+            result[name] = self.create_field(name, {'default': default}, declared_fields)
 
         for name, validators in validations.items():
             if not isinstance(validators, (list, tuple)):
@@ -434,14 +438,17 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def _set_defaults(self):
         """Sets attribute defaults based on ``defaults`` dict"""
-        for k, v in getattr(self._meta, 'defaults', {}).items():
-            if getattr(self, k, None) is None:
-                if isinstance(v, collections.Callable):
+        for name, field in self._meta.fields.items():
+            if not hasattr(field, 'default'):
+                continue
+            default = field.default
+            if getattr(self, name, None) is None:
+                if isinstance(default, collections.Callable):
                     try:
-                        v(self, k)
+                        default(self, name)
                     except TypeError:
-                        v = v()
-                setattr(self, k, v)
+                        default = default()
+                setattr(self, name, default)
 
     def validate(self, exclude=frozenset(), fields=frozenset()):
         """Tests all ``validations``"""
