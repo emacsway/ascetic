@@ -256,6 +256,7 @@ class TableGateway(object):
             data = dict(data)
         pk = self.pk if type(self.pk) == tuple else (self.pk,)
         cond = reduce(operator.and_, (smartsql.Field(k, self.sql_table) == data.get(k) for k in pk))
+        data = {self.fields[name].column: value for name, value in data.items() if name not in pk}
         return query.where(cond).update(data)
 
 
