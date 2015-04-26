@@ -146,6 +146,7 @@ class TableGateway(object):
 
     pk = 'id'
     using = 'default'
+    abstract = False
     field_factory = Field
     result_factory = TableResult
 
@@ -155,15 +156,19 @@ class TableGateway(object):
         for k, v in kw:
             setattr(self, k, v)
 
-        if db_table:
-            self.db_table = db_table
-
         self.declared_fields = self.create_declared_fields(
             getattr(self, 'map', {}),
             getattr(self, 'defaults', {}),
             getattr(self, 'validations', {}),
             getattr(self, 'declared_fields', {})
         )
+
+        if self.abstract:
+            return
+
+        if db_table:
+            self.db_table = db_table
+
         # fileds and columns can be a descriptor for multilingual mapping.
         self.fields = collections.OrderedDict()
         self.columns = collections.OrderedDict()
@@ -316,6 +321,8 @@ class ModelGatewayMixIn(object):
 
         db_table = getattr(self, 'db_table', None) or self.create_default_db_table(model)
         super(ModelGatewayMixIn, self).__init__(db_table=db_table, **kw)
+        self.clean_model(model)
+        self.inherit()
 
     def create_default_name(self, model):
         return ".".join((model.__module__, model.__name__))
@@ -329,13 +336,25 @@ class ModelGatewayMixIn(object):
     def create_model_declared_fields(self, model):
         declared_fields = {}
         # TODO: FIXME for inheritance
-        for name in dir(self.model):
-            field = getattr(self.model, name, None)
+        for name in model.__dict__:
+            field = getattr(model, name, None)
             if isinstance(field, Field):
                 declared_fields[name] = field
-                delattr(self.model, name)
 
         return declared_fields
+
+    def clean_model(self, model):
+        for name in self.model.__dict__:
+            field = getattr(model, name, None)
+            if isinstance(field, Field):
+                delattr(model, name)
+
+    def inherit(self):
+        for base in self.model.__bases__:  # recursive
+            if hasattr(base, '_gateway'):
+                for name, field in base._gateway.declared_fields.items():
+                    if name not in self.declared_fields:
+                        self.declared_fields[name] = field
 
     def add_field(self, name, field):
         field.model = self.model
@@ -392,10 +411,6 @@ class ModelBase(type):
         if name in ('Model', 'NewBase', ):
             return new_cls
 
-        if getattr(attrs.get('Meta'), 'abstract', None):
-            del new_cls.Meta
-            return new_cls
-
         if hasattr(new_cls, 'Meta'):
             if isinstance(new_cls.Meta, new_cls.gateway_class):
                 NewGateway = new_cls.Meta
@@ -406,6 +421,9 @@ class ModelBase(type):
             NewGateway = new_cls.gateway_class
         new_cls._meta = new_cls._gateway = NewGateway(new_cls)
 
+        # TODO: use dir() instead __dict__ to handle relations in abstract classes,
+        # add templates support for related_name,
+        # support copy.
         for key, rel in new_cls.__dict__.items():
             if isinstance(rel, Relation):
                 rel.add_to_class(new_cls, key)
