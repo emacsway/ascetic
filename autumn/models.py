@@ -353,7 +353,6 @@ class ModelGatewayMixIn(object):
 
     def create_model_declared_fields(self, model):
         declared_fields = {}
-        # TODO: FIXME for inheritance
         for name in model.__dict__:
             field = getattr(model, name, None)
             if isinstance(field, Field):
@@ -611,7 +610,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     @classproperty
     def s(cls):
-        # TODO: Use Model class descriptor without setter.
+        # TODO: Use Model class descriptor without __set__().
         return cls._gateway.sql_table
 
     @classproperty
@@ -856,6 +855,7 @@ class ForeignKey(Relation):
         )
 
     def __get__(self, instance, owner):
+        # TODO: owner is self.model. self.model is useless (do remove it). It cause problems with inheritance.
         if not instance:
             return self
         field = self.field if type(self.field) == tuple else (self.field,)
