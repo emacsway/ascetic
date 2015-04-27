@@ -340,7 +340,7 @@ class ModelGatewayMixIn(object):
         db_table = getattr(self, 'db_table', None) or self.create_default_db_table(model)
         super(ModelGatewayMixIn, self).__init__(db_table=db_table, **kw)
         self.clean_model(model)
-        self.inherit()
+        self.inherit(self, (base for base in self.model.__bases__ if hasattr(base, '_gateway')))  # recursive
 
     def create_default_name(self, model):
         return ".".join((model.__module__, model.__name__))
@@ -366,12 +366,11 @@ class ModelGatewayMixIn(object):
             if isinstance(field, Field):
                 delattr(model, name)
 
-    def inherit(self):
-        for base in self.model.__bases__:  # recursive
-            if hasattr(base, '_gateway'):
-                for name, field in base._gateway.declared_fields.items():
-                    if name not in self.declared_fields:
-                        self.declared_fields[name] = field
+    def inherit(self, successor, parents):
+        for base in parents:  # recursive
+            for name, field in base.declared_fields.items():
+                if name not in successor.declared_fields:
+                    successor.declared_fields[name] = field
 
     def add_field(self, name, field):
         field.model = self.model
