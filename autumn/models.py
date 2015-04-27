@@ -59,7 +59,7 @@ class TableResult(smartsql.Result):
         self.is_base(True)
         self._mapping = default_mapping
         self.gateway = gateway
-        self._using = gateway.using
+        self._using = gateway._using
 
     def __len__(self):
         """Returns length or list."""
@@ -118,10 +118,11 @@ class TableResult(smartsql.Result):
         for row in cursor.fetchall():
             yield self._mapping(self, zip(fields, row), state)
 
-    def using(self, alias=None):
+    def using(self, alias=False):
         if alias is None:
             return self._using
-        self._using = alias
+        if alias is not False:
+            self._using = alias
         return self
 
     def is_base(self, value=None):
@@ -192,16 +193,14 @@ class TableGateway(object):
     """Model options"""
 
     pk = 'id'
-    using = 'default'
+    default_using = 'default'
+    _using = 'default'
     abstract = False
     field_factory = Field
     result_factory = TableResult
 
-    def __init__(self, db_table=None, **kw):
+    def __init__(self, db_table=None):
         """Instance constructor"""
-
-        for k, v in kw:
-            setattr(self, k, v)
 
         self.declared_fields = self.create_declared_fields(
             getattr(self, 'map', {}),
@@ -213,6 +212,8 @@ class TableGateway(object):
         if self.abstract:
             return
 
+        self._using = self.default_using
+
         if db_table:
             self.db_table = db_table
 
@@ -220,7 +221,7 @@ class TableGateway(object):
         self.fields = collections.OrderedDict()
         self.columns = collections.OrderedDict()
 
-        for name, field in self.create_fields(self.read_columns(self.db_table, self.using), self.declared_fields).items():
+        for name, field in self.create_fields(self.read_columns(self.db_table, self._using), self.declared_fields).items():
             self.add_field(name, field)
 
         self.sql_table = self.create_sql_table()
@@ -284,14 +285,23 @@ class TableGateway(object):
     def create_query(self):
         return smartsql.QS(self.sql_table, result=self.result_factory(self)).fields(self.get_sql_fields())
 
+    def using(self, alias=False):
+        if alias is False:
+            return self._using
+        if alias is None or alias == self._using:
+            return self
+        c = copy.copy(self)
+        c._using = alias
+        c.query = c.query.using(c._using)
+        return c
+
     def get_sql_fields(self, prefix=None):
         """Returns field list."""
         return [smartsql.Field(f.column, prefix if prefix is not None else self.sql_table) for f in self.fields.values()]
 
-    def insert(self, data, using=None):
+    def insert(self, data):
         """Inserts record"""
-        using = using or self.using
-        query = self.query.using(using)
+        query = self.query
         if type(data) == tuple:
             data = dict(data)
         pk = self.pk if type(self.pk) == tuple else (self.pk,)
@@ -301,19 +311,17 @@ class TableGateway(object):
         if auto_pk:
             return query.result.db.last_insert_id(cursor)
 
-    def update(self, data, cond, using=None):
+    def update(self, data, cond):
         """Updates record"""
-        using = using or self.using
-        query = self.query.using(using)
+        query = self.query
         if type(data) == tuple:
             data = dict(data)
         data = {self.fields[name].column: value for name, value in data.items()}
         return query.where(cond).update(data)
 
-    def delete(self, cond, using=None):
+    def delete(self, cond):
         """Deletes record"""
-        using = using or self.using
-        query = self.query.using(using)
+        query = self.query
         return query.where(cond).delete()
 
 
@@ -435,30 +443,28 @@ class ModelGatewayMixIn(object):
         if errors:
             raise ValidationError(errors)
 
-    def save(self, obj, using=None):
+    def save(self, obj):
         """Sets defaults, validates and inserts into or updates database"""
         self.set_defaults(obj)
         self.validate(obj, fields=self.get_changed(obj))
-        using = using or self.using
-        self.send_signal(obj, signal='pre_save', using=using)
-        result = self.insert(obj, using) if obj._new_record else self.update(obj, using)
-        self.send_signal(obj, signal='post_save', created=obj._new_record, using=using)
+        self.send_signal(obj, signal='pre_save', using=self._using)
+        result = self.insert(obj) if obj._new_record else self.update(obj)
+        self.send_signal(obj, signal='post_save', created=obj._new_record, using=self._using)
         obj._new_record = False
         return result
 
-    def insert(self, obj, using=None):
-        pk = super(ModelGatewayMixIn, self).insert(self.get_data(obj), using)
+    def insert(self, obj):
+        pk = super(ModelGatewayMixIn, self).insert(self.get_data(obj))
         if pk:
             obj.pk = pk
 
-    def update(self, obj, using=None):
+    def update(self, obj):
         pk = self.pk if type(self.pk) == tuple else (self.pk,)
         cond = reduce(operator.and_, (smartsql.Field(self.fields[k].column, self.sql_table) == getattr(obj, k) for k in pk))
-        return super(ModelGatewayMixIn, self).update(self.get_data(obj, fields=self.get_changed(obj)), cond, using)
+        return super(ModelGatewayMixIn, self).update(self.get_data(obj, fields=self.get_changed(obj)), cond)
 
-    def delete(self, obj, using=None, visited=None):
+    def delete(self, obj, visited=None):
         """Deletes record from database"""
-        using = using or self.using
 
         if visited is None:
             visited = set()
@@ -466,19 +472,19 @@ class ModelGatewayMixIn(object):
             return False
         visited.add(self)
 
-        self.send_signal(obj, signal='pre_delete', using=using)
+        self.send_signal(obj, signal='pre_delete', using=self._using)
         for key, rel in self.relations.items():
             if isinstance(rel, OneToMany):
                 for child in getattr(obj, key).iterator():
-                    rel.on_delete(obj, child, rel, using, visited)
+                    rel.on_delete(obj, child, rel, self._using, visited)
             elif isinstance(rel, OneToOne):
                 child = getattr(obj, key)
-                rel.on_delete(obj, child, rel, using, visited)
+                rel.on_delete(obj, child, rel, self._using, visited)
 
         pk = self.pk if type(self.pk) == tuple else (self.pk,)
         cond = reduce(operator.and_, (smartsql.Field(self.fields[k].column, self.sql_table) == getattr(obj, k) for k in pk))
-        super(ModelGatewayMixIn, self).delete(cond, using)
-        self.send_signal(obj, signal='post_delete', using=using)
+        super(ModelGatewayMixIn, self).delete(cond)
+        self.send_signal(obj, signal='post_delete', using=self._using)
         return True
 
     def get(self, _obj_pk=None, **kwargs):
@@ -539,7 +545,7 @@ class ModelBase(type):
                 except ModelNotRegistered:
                     pass
 
-        signals.send_signal(signal='class_prepared', sender=new_cls, using=new_cls._gateway.using)
+        signals.send_signal(signal='class_prepared', sender=new_cls, using=new_cls._gateway._using)
         return new_cls
 
 
@@ -551,7 +557,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def __init__(self, *args, **kwargs):
         """Allows setting of fields using kwargs"""
-        self._gateway.send_signal(self, signal='pre_init', args=args, kwargs=kwargs, using=self._gateway.using)
+        self._gateway.send_signal(self, signal='pre_init', args=args, kwargs=kwargs, using=self._gateway._using)
         self._cache = {}
         pk = self._gateway.pk
         if type(pk) == tuple:
@@ -565,7 +571,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         if kwargs:
             for k, v in kwargs.items():
                 setattr(self, k, v)
-        self._gateway.send_signal(self, signal='post_init', using=self._gateway.using)
+        self._gateway.send_signal(self, signal='post_init', using=self._gateway._using)
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self._get_pk() == other._get_pk()
@@ -598,10 +604,10 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         return self._gateway.validate(self, fields=fields, exclude=exclude)
 
     def save(self, using=None):
-        return self._gateway.save(self, using)
+        return self._gateway.using(using).save(self)
 
     def delete(self, using=None, visited=None):
-        return self._gateway.delete(self, using)
+        return self._gateway.using(using).delete(self)
 
     @classproperty
     def s(cls):
@@ -752,12 +758,12 @@ class Table(smartsql.Table):
 
 
 def cascade(parent, child, parent_rel, using, visited):
-    child._gateway.delete(child, using, visited=visited)
+    child._gateway.using(using).delete(child, visited=visited)
 
 
 def set_null(parent, child, parent_rel, using, visited):
     setattr(child, parent_rel.rel_field, None)
-    child._gateway.save(child, using)
+    child._gateway.using(using).save(child)
 
 
 def do_nothing(parent, child, parent_rel, using, visited):
