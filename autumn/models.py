@@ -48,7 +48,7 @@ class Field(object):
 class TableResult(smartsql.Result):
     """Result adapted for table."""
 
-    gateway = None
+    _gateway = None
     _raw = None
     _cache = None
     _using = 'default'
@@ -58,7 +58,7 @@ class TableResult(smartsql.Result):
         self._select_related = {}
         self.is_base(True)
         self._mapping = default_mapping
-        self.gateway = gateway
+        self._gateway = gateway
         self._using = gateway._using
 
     def __len__(self):
@@ -157,12 +157,12 @@ class ModelResultMixIn(object):
         else:
             self._prefetch = copy.copy(self._prefetch)
             self._prefetch.update(kw)
-            self._prefetch.update({i: self.gateway.relations[i].qs for i in a})
+            self._prefetch.update({i: self._gateway.relations[i].qs for i in a})
         return self
 
     def populate_prefetch(self):
         for key, qs in self._prefetch.items():
-            rel = self.gateway.relations[key]
+            rel = self._gateway.relations[key]
             # recursive handle prefetch
             field = rel.field if type(rel.field) == tuple else (rel.field,)
             rel_field = rel.rel_field if type(rel.rel_field) == tuple else (rel.rel_field,)
@@ -656,7 +656,7 @@ def suffix_mapping(result, row, state):
 
 def default_mapping(result, row, state):
     try:
-        return result.gateway.create_instance(row)
+        return result._gateway.create_instance(row)
     except AttributeError:
         dict(row)
 
@@ -719,15 +719,15 @@ class Table(smartsql.Table):
     def __init__(self, gateway, qs=None, *args, **kwargs):
         """Constructor"""
         super(Table, self).__init__(gateway.db_table, *args, **kwargs)
-        self.gateway = gateway
+        self._gateway = gateway
 
     @property
     def qs(self):
-        return self.gateway.query
+        return self._gateway.query
 
     def get_fields(self, prefix=None):
         """Returns field list."""
-        return self.gateway.get_sql_fields()
+        return self._gateway.get_sql_fields()
 
     def __getattr__(self, name):
         """Added some specific functional."""
@@ -740,17 +740,17 @@ class Table(smartsql.Table):
         # field = result['field']
 
         if field == 'pk':
-            field = self.gateway.pk
-        elif isinstance(self.gateway.relations.get(field, None), ForeignKey):
-            field = self.gateway.relations.get(field).field
+            field = self._gateway.pk
+        elif isinstance(self._gateway.relations.get(field, None), ForeignKey):
+            field = self._gateway.relations.get(field).field
 
         if type(field) == tuple:
             if len(parts) > 1:
                 raise Exception("Can't set single alias for multiple fields of composite key {}.{}".format(self.model, name))
             return smartsql.CompositeExpr(*(self.__getattr__(k) for k in field))
 
-        if field in self.gateway.fields:
-            field = self.gateway.fields[field].column
+        if field in self._gateway.fields:
+            field = self._gateway.fields[field].column
         parts[0] = field
         return super(Table, self).__getattr__(smartsql.LOOKUP_SEP.join(parts))
 
