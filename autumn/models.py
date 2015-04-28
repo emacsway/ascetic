@@ -655,6 +655,9 @@ def suffix_mapping(result, row, state):
 
 
 def default_mapping(result, row, state):
+    columns = result._gateway.columns
+    row = tuple((columns[key].name if key in columns else key, value)
+                for key, value in row)
     try:
         return result._gateway.create_instance(row)
     except AttributeError:
