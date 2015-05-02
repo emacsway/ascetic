@@ -664,7 +664,7 @@ def default_mapping(result, row, state):
         dict(row)
 
 
-class RelatedMapping(object):
+class SelectRelatedMapping(object):
 
     def get_model_rows(self, models, row):
         rows = []
@@ -678,6 +678,9 @@ class RelatedMapping(object):
     def get_objects(self, models, rows, state):
         objs = []
         for model, model_row in zip(models, rows):
+            columns = model._gateway.columns
+            model_row = tuple((columns[key].name if key in columns else key, value)
+                              for key, value in model_row)
             model_row_dict = dict(model_row)
             pk = model._gateway.pk
             if type(pk) != tuple:
