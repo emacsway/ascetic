@@ -386,7 +386,7 @@ class ModelGatewayMixIn(object):
         super(ModelGatewayMixIn, self).add_field(name, field)
 
     def create_sql_table(self):
-        return Table(self)
+        return SqlTable(self)
 
     def create_instance(self, data):
         data = dict(data)
@@ -725,13 +725,13 @@ class SelectRelatedMapping(object):
         return objs[0]
 
 
-@cr
-class Table(smartsql.Table):
+@cr('Table')
+class SqlTable(smartsql.Table):
     """Table class"""
 
     def __init__(self, gateway, qs=None, *args, **kwargs):
         """Constructor"""
-        super(Table, self).__init__(gateway.db_table, *args, **kwargs)
+        super(SqlTable, self).__init__(gateway.db_table, *args, **kwargs)
         self._gateway = gateway
 
     @property
@@ -765,7 +765,7 @@ class Table(smartsql.Table):
         if field in self._gateway.fields:
             field = self._gateway.fields[field].column
         parts[0] = field
-        return super(Table, self).__getattr__(smartsql.LOOKUP_SEP.join(parts))
+        return super(SqlTable, self).__getattr__(smartsql.LOOKUP_SEP.join(parts))
 
 
 def cascade(parent, child, parent_rel, using, visited):
