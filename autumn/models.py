@@ -185,7 +185,7 @@ class ModelResultMixIn(object):
                 setattr(obj, "{}_prefetch".format(key), val)
 
 
-class ModelResult(ModelResultMixIn, TableResult):
+class Result(ModelResultMixIn, TableResult):
     pass
 
 
@@ -506,13 +506,13 @@ class ModelGatewayMixIn(object):
             return qs[0]
 
 
-class ModelGateway(ModelGatewayMixIn, TableGateway):
-    result_factory = ModelResult
+class Gateway(ModelGatewayMixIn, TableGateway):
+    result_factory = Result
 
 
 class ModelBase(type):
     """Metaclass for Model"""
-    gateway_class = ModelGateway
+    gateway_class = Gateway
 
     def __new__(cls, name, bases, attrs):
 
