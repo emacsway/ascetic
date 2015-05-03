@@ -285,7 +285,7 @@ class TableGateway(object):
 
     def add_field(self, name, field):
         field.name = name
-        field.model = self.model
+        field._gateway = self
         self.fields[name] = field
         self.columns[field.column] = field
 
@@ -380,10 +380,6 @@ class ModelGatewayMixIn(object):
             for name, field in base.declared_fields.items():
                 if name not in successor.declared_fields:
                     successor.declared_fields[name] = field
-
-    def add_field(self, name, field):
-        field.model = self.model
-        super(ModelGatewayMixIn, self).add_field(name, field)
 
     def create_sql_table(self):
         return SqlTable(self)
