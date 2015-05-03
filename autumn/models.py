@@ -45,7 +45,7 @@ class Field(object):
             setattr(self, k, v)
 
 
-class TableResult(smartsql.Result):
+class Result(smartsql.Result):
     """Result adapted for table."""
 
     _gateway = None
@@ -76,9 +76,9 @@ class TableResult(smartsql.Result):
         if self._cache:
             return self._cache[key]
         if isinstance(key, integer_types):
-            self._query = super(TableResult, self).__getitem__(key)
+            self._query = super(Result, self).__getitem__(key)
             return list(self)[0]
-        return super(TableResult, self).__getitem__(key)
+        return super(Result, self).__getitem__(key)
 
     def execute(self):
         """Implementation of query execution"""
@@ -141,15 +141,6 @@ class TableResult(smartsql.Result):
         c._mapping = mapping
         return c
 
-
-class ModelResultMixIn(object):
-    """Result adapted for model."""
-
-    def fill_cache(self):
-        self = super(ModelResultMixIn, self).fill_cache()
-        self.populate_prefetch()
-        return self
-
     def prefetch(self, *a, **kw):
         """Prefetch relations"""
         if a and not a[0]:  # .prefetch(False)
@@ -169,7 +160,7 @@ class ModelResultMixIn(object):
 
             cond = reduce(operator.or_,
                           (reduce(operator.and_,
-                                  ((smartsql.Field(rf, rel.rel_model.s) == getattr(obj, f))
+                                  ((rel.rel_model.s.__getattr__(rf) == getattr(obj, f))
                                    for f, rf in zip(field, rel_field)))
                            for obj in self._cache))
             rows = list(qs.where(cond))
@@ -185,60 +176,71 @@ class ModelResultMixIn(object):
                 setattr(obj, "{}_prefetch".format(key), val)
 
 
-class Result(ModelResultMixIn, TableResult):
-    pass
-
-
-class TableGateway(object):
-    """Model options"""
+class Gateway(object):
+    """Gateway"""
 
     pk = 'id'
     default_using = 'default'
     _using = 'default'
     abstract = False
     field_factory = Field
-    result_factory = TableResult
+    result_factory = Result
 
-    def __init__(self, db_table=None):
+    def __init__(self, model):
         """Instance constructor"""
+        self.model = model
 
         if not hasattr(self, 'name'):
-            self.name = self.create_default_name()
+            self.name = self._create_default_name(model)
 
         registry.add(self.name, self)
 
         self.relations = {}
-        self.declared_fields = self.create_declared_fields(
+        self.declared_fields = self._create_declared_fields(
+            model,
             getattr(self, 'map', {}),
             getattr(self, 'defaults', {}),
             getattr(self, 'validations', {}),
             getattr(self, 'declared_fields', {})
         )
 
+        self._clean_model(model)
+        self._inherit(self, (base for base in self.model.__bases__ if hasattr(base, '_gateway')))  # recursive
+
         if self.abstract:
             return
 
         self._using = self.default_using
 
-        if db_table:
-            self.db_table = db_table
+        if not hasattr(self, 'db_table'):
+            self.db_table = self._create_default_db_table(model)
 
         # fileds and columns can be a descriptor for multilingual mapping.
         self.fields = collections.OrderedDict()
         self.columns = collections.OrderedDict()
 
-        for name, field in self.create_fields(self.read_columns(self.db_table, self._using), self.declared_fields).items():
+        for name, field in self.create_fields(self._read_columns(self.db_table, self._using), self.declared_fields).items():
             self.add_field(name, field)
 
-        self.sql_table = self.create_sql_table()
-        self.query = self.create_query()
+        self.sql_table = self._create_sql_table()
+        self.query = self._create_query()
 
-    def create_default_name(self):
-        cls = self.__class__
-        return ".".join((cls.__module__, cls.__name__))
+    def _create_default_name(self, model):
+        return ".".join((model.__module__, model.__name__))
 
-    def create_declared_fields(self, map, defaults, validations, declared_fields):
+    def _create_default_db_table(self, model):
+        return "_".join([
+            re.sub(r"[^a-z0-9]", "", i.lower())
+            for i in (self.model.__module__.split(".") + [self.model.__name__, ])
+        ])
+
+    def _create_declared_fields(self, model, map, defaults, validations, declared_fields):
         result = {}
+
+        for name in model.__dict__:
+            field = getattr(model, name, None)
+            if isinstance(field, Field):
+                result[name] = field
 
         for name, column in map.items():
             result[name] = self.create_field(name, {'column': column}, declared_fields)
@@ -253,7 +255,7 @@ class TableGateway(object):
 
         return result
 
-    def read_columns(self, db_table, using):
+    def _read_columns(self, db_table, using):
         db = get_db(using)
         schema = db.describe_table(db_table)
         q = db.execute('SELECT * FROM {0} LIMIT 1'.format(db.qn(self.db_table)))
@@ -289,11 +291,27 @@ class TableGateway(object):
         self.fields[name] = field
         self.columns[field.column] = field
 
-    def create_sql_table(self):
-        return smartsql.Table(self.db_table)
+    def _create_sql_table(self):
+        return Table(self)
 
-    def create_query(self):
+    def _create_query(self):
         return smartsql.QS(self.sql_table, result=self.result_factory(self)).fields(self.get_sql_fields())
+
+    def get_sql_fields(self, prefix=None):
+        """Returns field list."""
+        return [smartsql.Field(f.column, prefix if prefix is not None else self.sql_table) for f in self.fields.values()]
+
+    def _clean_model(self, model):
+        for name in self.model.__dict__:
+            field = getattr(model, name, None)
+            if isinstance(field, Field):
+                delattr(model, name)
+
+    def _inherit(self, successor, parents):
+        for base in parents:  # recursive
+            for name, field in base.declared_fields.items():
+                if name not in successor.declared_fields:
+                    successor.declared_fields[name] = field
 
     def using(self, alias=False):
         if alias is False:
@@ -304,85 +322,6 @@ class TableGateway(object):
         c._using = alias
         c.query = c.query.using(c._using)
         return c
-
-    def get_sql_fields(self, prefix=None):
-        """Returns field list."""
-        return [smartsql.Field(f.column, prefix if prefix is not None else self.sql_table) for f in self.fields.values()]
-
-    def insert(self, data):
-        """Inserts record"""
-        query = self.query
-        if type(data) == tuple:
-            data = dict(data)
-        pk = self.pk if type(self.pk) == tuple else (self.pk,)
-        auto_pk = not all(data.get(k) for k in pk)
-        data = {self.fields[name].column: value for name, value in data.items() if not auto_pk or name not in pk}
-        cursor = query.insert(data)
-        if auto_pk:
-            return query.result.db.last_insert_id(cursor)
-
-    def update(self, data, cond):
-        """Updates record"""
-        query = self.query
-        if type(data) == tuple:
-            data = dict(data)
-        data = {self.fields[name].column: value for name, value in data.items()}
-        return query.where(cond).update(data)
-
-    def delete(self, cond):
-        """Deletes record"""
-        query = self.query
-        return query.where(cond).delete()
-
-
-class ModelGatewayMixIn(object):
-
-    def __init__(self, model, **kw):
-        """Instance constructor"""
-        self.model = model
-
-        if not hasattr(self, 'name') and self.__class__.__name__ == 'NewGateway':
-            self.name = self.create_model_default_name(model)
-
-        self.declared_fields = self.create_model_declared_fields(model)
-
-        db_table = getattr(self, 'db_table', None) or self.create_default_db_table(model)
-        super(ModelGatewayMixIn, self).__init__(db_table=db_table, **kw)
-        self.clean_model(model)
-        self.inherit(self, (base for base in self.model.__bases__ if hasattr(base, '_gateway')))  # recursive
-
-    def create_model_default_name(self, model):
-        return ".".join((model.__module__, model.__name__))
-
-    def create_model_default_db_table(self, model):
-        return "_".join([
-            re.sub(r"[^a-z0-9]", "", i.lower())
-            for i in (self.model.__module__.split(".") + [self.model.__name__, ])
-        ])
-
-    def create_model_declared_fields(self, model):
-        declared_fields = {}
-        for name in model.__dict__:
-            field = getattr(model, name, None)
-            if isinstance(field, Field):
-                declared_fields[name] = field
-
-        return declared_fields
-
-    def clean_model(self, model):
-        for name in self.model.__dict__:
-            field = getattr(model, name, None)
-            if isinstance(field, Field):
-                delattr(model, name)
-
-    def inherit(self, successor, parents):
-        for base in parents:  # recursive
-            for name, field in base.declared_fields.items():
-                if name not in successor.declared_fields:
-                    successor.declared_fields[name] = field
-
-    def create_sql_table(self):
-        return SqlTable(self)
 
     def create_instance(self, data):
         data = dict(data)
@@ -451,20 +390,28 @@ class ModelGatewayMixIn(object):
         self.set_defaults(obj)
         self.validate(obj, fields=self.get_changed(obj))
         self.send_signal(obj, signal='pre_save', using=self._using)
-        result = self.insert(obj) if obj._new_record else self.update(obj)
+        result = self._insert(obj) if obj._new_record else self._update(obj)
         self.send_signal(obj, signal='post_save', created=obj._new_record, using=self._using)
+        obj._original_data = self.get_data(obj)
         obj._new_record = False
         return result
 
-    def insert(self, obj):
-        pk = super(ModelGatewayMixIn, self).insert(self.get_data(obj))
-        if pk:
-            obj.pk = pk
+    def _insert(self, obj):
+        query = self.query
+        data = dict(self.get_data(obj))
+        pk = self.pk if type(self.pk) == tuple else (self.pk,)
+        auto_pk = not all(data.get(k) for k in pk)
+        data = {self.fields[name].column: value for name, value in data.items() if not auto_pk or name not in pk}
+        cursor = query.insert(data)
+        if auto_pk:
+            obj.pk = query.result.db.last_insert_id(cursor)
 
-    def update(self, obj):
+    def _update(self, obj):
         pk = self.pk if type(self.pk) == tuple else (self.pk,)
         cond = reduce(operator.and_, (smartsql.Field(self.fields[k].column, self.sql_table) == getattr(obj, k) for k in pk))
-        return super(ModelGatewayMixIn, self).update(self.get_data(obj, fields=self.get_changed(obj)), cond)
+        data = self.get_data(obj, fields=self.get_changed(obj))
+        data = {self.fields[name].column: value for name, value in data}
+        self.query.where(cond).update(data)
 
     def delete(self, obj, visited=None):
         """Deletes record from database"""
@@ -486,7 +433,7 @@ class ModelGatewayMixIn(object):
 
         pk = self.pk if type(self.pk) == tuple else (self.pk,)
         cond = reduce(operator.and_, (smartsql.Field(self.fields[k].column, self.sql_table) == getattr(obj, k) for k in pk))
-        super(ModelGatewayMixIn, self).delete(cond)
+        self.query.where(cond).delete()
         self.send_signal(obj, signal='post_delete', using=self._using)
         return True
 
@@ -504,10 +451,6 @@ class ModelGatewayMixIn(object):
             for k, v in kwargs.items():
                 qs = qs.where(smartsql.Field(self.fields[k].column, self.sql_table) == v)
             return qs[0]
-
-
-class Gateway(ModelGatewayMixIn, TableGateway):
-    result_factory = Result
 
 
 class ModelBase(type):
@@ -721,13 +664,13 @@ class SelectRelatedMapping(object):
         return objs[0]
 
 
-@cr('Table')
-class SqlTable(smartsql.Table):
+@cr
+class Table(smartsql.Table):
     """Table class"""
 
     def __init__(self, gateway, qs=None, *args, **kwargs):
         """Constructor"""
-        super(SqlTable, self).__init__(gateway.db_table, *args, **kwargs)
+        super(Table, self).__init__(gateway.db_table, *args, **kwargs)
         self._gateway = gateway
 
     @property
@@ -761,7 +704,7 @@ class SqlTable(smartsql.Table):
         if field in self._gateway.fields:
             field = self._gateway.fields[field].column
         parts[0] = field
-        return super(SqlTable, self).__getattr__(smartsql.LOOKUP_SEP.join(parts))
+        return super(Table, self).__getattr__(smartsql.LOOKUP_SEP.join(parts))
 
 
 def cascade(parent, child, parent_rel, using, visited):
@@ -822,8 +765,8 @@ class Relation(object):
     def filter(self, *a, **kw):
         qs = self.qs
         t = self.rel_model.s
-        for fn, param in kw.items():
-            f = smartsql.Field(fn, t)
+        for name, param in kw.items():
+            f = t.__getattr__(name)
             qs = qs.where(f == param)
         return qs
 
