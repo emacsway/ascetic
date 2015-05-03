@@ -27,12 +27,12 @@ class ModelNotRegistered(Exception):
 
 class ModelRegistry(dict):
 
-    def add(self, model):
-        self[model._gateway.name] = model
+    def add(self, name, gateway):
+        self[name] = gateway
 
-    def __getitem__(self, model_name):
+    def __getitem__(self, name):
         try:
-            return self[model_name]
+            return self[name]
         except KeyError:
             raise ModelNotRegistered
 
@@ -202,6 +202,12 @@ class TableGateway(object):
     def __init__(self, db_table=None):
         """Instance constructor"""
 
+        if not hasattr(self, 'name'):
+            self.name = self.create_default_name()
+
+        registry.add(self.name, self)
+
+        self.relations = {}
         self.declared_fields = self.create_declared_fields(
             getattr(self, 'map', {}),
             getattr(self, 'defaults', {}),
@@ -226,6 +232,10 @@ class TableGateway(object):
 
         self.sql_table = self.create_sql_table()
         self.query = self.create_query()
+
+    def create_default_name(self):
+        cls = self.__class__
+        return ".".join((cls.__module__, cls.__name__))
 
     def create_declared_fields(self, map, defaults, validations, declared_fields):
         result = {}
@@ -330,10 +340,9 @@ class ModelGatewayMixIn(object):
     def __init__(self, model, **kw):
         """Instance constructor"""
         self.model = model
-        self.relations = {}
 
-        if not hasattr(self, 'name'):
-            self.name = self.create_default_name(model)
+        if not hasattr(self, 'name') and self.__class__.__name__ == 'NewGateway':
+            self.name = self.create_model_default_name(model)
 
         self.declared_fields = self.create_model_declared_fields(model)
 
@@ -342,10 +351,10 @@ class ModelGatewayMixIn(object):
         self.clean_model(model)
         self.inherit(self, (base for base in self.model.__bases__ if hasattr(base, '_gateway')))  # recursive
 
-    def create_default_name(self, model):
+    def create_model_default_name(self, model):
         return ".".join((model.__module__, model.__name__))
 
-    def create_default_db_table(self, model):
+    def create_model_default_db_table(self, model):
         return "_".join([
             re.sub(r"[^a-z0-9]", "", i.lower())
             for i in (self.model.__module__.split(".") + [self.model.__name__, ])
@@ -533,10 +542,8 @@ class ModelBase(type):
             if isinstance(rel, Relation):
                 rel.add_to_class(new_cls, key)
 
-        registry.add(new_cls)
-
-        for m in registry.values():
-            for key, rel in m._gateway.relations.items():
+        for gateway in registry.values():
+            for key, rel in gateway.relations.items():
                 try:
                     if hasattr(rel, 'add_related') and rel.rel_model is new_cls:
                         rel.add_related()
@@ -801,7 +808,7 @@ class Relation(object):
             name = self.rel_model_or_name
             if name == 'self':
                 name = self.model._gateway.name
-            return registry[name]
+            return registry[name].model
         return self.rel_model_or_name
 
     def _get_qs(self):
