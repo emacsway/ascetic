@@ -27,8 +27,8 @@ class ModelNotRegistered(Exception):
 
 class ModelRegistry(dict):
 
-    def add(self, name, gateway):
-        self[name] = gateway
+    def add(self, name, model):
+        self[name] = model
 
     def __getitem__(self, name):
         try:
@@ -193,8 +193,7 @@ class Gateway(object):
         if not hasattr(self, 'name'):
             self.name = self._create_default_name(model)
 
-        registry.add(self.name, self)
-
+        registry.add(self.name, model)
         self.relations = {}
         self.declared_fields = self._create_declared_fields(
             model,
@@ -481,8 +480,8 @@ class ModelBase(type):
             if isinstance(rel, Relation):
                 rel.add_to_class(new_cls, key)
 
-        for gateway in registry.values():
-            for key, rel in gateway.relations.items():
+        for model in registry.values():
+            for key, rel in model._gateway.relations.items():
                 try:
                     if hasattr(rel, 'add_related') and rel.rel_model is new_cls:
                         rel.add_related()
@@ -747,7 +746,7 @@ class Relation(object):
             name = self.rel_model_or_name
             if name == 'self':
                 name = self.model._gateway.name
-            return registry[name].model
+            return registry[name]
         return self.rel_model_or_name
 
     def _get_qs(self):
