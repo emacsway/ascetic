@@ -143,37 +143,38 @@ class Result(smartsql.Result):
 
     def prefetch(self, *a, **kw):
         """Prefetch relations"""
+        relations = self._gateway.bound_relations
         if a and not a[0]:  # .prefetch(False)
             self._prefetch = {}
         else:
             self._prefetch = copy.copy(self._prefetch)
             self._prefetch.update(kw)
-            self._prefetch.update({i: self._gateway.relations[i].rel_model(self._gateway.model)._gateway.base_query for i in a})
+            self._prefetch.update({i: relations[i].query for i in a})
         return self
 
     def populate_prefetch(self):
+        relations = self._gateway.bound_relations
         for key, qs in self._prefetch.items():
-            owner = self._gateway.model
-            rel = self._gateway.relations[key]
+            rel = relations[key]
             # recursive handle prefetch
-            field = rel.field(owner) if type(rel.field(owner)) == tuple else (rel.field(owner),)
-            rel_field = rel.rel_field(owner) if type(rel.rel_field(owner)) == tuple else (rel.rel_field(owner),)
+            field = rel.field if type(rel.field) == tuple else (rel.field,)
+            rel_field = rel.rel_field if type(rel.rel_field) == tuple else (rel.rel_field,)
 
             cond = reduce(operator.or_,
                           (reduce(operator.and_,
-                                  ((rel.rel_model(owner).s.__getattr__(rf) == getattr(obj, f))
+                                  ((rel.rel_model.s.__getattr__(rf) == getattr(obj, f))
                                    for f, rf in zip(field, rel_field)))
                            for obj in self._cache))
             rows = list(qs.where(cond))
             for obj in self._cache:
                 val = [i for i in rows if tuple(getattr(i, f) for f in rel_field) == tuple(getattr(obj, f) for f in field)]
-                if isinstance(rel, (ForeignKey, OneToOne)):
+                if isinstance(rel.relation, (ForeignKey, OneToOne)):
                     val = val[0] if val else None
-                    if val and isinstance(rel, OneToOne):
-                        setattr(val, "{}_prefetch".format(rel.rel_name(owner)), obj)
-                elif isinstance(rel, OneToMany):
+                    if val and isinstance(rel.relation, OneToOne):
+                        setattr(val, "{}_prefetch".format(rel.rel_name), obj)
+                elif isinstance(rel.relation, OneToMany):
                     for i in val:
-                        setattr(i, "{}_prefetch".format(rel.rel_name(owner)), obj)
+                        setattr(i, "{}_prefetch".format(rel.rel_name), obj)
                 setattr(obj, "{}_prefetch".format(key), val)
 
 
@@ -435,7 +436,7 @@ class Gateway(object):
         self.send_signal(obj, signal='pre_save', using=self._using)
         result = self._insert(obj) if obj._new_record else self._update(obj)
         self.send_signal(obj, signal='post_save', created=obj._new_record, using=self._using)
-        obj._original_data = self.get_data(obj)
+        obj._original_data = dict(self.get_data(obj))
         obj._new_record = False
         return result
 
@@ -674,14 +675,14 @@ class SelectRelatedMapping(object):
     def build_relations(self, relations, objs):
         for i, rel in enumerate(relations):
             obj, rel_obj = objs[i], objs[i + 1]
-            name = '{}_related'.format(rel.name)
-            rel_name = '{}_related'.format(rel.rel_name)
-            if isinstance(rel, (ForeignKey, OneToOne)):
+            name = '{}_prefetch'.format(rel.name)
+            rel_name = '{}_prefetch'.format(rel.rel_name)
+            if isinstance(rel.relation, (ForeignKey, OneToOne)):
                 setattr(obj, name, rel_obj)
                 if not hasattr(rel_obj, rel_name):
                     setattr(rel_obj, rel_name, [])
                 getattr(rel_obj, rel_name).append[obj]
-            elif isinstance(rel, OneToMany):
+            elif isinstance(rel.relation, OneToMany):
                 if not hasattr(obj, name):
                     setattr(obj, name, [])
                 getattr(obj, name).append[rel_obj]
@@ -773,6 +774,14 @@ class BoundRelation(object):
     def __init__(self, owner, relation):
         self._owner = owner
         self._relation = relation
+
+    @cached_property
+    def query(self):
+        return self.rel_model._gateway.base_query
+
+    @cached_property
+    def relation(self):
+        return self._relation
 
     @cached_property
     def model(self):
