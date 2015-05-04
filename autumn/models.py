@@ -357,6 +357,15 @@ class Gateway(object):
                 result[name] = attr
         return result
 
+    @property
+    def bound_relations(self):
+        result = {}
+        for name in dir(self.model):
+            attr = getattr(self.model, name, None)
+            if isinstance(attr, Relation):
+                result[name] = attr
+        return {k: BoundRelation(self.model, v) for k, v in self.relations.items()}
+
     def create_instance(self, data):
         data = dict(data)
         obj = self.model(**data)
@@ -747,6 +756,58 @@ def do_nothing(parent, child, parent_rel, using, visited):
 # TODO: descriptor for FileField? Or custom postgresql data type? See http://www.postgresql.org/docs/8.4/static/sql-createtype.html
 
 
+class cached_property(object):
+    def __init__(self, func, name=None):
+        self.func = func
+        self.name = name or func.__name__
+
+    def __get__(self, instance, type=None):
+        if instance is None:
+            return self
+        res = instance.__dict__[self.name] = self.func(instance)
+        return res
+
+
+class BoundRelation(object):
+
+    def __init__(self, owner, relation):
+        self._owner = owner
+        self._relation = relation
+
+    @cached_property
+    def model(self):
+        return self._owner
+
+    @cached_property
+    def name(self):
+        return self._relation.name(self._owner)
+
+    @cached_property
+    def field(self):
+        return self._relation.field(self._owner)
+
+    @cached_property
+    def rel_name(self):
+        return self._relation.rel_name(self._owner)
+
+    @cached_property
+    def rel_model(self):
+        return self._relation.rel_model(self._owner)
+
+    @cached_property
+    def rel_field(self):
+        return self._relation.rel_field(self._owner)
+
+    def __get__(self, instance, owner):
+        return self._relation.__get__(instance, self._owner)
+
+    def __set__(self, instance, value):
+        return self._relation.__get__(instance, value)
+
+    def __delete__(self, instance):
+        return self._relation.__delete__(instance)
+
+
 class Relation(object):
 
     def __init__(self, rel_model, rel_field=None, field=None, on_delete=cascade, rel_name=None):
@@ -756,6 +817,12 @@ class Relation(object):
         self.on_delete = on_delete
         self._rel_name = rel_name
 
+    def name(self, owner):
+        self_id = id(self)
+        for name in dir(owner):
+            if id(getattr(owner, name, None)) == self_id:
+                return name
+
     def rel_model(self, owner):
         if isinstance(self.rel_model_or_name, string_types):
             name = self.rel_model_or_name
@@ -763,12 +830,6 @@ class Relation(object):
                 name = self.model._gateway.name
             return registry[name]
         return self.rel_model_or_name
-
-    def name(self, owner):
-        self_id = id(self)
-        for name in dir(owner):
-            if id(getattr(owner, name, None)) == self_id:
-                return name
 
 
 class ForeignKey(Relation):
