@@ -186,9 +186,10 @@ class Gateway(object):
     field_factory = Field
     result_factory = Result
 
-    def __init__(self, model):
+    def __init__(self, model=None):
         """Instance constructor"""
-        self.model = model
+        if model:
+            self.model = model
 
         if not hasattr(self, 'name'):
             self.name = self._create_default_name(model)
@@ -203,7 +204,7 @@ class Gateway(object):
             getattr(self, 'declared_fields', {})
         )
 
-        self._clean_model(model)
+        self._prepare_model(model)
         self._inherit(self, (base for base in self.model.__bases__ if hasattr(base, '_gateway')))  # recursive
 
         if self.abstract:
@@ -300,11 +301,27 @@ class Gateway(object):
         """Returns field list."""
         return [smartsql.Field(f.column, prefix if prefix is not None else self.sql_table) for f in self.fields.values()]
 
-    def _clean_model(self, model):
+    def _prepare_model(self, model):
+        model._gateway = model._meta = self
         for name in self.model.__dict__:
             field = getattr(model, name, None)
             if isinstance(field, Field):
                 delattr(model, name)
+
+        # TODO: use dir() instead __dict__ to handle relations in abstract classes,
+        # add templates support for related_name,
+        # support copy.
+        for key, rel in model.__dict__.items():
+            if isinstance(rel, Relation):
+                rel.add_to_class(model, key)
+
+        for rel_model in registry.values():
+            for key, rel in rel_model._gateway.relations.items():
+                try:
+                    if hasattr(rel, 'add_related') and rel.rel_model is model:
+                        rel.add_related(rel_model)
+                except ModelNotRegistered:
+                    pass
 
     def _inherit(self, successor, parents):
         for base in parents:  # recursive
@@ -463,7 +480,13 @@ class ModelBase(type):
         if name in ('Model', 'NewBase', ):
             return new_cls
 
-        if hasattr(new_cls, 'Meta'):
+        if hasattr(new_cls, 'Gateway'):
+            if isinstance(new_cls.Gateway, new_cls.gateway_class):
+                NewGateway = new_cls.Gateway
+            else:
+                class NewGateway(new_cls.Gateway, new_cls.gateway_class):
+                    pass
+        elif hasattr(new_cls, 'Meta'):  # backward compatible
             if isinstance(new_cls.Meta, new_cls.gateway_class):
                 NewGateway = new_cls.Meta
             else:
@@ -471,22 +494,7 @@ class ModelBase(type):
                     pass
         else:
             NewGateway = new_cls.gateway_class
-        new_cls._meta = new_cls._gateway = NewGateway(new_cls)
-
-        # TODO: use dir() instead __dict__ to handle relations in abstract classes,
-        # add templates support for related_name,
-        # support copy.
-        for key, rel in new_cls.__dict__.items():
-            if isinstance(rel, Relation):
-                rel.add_to_class(new_cls, key)
-
-        for model in registry.values():
-            for key, rel in model._gateway.relations.items():
-                try:
-                    if hasattr(rel, 'add_related') and rel.rel_model is new_cls:
-                        rel.add_related()
-                except ModelNotRegistered:
-                    pass
+        NewGateway(new_cls)
 
         signals.send_signal(signal='class_prepared', sender=new_cls, using=new_cls._gateway._using)
         return new_cls
@@ -786,9 +794,9 @@ class ForeignKey(Relation):
 
     def add_to_class(self, model_class, name):
         super(ForeignKey, self).add_to_class(model_class, name)
-        self.add_related()
+        self.add_related(model_class)
 
-    def add_related(self):
+    def add_related(self, model):
         try:
             rel_model = self.rel_model
         except ModelNotRegistered:
@@ -798,7 +806,7 @@ class ForeignKey(Relation):
             return
 
         OneToMany(
-            self.model, self.field, self.rel_field,
+            model, self.field, self.rel_field,
             None, on_delete=self.on_delete, rel_name=self.name
         ).add_to_class(
             rel_model, self.rel_name
@@ -846,7 +854,7 @@ class ForeignKey(Relation):
 
 class OneToOne(ForeignKey):
 
-    def add_related(self):
+    def add_related(self, model):
         try:
             rel_model = self.rel_model
         except ModelNotRegistered:
@@ -856,7 +864,7 @@ class OneToOne(ForeignKey):
             return
 
         OneToOne(
-            self.model, self.field, self.rel_field,
+            model, self.field, self.rel_field,
             None, on_delete=self.on_delete, rel_name=self.name
         ).add_to_class(
             rel_model, self.rel_name
