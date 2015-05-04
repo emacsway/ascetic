@@ -148,19 +148,20 @@ class Result(smartsql.Result):
         else:
             self._prefetch = copy.copy(self._prefetch)
             self._prefetch.update(kw)
-            self._prefetch.update({i: self._gateway.relations[i].qs for i in a})
+            self._prefetch.update({i: self._gateway.relations[i].rel_model(self._gateway.model)._gateway.base_query for i in a})
         return self
 
     def populate_prefetch(self):
         for key, qs in self._prefetch.items():
+            owner = self._gateway.model
             rel = self._gateway.relations[key]
             # recursive handle prefetch
-            field = rel.field if type(rel.field) == tuple else (rel.field,)
-            rel_field = rel.rel_field if type(rel.rel_field) == tuple else (rel.rel_field,)
+            field = rel.field(owner) if type(rel.field(owner)) == tuple else (rel.field(owner),)
+            rel_field = rel.rel_field(owner) if type(rel.rel_field(owner)) == tuple else (rel.rel_field(owner),)
 
             cond = reduce(operator.or_,
                           (reduce(operator.and_,
-                                  ((rel.rel_model.s.__getattr__(rf) == getattr(obj, f))
+                                  ((rel.rel_model(owner).s.__getattr__(rf) == getattr(obj, f))
                                    for f, rf in zip(field, rel_field)))
                            for obj in self._cache))
             rows = list(qs.where(cond))
@@ -169,10 +170,10 @@ class Result(smartsql.Result):
                 if isinstance(rel, (ForeignKey, OneToOne)):
                     val = val[0] if val else None
                     if val and isinstance(rel, OneToOne):
-                        setattr(val, "{}_prefetch".format(rel.rel_name), obj)
+                        setattr(val, "{}_prefetch".format(rel.rel_name(owner)), obj)
                 elif isinstance(rel, OneToMany):
                     for i in val:
-                        setattr(i, "{}_prefetch".format(rel.rel_name), obj)
+                        setattr(i, "{}_prefetch".format(rel.rel_name(owner)), obj)
                 setattr(obj, "{}_prefetch".format(key), val)
 
 
@@ -195,7 +196,6 @@ class Gateway(object):
             self.name = self._create_default_name(model)
 
         registry.add(self.name, model)
-        self.relations = {}
         self.declared_fields = self._create_declared_fields(
             model,
             getattr(self, 'map', {}),
@@ -223,6 +223,7 @@ class Gateway(object):
             self.add_field(name, field)
 
         self.sql_table = self._create_sql_table()
+        self.base_query = self._create_base_query()
         self.query = self._create_query()
 
     def _create_default_name(self, model):
@@ -294,7 +295,12 @@ class Gateway(object):
     def _create_sql_table(self):
         return Table(self)
 
+    def _create_base_query(self):
+        """For relations."""
+        return smartsql.QS(self.sql_table, result=self.result_factory(self)).fields(self.get_sql_fields())
+
     def _create_query(self):
+        """For selection."""
         return smartsql.QS(self.sql_table, result=self.result_factory(self)).fields(self.get_sql_fields())
 
     def get_sql_fields(self, prefix=None):
@@ -313,12 +319,15 @@ class Gateway(object):
         # support copy.
         for key, rel in model.__dict__.items():
             if isinstance(rel, Relation):
-                rel.add_to_class(model, key)
+                try:
+                    rel.add_related(model)
+                except ModelNotRegistered:
+                    pass
 
         for rel_model in registry.values():
             for key, rel in rel_model._gateway.relations.items():
                 try:
-                    if hasattr(rel, 'add_related') and rel.rel_model is model:
+                    if hasattr(rel, 'add_related') and rel.rel_model(rel_model) is model:
                         rel.add_related(rel_model)
                 except ModelNotRegistered:
                     pass
@@ -338,6 +347,15 @@ class Gateway(object):
         c._using = alias
         c.query = c.query.using(c._using)
         return c
+
+    @property
+    def relations(self):
+        result = {}
+        for name in dir(self.model):
+            attr = getattr(self.model, name, None)
+            if isinstance(attr, Relation):
+                result[name] = attr
+        return result
 
     def create_instance(self, data):
         data = dict(data)
@@ -701,7 +719,7 @@ class Table(smartsql.Table):
         if field == 'pk':
             field = self._gateway.pk
         elif isinstance(self._gateway.relations.get(field, None), ForeignKey):
-            field = self._gateway.relations.get(field).field
+            field = self._gateway.relations.get(field).field(self._gateway.model)
 
         if type(field) == tuple:
             if len(parts) > 1:
@@ -731,25 +749,14 @@ def do_nothing(parent, child, parent_rel, using, visited):
 
 class Relation(object):
 
-    def __init__(self, rel_model, rel_field=None, field=None, qs=None, on_delete=cascade, rel_name=None, related_name=None):
+    def __init__(self, rel_model, rel_field=None, field=None, on_delete=cascade, rel_name=None):
         self.rel_model_or_name = rel_model
         self._rel_field = rel_field
         self._field = field
-        self._qs = qs
         self.on_delete = on_delete
         self._rel_name = rel_name
-        if related_name:
-            smartsql.warn('related_name', 'rel_name')
-            self._rel_name = self._rel_name or related_name
 
-    def add_to_class(self, model_class, name):
-        self.model = model_class
-        self.name = name
-        self.model._gateway.relations[name] = self
-        setattr(self.model, name, self)
-
-    @property
-    def rel_model(self):
+    def rel_model(self, owner):
         if isinstance(self.rel_model_or_name, string_types):
             name = self.rel_model_or_name
             if name == 'self':
@@ -757,118 +764,100 @@ class Relation(object):
             return registry[name]
         return self.rel_model_or_name
 
-    def _get_qs(self):
-        if isinstance(self._qs, collections.Callable):
-            self._qs = self._qs(self)
-        elif self._qs is None:
-            self._qs = self.rel_model._gateway.query
-        return self._qs.clone()
-
-    def _set_qs(self, val):
-        self._qs = val
-
-    qs = property(_get_qs, _set_qs)
-
-    def filter(self, *a, **kw):
-        qs = self.qs
-        t = self.rel_model.s
-        for name, param in kw.items():
-            f = t.__getattr__(name)
-            qs = qs.where(f == param)
-        return qs
+    def name(self, owner):
+        self_id = id(self)
+        for name in dir(owner):
+            if id(getattr(owner, name, None)) == self_id:
+                return name
 
 
 class ForeignKey(Relation):
 
-    @property
-    def field(self):
-        return self._field or '{0}_id'.format(self.rel_model._gateway.db_table.rsplit("_", 1).pop())
+    def field(self, owner):
+        return self._field or '{0}_id'.format(self.rel_model(owner)._gateway.db_table.rsplit("_", 1).pop())
 
-    @property
-    def rel_field(self):
-        return self._rel_field or self.rel_model._gateway.pk
+    def rel_field(self, owner):
+        return self._rel_field or self.rel_model(owner)._gateway.pk
 
-    @property
-    def rel_name(self):
-        return self._rel_name or '{0}_set'.format(self.rel_model.__name__.lower())
+    def rel_name(self, owner):
+        return self._rel_name or '{0}_set'.format(self.rel_model(owner).__name__.lower())
 
-    def add_to_class(self, model_class, name):
-        super(ForeignKey, self).add_to_class(model_class, name)
-        self.add_related(model_class)
-
-    def add_related(self, model):
+    def add_related(self, owner):
         try:
-            rel_model = self.rel_model
+            rel_model = self.rel_model(owner)
         except ModelNotRegistered:
             return
 
-        if self.rel_name in rel_model._gateway.relations:
+        if self.rel_name(owner) in rel_model._gateway.relations:
             return
 
-        OneToMany(
-            model, self.field, self.rel_field,
-            None, on_delete=self.on_delete, rel_name=self.name
-        ).add_to_class(
-            rel_model, self.rel_name
-        )
+        setattr(rel_model, self.rel_name(owner), OneToMany(
+            owner, self.field(owner), self.rel_field(owner),
+            on_delete=self.on_delete, rel_name=self.name(owner)
+        ))
 
     def __get__(self, instance, owner):
         # TODO: owner is self.model. self.model is useless (do remove it). It cause problems with inheritance.
         if not instance:
             return self
-        field = self.field if type(self.field) == tuple else (self.field,)
-        rel_field = self.rel_field if type(self.rel_field) == tuple else (self.rel_field,)
+        field = self.field(owner) if type(self.field(owner)) == tuple else (self.field(owner),)
+        rel_field = self.rel_field(owner) if type(self.rel_field(owner)) == tuple else (self.rel_field(owner),)
         fk_val = tuple(getattr(instance, f) for f in field)
         if not [i for i in fk_val if i is not None]:
             return None
 
-        if (getattr(instance._cache.get(self.name, None), f, None) for f in self.rel_field) != fk_val:
-            instance._cache[self.name] = self.filter(**dict(zip(rel_field, fk_val)))[0]
-        return instance._cache[self.name]
+        if (getattr(instance._cache.get(self.name(owner), None), f, None) for f in self.rel_field(owner)) != fk_val:
+            t = self.rel_model(owner)._gateway.sql_table
+            q = self.rel_model(owner)._gateway.base_query
+            for f, v in zip(rel_field, fk_val):
+                q = q.where(t.__getattr__(f) == v)
+            # TODO: Add hook here?
+            instance._cache[self.name(owner)] = q[0]
+        return instance._cache[self.name(owner)]
 
     def __set__(self, instance, value):
+        owner = instance.__class__
         if isinstance(value, Model):
-            if not isinstance(value, self.rel_model):
+            if not isinstance(value, self.rel_model(owner)):
                 raise Exception(
                     ('Value should be an instance of "{0}" ' +
                      'or primary key of related instance.').format(
-                        self.rel_model._gateway.name
+                        self.rel_model(owner)._gateway.name
                     )
                 )
-            instance._cache[self.name] = value
+            instance._cache[self.name(owner)] = value
             value = value._get_pk()
-        if type(self.field) == tuple:
-            for a, v in zip(self.field, value):
+        if type(self.field(owner)) == tuple:
+            for a, v in zip(self.field(owner), value):
                 setattr(instance, a, v)
         else:
-            setattr(instance, self.field, value)
+            setattr(instance, self.field(owner), value)
 
     def __delete__(self, instance):
-        instance._cache.pop(self.name, None)
-        if type(self.field) == tuple:
-            for a in self.field:
+        owner = instance.__class__
+        instance._cache.pop(self.name(owner), None)
+        if type(self.field(owner)) == tuple:
+            for a in self.field(owner):
                 setattr(instance, a, None)
         else:
-            setattr(instance, self.field, None)
+            setattr(instance, self.field(owner), None)
 
 
 class OneToOne(ForeignKey):
 
-    def add_related(self, model):
+    def add_related(self, owner):
         try:
-            rel_model = self.rel_model
+            rel_model = self.rel_model(owner)
         except ModelNotRegistered:
             return
 
-        if self.rel_name in rel_model._gateway.relations:
+        if self.rel_name(owner) in rel_model._gateway.relations:
             return
 
-        OneToOne(
-            model, self.field, self.rel_field,
-            None, on_delete=self.on_delete, rel_name=self.name
-        ).add_to_class(
-            rel_model, self.rel_name
-        )
+        setattr(rel_model, self.rel_name(owner), OneToOne(
+            owner, self.field(owner), self.rel_field(owner),
+            on_delete=self.on_delete, rel_name=self.name(owner)
+        ))
         self.on_delete = do_nothing
 
 
@@ -876,23 +865,24 @@ class OneToMany(Relation):
 
     # TODO: is it need add_related() here to construct related FK?
 
-    @property
-    def field(self):
-        return self._field or self.model._gateway.pk
+    def field(self, owner):
+        return self._field or owner._gateway.pk
 
-    @property
-    def rel_field(self):
-        return self._rel_field or '{0}_id'.format(self.model._gateway.db_table.rsplit("_", 1).pop())
+    def rel_field(self, owner):
+        return self._rel_field or '{0}_id'.format(owner._gateway.db_table.rsplit("_", 1).pop())
 
-    @property
-    def rel_name(self):
-        return self._rel_name or self.rel_model.__name__.lower()
+    def rel_name(self, owner):
+        return self._rel_name or self.rel_model(owner).__name__.lower()
 
     def __get__(self, instance, owner):
         if not instance:
             return self
-        field = self.field if type(self.field) == tuple else (self.field,)
-        rel_field = self.rel_field if type(self.rel_field) == tuple else (self.rel_field,)
+        field = self.field(owner) if type(self.field(owner)) == tuple else (self.field(owner),)
+        rel_field = self.rel_field(owner) if type(self.rel_field(owner)) == tuple else (self.rel_field(owner),)
         val = tuple(getattr(instance, f) for f in field)
         # Cache attr already exists in QS, so, can be even setable.
-        return self.filter(**dict(zip(rel_field, val)))
+        t = self.rel_model(owner)._gateway.sql_table
+        q = self.rel_model(owner)._gateway.base_query
+        for f, v in zip(rel_field, val):
+            q = q.where(t.__getattr__(f) == v)
+        return q
