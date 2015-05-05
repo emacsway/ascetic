@@ -788,6 +788,10 @@ class BoundRelation(object):
         return self._owner
 
     @cached_property
+    def descriptor_class(self):
+        return self._relation.descriptor_class(self._owner)
+
+    @cached_property
     def name(self):
         return self._relation.name(self._owner)
 
@@ -825,6 +829,13 @@ class Relation(object):
         self._field = field
         self.on_delete = on_delete
         self._rel_name = rel_name
+
+    def descriptor_class(self, owner):
+        for cls in owner.__mro__:
+            for name, attr in cls.__dict__.items():
+                if attr is self:
+                    return cls
+        raise Exception("Can't find descriptor class")
 
     def name(self, owner):
         self_id = id(self)
