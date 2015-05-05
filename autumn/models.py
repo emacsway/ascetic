@@ -359,7 +359,7 @@ class Gateway(object):
         return result
 
     @property
-    def bound_relations(self):
+    def bound_relations(self):  # local_relations() ???
         result = {}
         for name in dir(self.model):
             attr = getattr(self.model, name, None)
@@ -367,17 +367,22 @@ class Gateway(object):
                 result[name] = attr
         return {k: BoundRelation(self.model, v) for k, v in self.relations.items()}
 
-    def create_instance(self, data):
-        data = dict(data)
+    def create_instance(self, data, from_db=True):
+        if from_db:
+            data = {self.columns[key].name if key in self.columns else key: value for key, value in data}
+        else:
+            data = dict(data)
         obj = self.model(**data)
         obj._original_data = data
         obj._new_record = False
         return obj
 
-    def get_data(self, obj, fields=frozenset(), exclude=frozenset()):
+    def get_data(self, obj, fields=frozenset(), exclude=frozenset(), to_db=True):
         data = tuple((name, getattr(obj, name, None))
                      for name in self.fields
                      if not (name in exclude or (fields and name not in fields)))
+        if to_db:
+            data = {self.fields[name].column: value for name, value in data}
         return data
 
     def get_changed(self, obj):
@@ -436,16 +441,15 @@ class Gateway(object):
         self.send_signal(obj, signal='pre_save', using=self._using)
         result = self._insert(obj) if obj._new_record else self._update(obj)
         self.send_signal(obj, signal='post_save', created=obj._new_record, using=self._using)
-        obj._original_data = dict(self.get_data(obj))
+        obj._original_data = dict(self.get_data(obj, to_db=False))
         obj._new_record = False
         return result
 
     def _insert(self, obj):
         query = self.query
-        data = dict(self.get_data(obj))
         pk = self.pk if type(self.pk) == tuple else (self.pk,)
-        auto_pk = not all(data.get(k) for k in pk)
-        data = {self.fields[name].column: value for name, value in data.items() if not auto_pk or name not in pk}
+        auto_pk = not all(getattr(obj, k, False) for k in pk)
+        data = self.get_data(obj, exclude=(pk if auto_pk else ()), to_db=True)
         cursor = query.insert(data)
         if auto_pk:
             obj.pk = query.result.db.last_insert_id(cursor)
@@ -453,8 +457,7 @@ class Gateway(object):
     def _update(self, obj):
         pk = self.pk if type(self.pk) == tuple else (self.pk,)
         cond = reduce(operator.and_, (smartsql.Field(self.fields[k].column, self.sql_table) == getattr(obj, k) for k in pk))
-        data = self.get_data(obj, fields=self.get_changed(obj))
-        data = {self.fields[name].column: value for name, value in data}
+        data = self.get_data(obj, fields=self.get_changed(obj), to_db=True)
         self.query.where(cond).update(data)
 
     def delete(self, obj, visited=None):
@@ -636,13 +639,7 @@ def suffix_mapping(result, row, state):
 
 
 def default_mapping(result, row, state):
-    columns = result._gateway.columns
-    row = tuple((columns[key].name if key in columns else key, value)
-                for key, value in row)
-    try:
-        return result._gateway.create_instance(row)
-    except AttributeError:
-        dict(row)
+    return result._gateway.create_instance(row, from_db=True)
 
 
 class SelectRelatedMapping(object):
@@ -659,16 +656,15 @@ class SelectRelatedMapping(object):
     def get_objects(self, models, rows, state):
         objs = []
         for model, model_row in zip(models, rows):
-            columns = model._gateway.columns
-            model_row = tuple((columns[key].name if key in columns else key, value)
-                              for key, value in model_row)
-            model_row_dict = dict(model_row)
             pk = model._gateway.pk
             if type(pk) != tuple:
                 pk = (pk,)
-            key = (model, tuple(model_row_dict[f] for f in pk))
+            pk_columns = tuple(model._gateway.fields[k].columns for k in pk)
+            model_row_dict = dict(model_row)
+            pk_values = tuple(model_row_dict[k] for k in pk_columns)
+            key = (model, pk_values)
             if key not in state:
-                state[key] = model._gateway.create_instance(model_row)
+                state[key] = model._gateway.create_instance(model_row, from_db=True)
             objs.append(state[key])
         return objs
 
