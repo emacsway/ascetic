@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='autumn2',
-    version='0.7.1.0',
+    version='0.7.2.0',
 
     packages = find_packages(),
     include_package_data=True,
@@ -18,7 +18,7 @@ setup(
     license="MIT License",
     keywords = "ORM Database SQL",
     install_requires=[
-        'sqlbuilder >= 0.7.9.0'
+        'sqlbuilder >= 0.7.9.1'
     ],
     classifiers = [
         'Development Status :: 1 - Planning',
