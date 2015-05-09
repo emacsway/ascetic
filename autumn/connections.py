@@ -241,9 +241,21 @@ class PostgreSQLDatabase(Database):
         cursor.execute("SELECT lastval()")
         return cursor.fetchone()[0]
 
+    def get_pk(self, table_name):
+        # https://wiki.postgresql.org/wiki/Retrieve_primary_key_columns
+        cursor = self.execute("""
+        SELECT a.attname, format_type(a.atttypid, a.atttypmod) AS data_type
+        FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid
+             AND a.attnum = ANY(i.indkey)
+        WHERE i.indrelid = %s::regclass
+              AND i.indisprimary
+        ORDER BY a.attnum;
+        """, [table_name])
+        return tuple(i[0] for i in cursor.fetchall())
+
     def describe_table(self, table_name):
         cursor = self.execute("""
-            SELECT * FROM information_schema.columns WHERE table_name = %s;
+            SELECT * FROM information_schema.columns WHERE table_name = %s ORDER BY ordinal_position;
         """, [table_name])
         fields = [f[0] for f in cursor.description]
         schema = collections.OrderedDict()
@@ -255,6 +267,7 @@ class PostgreSQLDatabase(Database):
                 'type': data['udt_name'],
                 'data_type': data['data_type'],
                 'null': data['is_nullable'].upper() == 'YES',
+                # 'default': data['column_default'],
                 'max_length': data['character_maximum_length'],
             }
             schema[col['column']] = col

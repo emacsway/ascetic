@@ -40,6 +40,7 @@ registry = ModelRegistry()
 
 
 class Field(object):
+
     def __init__(self, **kw):
         for k, v in kw.items():
             setattr(self, k, v)
@@ -223,6 +224,8 @@ class Gateway(object):
         for name, field in self.create_fields(self._read_columns(self.db_table, self._using), self.declared_fields).items():
             self.add_field(name, field)
 
+        self.pk = self._read_pk(self.db_table, self._using, self.columns)
+
         self.sql_table = self._create_sql_table()
         self.base_query = self._create_base_query()
         self.query = self._create_query()
@@ -256,6 +259,13 @@ class Gateway(object):
             result[name] = self.create_field(name, {'validators': validators}, declared_fields)
 
         return result
+
+    def _read_pk(self, db_table, using, columns):
+        db = get_db(using)
+        if hasattr(db, 'get_pk'):
+            pk = tuple(columns[i].name for i in db.get_pk(db_table))
+            return pk[0] if len(pk) == 1 else pk
+        return self.__class__.pk
 
     def _read_columns(self, db_table, using):
         db = get_db(using)
@@ -382,7 +392,7 @@ class Gateway(object):
                      for name in self.fields
                      if not (name in exclude or (fields and name not in fields)))
         if to_db:
-            data = {self.fields[name].column: value for name, value in data}
+            data = {self.fields[name].column: value for name, value in data if not getattr(self.fields[name], 'readonly', False)}
         return data
 
     def get_changed(self, obj):
