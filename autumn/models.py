@@ -392,8 +392,8 @@ class Gateway(object):
                      for name in self.fields
                      if not (name in exclude or (fields and name not in fields)))
         if to_db:
-            # check field is not readonly like annotation and subquery.
-            data = {self.fields[name].column: value for name, value in data if not getattr(self.fields[name], 'readonly', False)}
+            # check field is not virtual like annotation and subquery.
+            data = {self.fields[name].column: value for name, value in data if not getattr(self.fields[name], 'virtual', False)}
         return data
 
     def get_changed(self, obj):
