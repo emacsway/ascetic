@@ -392,6 +392,7 @@ class Gateway(object):
                      for name in self.fields
                      if not (name in exclude or (fields and name not in fields)))
         if to_db:
+            # check field is not readonly like annotation and subquery.
             data = {self.fields[name].column: value for name, value in data if not getattr(self.fields[name], 'readonly', False)}
         return data
 
