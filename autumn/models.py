@@ -316,7 +316,9 @@ class Gateway(object):
 
     def get_sql_fields(self, prefix=None):
         """Returns field list."""
-        return [smartsql.Field(f.column, prefix if prefix is not None else self.sql_table) for f in self.fields.values()]
+        return [smartsql.Field(f.column, prefix if prefix is not None else self.sql_table)
+                for f in self.fields.values()
+                if not getattr(f, 'virtual', False)]
 
     def _prepare_model(self, model):
         model._gateway = model._meta = self
