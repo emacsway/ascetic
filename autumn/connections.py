@@ -230,6 +230,38 @@ class MySQLDatabase(Database):
         import MySQLdb
         return MySQLdb.connect(**kwargs)
 
+    def get_pk(self, table_name):
+        cursor = self.execute("""
+            SELECT COLUMN_NAME
+            FROM   information_schema.KEY_COLUMN_USAGE
+            WHERE  TABLE_SCHEMA = SCHEMA()
+            AND    CONSTRAINT_NAME = 'PRIMARY'
+            AND    TABLE_NAME = %s
+            ORDER BY ORDINAL_POSITION;
+        """, [table_name])
+        return tuple(i[0] for i in cursor.fetchall())
+
+    def describe_table(self, table_name):
+        cursor = self.execute("""
+            SELECT COLUMN_NAME, ORDINAL_POSITION, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT, CHARACTER_MAXIMUM_LENGTH
+            FROM   information_schema.COLUMNS
+            WHERE  TABLE_SCHEMA = SCHEMA()
+            AND    TABLE_NAME = %s
+            ORDER BY ORDINAL_POSITION;
+        """, [table_name])
+        schema = collections.OrderedDict()
+        for row in cursor.fetchall():
+            col = {
+                'column': row[0],
+                'position': row[1],
+                'data_type': row[2],
+                'null': row[3].upper() == 'YES',
+                # 'default': row[4],
+                'max_length': row[5],
+            }
+            schema[col['column']] = col
+        return schema
+
 
 class PostgreSQLDatabase(Database):
 
@@ -245,30 +277,30 @@ class PostgreSQLDatabase(Database):
         # https://wiki.postgresql.org/wiki/Retrieve_primary_key_columns
         cursor = self.execute("""
         SELECT a.attname, format_type(a.atttypid, a.atttypmod) AS data_type
-        FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid
-             AND a.attnum = ANY(i.indkey)
-        WHERE i.indrelid = %s::regclass
-              AND i.indisprimary
+        FROM   pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid
+               AND a.attnum = ANY(i.indkey)
+        WHERE  i.indrelid = %s::regclass
+               AND i.indisprimary
         ORDER BY a.attnum;
         """, [table_name])
         return tuple(i[0] for i in cursor.fetchall())
 
     def describe_table(self, table_name):
         cursor = self.execute("""
-            SELECT * FROM information_schema.columns WHERE table_name = %s ORDER BY ordinal_position;
+            SELECT column_name, ordinal_position, data_type, is_nullable, column_default, character_maximum_length
+            FROM   information_schema.columns
+            WHERE  table_name = %s
+            ORDER BY ordinal_position;
         """, [table_name])
-        fields = [f[0] for f in cursor.description]
         schema = collections.OrderedDict()
         for row in cursor.fetchall():
-            data = dict(list(zip(fields, row)))
             col = {
-                'column': data['column_name'],
-                'position': data['ordinal_position'],
-                'type': data['udt_name'],
-                'data_type': data['data_type'],
-                'null': data['is_nullable'].upper() == 'YES',
-                # 'default': data['column_default'],
-                'max_length': data['character_maximum_length'],
+                'column': row[0],
+                'position': row[1],
+                'data_type': row[2],
+                'null': row[3].upper() == 'YES',
+                # 'default': row[4],
+                'max_length': row[5],
             }
             schema[col['column']] = col
         return schema

@@ -1,6 +1,6 @@
 import os
 
-DATABASES = {
+DATABASES_MYSQL = {
     'default': {
         'engine': "mysql",
         'user': "devel",
@@ -12,7 +12,7 @@ DATABASES = {
     }
 }
 
-DATABASES = {
+DATABASES_POSTGRESQL = {
     'default': {
         'engine': "postgresql",
         'user': "devel",
@@ -23,6 +23,8 @@ DATABASES = {
         'thread_safe': True,
     }
 }
+
+DATABASES = DATABASES_POSTGRESQL
 
 DEBUG = True
 
