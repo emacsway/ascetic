@@ -884,7 +884,12 @@ class ForeignKey(Relation):
         return self._rel_field or self.rel_model(owner)._gateway.pk
 
     def rel_name(self, owner):
-        return self._rel_name or '{0}_set'.format(self.rel_model(owner).__name__.lower())
+        if self._rel_name is None:
+            return '{0}_set'.format(self.rel_model(owner).__name__.lower())
+        elif isinstance(self._rel_name, collections.Callable):
+            return self._rel_name(self, owner)
+        else:
+            return self._rel_name
 
     def add_related(self, owner):
         try:
@@ -962,7 +967,7 @@ class OneToOne(ForeignKey):
             owner, self.field(owner), self.rel_field(owner),
             on_delete=self.on_delete, rel_name=self.name(owner)
         ))
-        self.on_delete = do_nothing
+        # self.on_delete = do_nothing
 
 
 class OneToMany(Relation):
