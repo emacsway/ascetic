@@ -347,6 +347,7 @@ class Gateway(object):
                         rel.add_related(rel_model)
                 except ModelNotRegistered:
                     pass
+        signals.send_signal(signal='class_prepared', sender=model, using=self._using)
 
     def _inherit(self, successor, parents):
         for base in parents:  # recursive
@@ -543,7 +544,6 @@ class ModelBase(type):
             NewGateway = new_cls.gateway_class
         NewGateway(new_cls)
 
-        signals.send_signal(signal='class_prepared', sender=new_cls, using=new_cls._gateway._using)
         return new_cls
 
 
