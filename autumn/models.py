@@ -295,6 +295,9 @@ class Gateway(object):
             column_name = data['column']
             name = rmap.get(column_name, column_name)
             fields[name] = self.create_field(name, data, declared_fields)
+        for name, field in declared_fields.items():
+            if name not in fields:
+                fields[name] = self.create_field(name, {'virtual': True}, declared_fields)
         return fields
 
     def add_field(self, name, field):
