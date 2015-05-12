@@ -463,7 +463,7 @@ class Gateway(object):
         return result
 
     def _insert(self, obj):
-        query = self.query
+        query = self.base_query
         pk = self.pk if type(self.pk) == tuple else (self.pk,)
         auto_pk = not all(getattr(obj, k, False) for k in pk)
         data = self.get_data(obj, exclude=(pk if auto_pk else ()), to_db=True)
@@ -475,7 +475,7 @@ class Gateway(object):
         pk = self.pk if type(self.pk) == tuple else (self.pk,)
         cond = reduce(operator.and_, (smartsql.Field(self.fields[k].column, self.sql_table) == getattr(obj, k) for k in pk))
         data = self.get_data(obj, fields=self.get_changed(obj), to_db=True)
-        self.query.where(cond).update(data)
+        self.base_query.where(cond).update(data)
 
     def delete(self, obj, visited=None):
         """Deletes record from database"""
@@ -497,7 +497,7 @@ class Gateway(object):
 
         pk = self.pk if type(self.pk) == tuple else (self.pk,)
         cond = reduce(operator.and_, (smartsql.Field(self.fields[k].column, self.sql_table) == getattr(obj, k) for k in pk))
-        self.query.where(cond).delete()
+        self.base_query.where(cond).delete()
         self.send_signal(obj, signal='post_delete', using=self._using)
         return True
 
