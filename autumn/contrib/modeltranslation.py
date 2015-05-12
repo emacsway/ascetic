@@ -42,52 +42,50 @@ class TranslationRegistry(dict):
             TranslationRegistry._singleton = super(TranslationRegistry, cls).__new__(cls, *args, **kwargs)
         return TranslationRegistry._singleton
 
-    def __call__(self, model, fields):
-        if model._meta.name in self:
+    def __call__(self, gateway, translate_fields):
+        if gateway.name in self:
             raise Exception("Already registered {}".format(
-                model.__name__)
+                gateway.name)
             )
-        opts = model._meta
-        self[opts.name] = fields
-        opts.fields = collections.OrderedDict()
+        self[gateway.name] = translate_fields
+        gateway.fields = collections.OrderedDict()
 
-        rmap = {field.column: name for name, field in opts.declared_fields.items() if hasattr(field, 'column')}
-        columns = {}
-        for name in fields:
-            if name in opts.declared_fields and hasattr(opts.declared_fields[name], 'column'):
-                column = opts.declared_fields[name].column
+        rmap = {field.column: name for name, field in gateway.declared_fields.items() if hasattr(field, 'column')}
+        original_columns = {}
+        for name in translate_fields:
+            if name in gateway.declared_fields and hasattr(gateway.declared_fields[name], 'column'):
+                column = gateway.declared_fields[name].column
             else:
                 column = column
             for lang in self.get_languages():
-                columns[self.translate_column(column, lang)] = column
+                original_columns[self.translate_column(column, lang)] = column
 
-        for column in opts.columns:
-            field = opts.columns[column]
-            if column in columns and not isinstance(field, TranslationField):
-                original_column = columns[column]
-                name = rmap.get(original_column, original_column)
+        for column in gateway.columns:
+            original_column = original_columns[column]
+            name = rmap.get(original_column, original_column)
+            if name in gateway.fields:
+                field = gateway.fields[name]
+            else:
+                field = gateway.columns[column]
+                if column in original_columns and not isinstance(field, TranslationField):
+                    class NewTranslationField(TranslationField, field.__class__):
+                        pass
 
-                class NewTranslationField(TranslationField, field.__class__):
-                    pass
+                    data = vars(gateway.declared_fields[name]) if name in gateway.declared_fields else {}
+                    data.update(vars(field))
+                    field = NewTranslationField(**data)
+            self.add_field(gateway, column, name, field)
 
-                data = vars(opts.declared_fields[name]) if name in opts.declared_fields else {}
-                data.update(vars(field))
-                new_field = NewTranslationField(**data)
-                self.add_field(model, new_field, name)
-            elif field.name not in opts.fields:
-                self.add_field(model, field, field.name)
+        gateway.pk = gateway._read_pk(gateway.db_table, gateway._using, gateway.columns)
+        gateway.sql_table = gateway._create_sql_table()
+        gateway.base_query = gateway._create_base_query()
+        gateway.query = gateway._create_query()
 
-    def add_field(self, model, field, name):
+    def add_field(self, gateway, column, name, field):
         field.name = name
-        field.model = model
-        if getattr(field, b'validators', None):
-            model._meta.validations[name] = field.validators
-        model._meta.fields[name] = field
-        if isinstance(field, TranslationField):
-            for lang in self.get_languages():
-                model._meta.columns[self.translate_column(field.original_column, lang)] = field
-        else:
-            model._meta.columns[field.column] = field
+        field._gateway = gateway
+        gateway.fields[name] = field
+        gateway.columns[column] = field
 
     def translate_column(self, name, lang=None):
         return '{}_{}'.format(name, lang or self.get_language())
