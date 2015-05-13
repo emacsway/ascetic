@@ -70,7 +70,7 @@ class TestModels(unittest.TestCase):
         class Author(Model):
             # books = OneToMany('autumn.tests.models.Book')
 
-            class Meta:
+            class Gateway(object):
                 db_table = 'autumn_tests_author'
                 defaults = {'bio': 'No bio available'}
                 validations = {'first_name': validators.Length(),
@@ -79,7 +79,7 @@ class TestModels(unittest.TestCase):
         class Book(Model):
             author = ForeignKey(Author, rel_name='books')
 
-            class Meta:
+            class Gateway(object):
                 db_table = 'books'
 
         return locals()

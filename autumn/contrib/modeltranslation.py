@@ -1,7 +1,7 @@
 import collections
 from .. import models
 
-# Not testet yet!!! It's just a draft!!!
+# This contrib already working and tested.
 
 # We can't use TranslationRegistry, because Gateway can be inherited, and we need to fix hierarchy???
 
@@ -11,7 +11,7 @@ class TranslationColumnDescriptor(object):
     def __get__(self, instance, owner):
         if not instance:
             return self
-        return self._gateway.translate_column(instance.original_column)
+        return instance._gateway.translate_column(instance.original_column)
 
     def __set__(self, instance, value):
         instance.original_column = value.rsplit('_', 1)[0]
@@ -25,7 +25,7 @@ class TranslationGatewayMixIn(object):
 
     translated_fields = ()
 
-    def create_field(self, name, data, declared_fields=None):
+    def create_translation_field(self, name, data, declared_fields=None):
         field = super(TranslationGatewayMixIn, self).create_field(name, data, declared_fields)
         if name in self.translated_fields and not isinstance(field, TranslationField):
             class NewField(TranslationField, field.__class__):
@@ -40,9 +40,10 @@ class TranslationGatewayMixIn(object):
         original_columns = {}
         for name in self.translated_fields:
             if name in declared_fields and hasattr(declared_fields[name], 'column'):
-                column = declared_fields[name].column
+                field = declared_fields[name]
+                column = field.original_column if isinstance(field, TranslationField) else field.column
             else:
-                column = column
+                column = name
             for lang in self.get_languages():
                 original_columns[self.translate_column(column, lang)] = column
 
@@ -52,11 +53,11 @@ class TranslationGatewayMixIn(object):
             name = rmap.get(column_name, column_name)
             if name in fields:
                 continue
-            fields[name] = self.create_field(name, data, declared_fields)
+            fields[name] = self.create_translation_field(name, data, declared_fields)
 
         for name, field in declared_fields.items():
             if name not in fields:
-                fields[name] = self.create_field(name, {'virtual': True}, declared_fields)
+                fields[name] = self.create_translation_field(name, {'virtual': True}, declared_fields)
         return fields
 
     def add_field(self, name, field):
@@ -75,7 +76,7 @@ class TranslationGatewayMixIn(object):
     def get_language(self):
         raise NotImplementedError
 
-    def get_languages(self, lang=None):
+    def get_languages(self):
         raise NotImplementedError
 
 
@@ -105,7 +106,7 @@ class TranslationRegistry(dict):
             if name in gateway.declared_fields and hasattr(gateway.declared_fields[name], 'column'):
                 column = gateway.declared_fields[name].column
             else:
-                column = column
+                column = name
             for lang in self.get_languages():
                 original_columns[self.translate_column(column, lang)] = column
 
