@@ -3,34 +3,83 @@ from .. import models
 
 # Not testet yet!!! It's just a draft!!!
 
+# We can't use TranslationRegistry, because Gateway can be inherited, and we need to fix hierarchy???
+
 
 class TranslationColumnDescriptor(object):
 
     def __get__(self, instance, owner):
         if not instance:
             return self
-        return TranslationRegistry().translate_column(instance._column)
+        return self._gateway.translate_column(instance.original_column)
 
     def __set__(self, instance, value):
-        instance._column = value.rsplit('_', 1)[0]
-
-
-class OriginalColumnDescriptor(object):
-
-    def __get__(self, instance, owner):
-        if not instance:
-            return self
-        return instance._column
-
-    def __set__(self, instance, value):
-        instance._column = value
+        instance.original_column = value.rsplit('_', 1)[0]
 
 
 class TranslationField(models.Field):
     column = TranslationColumnDescriptor()
-    original_column = OriginalColumnDescriptor()
 
 
+class TranslationGatewayMixIn(object):
+
+    translated_fields = ()
+
+    def create_field(self, name, data, declared_fields=None):
+        field = super(TranslationGatewayMixIn, self).create_field(name, data, declared_fields)
+        if name in self.translated_fields and not isinstance(field, TranslationField):
+            class NewField(TranslationField, field.__class__):
+                pass
+            field = NewField(**field.__dict__)
+        return field
+
+    def create_fields(self, columns, declared_fields):
+        fields = collections.OrderedDict()
+        rmap = {field.column: name for name, field in declared_fields.items() if hasattr(field, 'column')}
+
+        original_columns = {}
+        for name in self.translated_fields:
+            if name in declared_fields and hasattr(declared_fields[name], 'column'):
+                column = declared_fields[name].column
+            else:
+                column = column
+            for lang in self.get_languages():
+                original_columns[self.translate_column(column, lang)] = column
+
+        for data in columns:
+            column_name = data['column']
+            column_name = original_columns.get(column_name, column_name)
+            name = rmap.get(column_name, column_name)
+            if name in fields:
+                continue
+            fields[name] = self.create_field(name, data, declared_fields)
+
+        for name, field in declared_fields.items():
+            if name not in fields:
+                fields[name] = self.create_field(name, {'virtual': True}, declared_fields)
+        return fields
+
+    def add_field(self, name, field):
+        field.name = name
+        field._gateway = self
+        self.fields[name] = field
+        if isinstance(field, TranslationField):
+            for lang in self.get_languages():
+                self.columns[self.translate_column(field.original_column, lang)] = field
+        else:
+            self.columns[field.column] = field
+
+    def translate_column(self, name, lang=None):
+        return '{}_{}'.format(name, lang or self.get_language())
+
+    def get_language(self):
+        raise NotImplementedError
+
+    def get_languages(self, lang=None):
+        raise NotImplementedError
+
+
+"""
 class TranslationRegistry(dict):
 
     _singleton = None
@@ -42,17 +91,17 @@ class TranslationRegistry(dict):
             TranslationRegistry._singleton = super(TranslationRegistry, cls).__new__(cls, *args, **kwargs)
         return TranslationRegistry._singleton
 
-    def __call__(self, gateway, translate_fields):
+    def __call__(self, gateway, translated_fields):
         if gateway.name in self:
             raise Exception("Already registered {}".format(
                 gateway.name)
             )
-        self[gateway.name] = translate_fields
+        self[gateway.name] = translated_fields
         gateway.fields = collections.OrderedDict()
 
         rmap = {field.column: name for name, field in gateway.declared_fields.items() if hasattr(field, 'column')}
         original_columns = {}
-        for name in translate_fields:
+        for name in translated_fields:
             if name in gateway.declared_fields and hasattr(gateway.declared_fields[name], 'column'):
                 column = gateway.declared_fields[name].column
             else:
@@ -86,12 +135,4 @@ class TranslationRegistry(dict):
         field._gateway = gateway
         gateway.fields[name] = field
         gateway.columns[column] = field
-
-    def translate_column(self, name, lang=None):
-        return '{}_{}'.format(name, lang or self.get_language())
-
-    def get_language(self):
-        raise NotImplementedError
-
-    def get_languages(self, lang=None):
-        raise NotImplementedError
+"""
