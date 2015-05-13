@@ -2,7 +2,7 @@
 from .. import models, validators
 from . import gfk
 
-# Not tested yet!!!
+# Under construction!!! Not testet yet!!!
 
 # TODO: multilingual based on polymorphic???
 # Django-way with fields and local_fields???

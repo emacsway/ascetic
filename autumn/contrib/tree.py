@@ -2,7 +2,8 @@ from __future__ import absolute_import
 from sqlbuilder import smartsql
 from .. import models
 from . import polymorphic
-# Not testet yet!!!
+
+# Under construction!!! Not testet yet!!!
 
 
 def get_root_model(cls):

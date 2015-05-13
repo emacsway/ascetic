@@ -1,6 +1,6 @@
 from .. import models
 
-# Not testet yet!!!
+# Under construction!!! Not testet yet!!!
 
 
 class GenericForeignKey(models.Relation):

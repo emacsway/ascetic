@@ -3,8 +3,7 @@ import sys
 import base64
 import json
 
-# Just a draft! In progress.
-# Not tested yet!!!
+# Under construction!!! Not testet yet!!!
 
 try:
     import cPickle as pickle
