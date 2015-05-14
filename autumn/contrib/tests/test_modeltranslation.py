@@ -48,11 +48,11 @@ class TestModelTranslation(unittest.TestCase):
         'sqlite3': """
             DROP TABLE IF EXISTS autumn_modeltranslation_author;
             CREATE TABLE autumn_modeltranslation_author (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              first_name VARCHAR(40),
-              first_name VARCHAR(40),
-              last_name VARCHAR(40),
-              last_name VARCHAR(40),
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                first_name VARCHAR(40),
+                first_name VARCHAR(40),
+                last_name VARCHAR(40),
+                last_name VARCHAR(40),
               bio TEXT
             );
         """
