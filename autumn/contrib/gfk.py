@@ -26,7 +26,7 @@ class GenericForeignKey(models.Relation):
         if (cached_obj is not None or cached_obj.pk != fk_val or
                 type(cached_obj)._meta.name != type_val):
             rel_model = models.registry[type_val]
-            instance._cache[self.name] = rel_model.qs.where(
+            instance._cache[self.name] = rel_model.q.where(
                 rel_model.s.pk == fk_val
             )
         return instance._cache[self.name]

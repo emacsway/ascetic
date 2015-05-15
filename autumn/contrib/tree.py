@@ -37,7 +37,7 @@ class MpModel(object):
         using = using or self._meta.using
         base_model = get_root_model(type(self))
         if self.pk:
-            old_tree_path = base_model.qs.get(pk=self.pk).tree_path
+            old_tree_path = base_model.q.get(pk=self.pk).tree_path
         else:
             old_tree_path = None
         super(MpModel, self).save(using=using)
@@ -46,18 +46,18 @@ class MpModel(object):
         if self.parent:
             tree_path = self.PATH_SEPARATOR.join((self.parent.tree_path, tree_path))
         self.tree_path = tree_path
-        type(self).qs.using(using).where(
+        type(self).q.using(using).where(
             type(self).s.pk == self.pk
         ).update({
             'tree_path': self.tree_path
         })
 
         if old_tree_path is not None and old_tree_path != tree_path:
-            for obj in type(self).qs.using(using).where(
+            for obj in type(self).q.using(using).where(
                 type(self).s.tree_path.startswith(old_tree_path) &
                 type(self).s.pk != self.pk
             ).iterator():
-                type(self).qs.using(using).where(
+                type(self).q.using(using).where(
                     type(self).s.pk == obj.pk
                 ).update({
                     'tree_path': obj.tree_path.replace(old_tree_path, tree_path)
@@ -78,22 +78,22 @@ class MpModel(object):
     def get_ancestors_by_path(self, root=False, me=False, reverse=True):
         base_model = get_root_model(type(self))
         t = base_model.s
-        qs = base_model.qs.where(
+        q = base_model.q.where(
             smartsql.P(self.tree_path).startswith(t.tree_path)
         )
         if not root:
-            qs = qs.where(base_model.s.parent.is_not(None))
+            q = q.where(base_model.s.parent.is_not(None))
         if not me:
-            qs = qs.where(base_model.s.pk != self.pk)
+            q = q.where(base_model.s.pk != self.pk)
         if reverse:
-            qs = qs.order_by(base_model.s.tree_path)
+            q = q.order_by(base_model.s.tree_path)
         else:
-            qs = qs.order_by(base_model.s.tree_path.desc())
-        return qs
+            q = q.order_by(base_model.s.tree_path.desc())
+        return q
 
     def get_ancestors_by_paths(self, root=False, me=False, reverse=True):
         base_model = get_root_model(type(self))
-        qs = base_model.qs
+        q = base_model.q
         cond = None
         paths = self.tree_path.split(self.PATH_SEPARATOR)
         while paths:
@@ -101,18 +101,18 @@ class MpModel(object):
             cond = cond | q if cond is not None else q
             paths.pop()
 
-        qs = qs.where(cond)
+        q = q.where(cond)
 
         if not root:
-            qs = qs.where(base_model.s.parent.is_not(None))
+            q = q.where(base_model.s.parent.is_not(None))
         if not me:
-            qs = qs.where(base_model.s.pk != self.pk)
+            q = q.where(base_model.s.pk != self.pk)
 
         if reverse:
-            qs = qs.order_by(base_model.s.tree_path)
+            q = q.order_by(base_model.s.tree_path)
         else:
-            qs = qs.order_by(base_model.s.tree_path.desc())
-        return qs
+            q = q.order_by(base_model.s.tree_path.desc())
+        return q
 
     def get_ancestors(self, root=False, me=False, reverse=True):
         return self.get_ancestors_by_paths(root=root, me=me, reverse=reverse)
@@ -124,7 +124,7 @@ class MpModel(object):
     def get_children(self):
         """Fix for MTI"""
         base_model = get_root_model(type(self))
-        return base_model.qs.where(base_model.s.parent == self.pk)
+        return base_model.q.where(base_model.s.parent == self.pk)
 
     def _descendants(self):
         r = list(self.get_children())
@@ -141,7 +141,7 @@ class MpModel(object):
 
     def get_descendants(self, me=False):
         base_model = get_root_model(type(self))
-        qs = base_model.qs.where(base_model.s.tree_path.startswith(self.tree_path))
+        q = base_model.q.where(base_model.s.tree_path.startswith(self.tree_path))
         if not me:
-            qs = qs.where(base_model.s.pk != self.pk)
-        return qs
+            q = q.where(base_model.s.pk != self.pk)
+        return q

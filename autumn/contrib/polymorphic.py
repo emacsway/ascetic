@@ -26,7 +26,7 @@ class PolymorphicModelBase(models.ModelBase):
                     field=new_cls.pk,
                     to_field=base.pk,
                     rel_name=new_cls.__name__.lower(),
-                    qs=lambda rel: rel.rel_model.s.qs.polymorphic(False)
+                    qs=lambda rel: rel.rel_model.s.q.polymorphic(False)
                 ).add_to_class(
                     new_cls, pk_rel_name
                 )
@@ -145,21 +145,21 @@ class PolymorphicModel(PolymorphicModelBase(b"NewBase", (models.Model, ), {})):
         if '_s' not in cls.__dict__:
             cls._s = t = models.Table(cls)
             if cls.parent_model:
-                qs = cls.parent_model.qs
-                qs = qs.fields(
+                q = cls.parent_model.q
+                q = q.fields(
                     *t.get_fields()
                 ).tables((
-                    qs.tables() & t
+                    q.tables() & t
                 ).on(
                     t.pk == cls.parent_model.s.pk
                 )).polymorphic(False)
-                t.qs = qs
+                t.q = q
             else:
-                t.qs = PolymorphicQuerySet(t).fields(t.get_fields())
+                t.q = PolymorphicQuerySet(t).fields(t.get_fields())
         return cls._s
 
 
-class PolymorphicQuerySet(models.QS):
+class PolymorphicQuerySet(models.Q):
     """Custom QuerySet for real instances."""
 
     _polymorphic = True
@@ -201,7 +201,7 @@ def populate_polymorphic(rows):
     for ct in content_types:
         model = models.registry[ct]
         if model.root_model:  # TODO: remove this condition?
-            typical_objects[ct] = {i.pk: i for i in model.qs.where(model.s.pk.in_(pks))}
+            typical_objects[ct] = {i.pk: i for i in model.q.where(model.s.pk.in_(pks))}
     for i, obj in enumerate(rows):
         if obj.polymorphic_type_id in typical_objects:
             rows[i] = typical_objects[obj.polymorphic_type_id][obj.pk]

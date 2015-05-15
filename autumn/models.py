@@ -155,7 +155,7 @@ class Result(smartsql.Result):
 
     def populate_prefetch(self):
         relations = self._gateway.bound_relations
-        for key, qs in self._prefetch.items():
+        for key, q in self._prefetch.items():
             rel = relations[key]
             # recursive handle prefetch
             field = rel.field if type(rel.field) == tuple else (rel.field,)
@@ -166,7 +166,7 @@ class Result(smartsql.Result):
                                   ((rel.rel_model.s.__getattr__(rf) == getattr(obj, f))
                                    for f, rf in zip(field, rel_field)))
                            for obj in self._cache))
-            rows = list(qs.where(cond))
+            rows = list(q.where(cond))
             for obj in self._cache:
                 val = [i for i in rows if tuple(getattr(i, f) for f in rel_field) == tuple(getattr(obj, f) for f in field)]
                 if isinstance(rel.relation, (ForeignKey, OneToOne)):
@@ -311,11 +311,11 @@ class Gateway(object):
 
     def _create_base_query(self):
         """For relations."""
-        return smartsql.QS(self.sql_table, result=self.result_factory(self)).fields(self.get_sql_fields())
+        return smartsql.Q(self.sql_table, result=self.result_factory(self)).fields(self.get_sql_fields())
 
     def _create_query(self):
         """For selection."""
-        return smartsql.QS(self.sql_table, result=self.result_factory(self)).fields(self.get_sql_fields())
+        return smartsql.Q(self.sql_table, result=self.result_factory(self)).fields(self.get_sql_fields())
 
     def get_sql_fields(self, prefix=None):
         """Returns field list."""
@@ -502,7 +502,7 @@ class Gateway(object):
         return True
 
     def get(self, _obj_pk=None, **kwargs):
-        """Returns QS object"""
+        """Returns Q object"""
         if _obj_pk is not None:
             pk = self.pk
             if type(self.pk) != tuple:
@@ -511,10 +511,10 @@ class Gateway(object):
             return self.get(**{k: v for k, v in zip(pk, _obj_pk)})
 
         if kwargs:
-            qs = self.query
+            q = self.query
             for k, v in kwargs.items():
-                qs = qs.where(smartsql.Field(self.fields[k].column, self.sql_table) == v)
-            return qs[0]
+                q = q.where(smartsql.Field(self.fields[k].column, self.sql_table) == v)
+            return q[0]
 
 
 class ModelBase(type):
@@ -613,7 +613,12 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         return cls._gateway.sql_table
 
     @classproperty
+    def q(cls):
+        return cls._gateway.query
+
+    @classproperty
     def qs(cls):
+        smartsql.warn('Table.qs', 'Table.q')
         return cls._gateway.query
 
     @classmethod
@@ -628,7 +633,7 @@ class CompositeModel(object):
     """Composite model.
 
     Exaple of usage:
-    >>> rows = CompositeModel(Model1, Model2).qs...filter(...)
+    >>> rows = CompositeModel(Model1, Model2).q...filter(...)
     >>> type(rows[0]):
         CompositeModel
     >>> list(rows[0])
@@ -715,13 +720,18 @@ class SelectRelatedMapping(object):
 class Table(smartsql.Table):
     """Table class"""
 
-    def __init__(self, gateway, qs=None, *args, **kwargs):
+    def __init__(self, gateway, *args, **kwargs):
         """Constructor"""
         super(Table, self).__init__(gateway.db_table, *args, **kwargs)
         self._gateway = gateway
 
     @property
+    def q(self):
+        return self._gateway.query
+
+    @property
     def qs(self):
+        smartsql.warn('Table.qs', 'Table.q')
         return self._gateway.query
 
     def get_fields(self, prefix=None):
@@ -989,7 +999,7 @@ class OneToMany(Relation):
         field = self.field(owner) if type(self.field(owner)) == tuple else (self.field(owner),)
         rel_field = self.rel_field(owner) if type(self.rel_field(owner)) == tuple else (self.rel_field(owner),)
         val = tuple(getattr(instance, f) for f in field)
-        # Cache attr already exists in QS, so, can be even setable.
+        # Cache attr already exists in Q, so, can be even setable.
         t = self.rel_model(owner)._gateway.sql_table
         q = self.rel_model(owner)._gateway.base_query
         for f, v in zip(rel_field, val):
