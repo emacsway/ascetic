@@ -98,7 +98,10 @@ class Result(smartsql.Result):
             return self._cache[key]
         if isinstance(key, integer_types):
             self._query = super(Result, self).__getitem__(key)
-            return list(self)[0]
+            try:
+                return list(self)[0]
+            except IndexError:
+                raise ObjectDoesNotExist
         return super(Result, self).__getitem__(key)
 
     def execute(self):
