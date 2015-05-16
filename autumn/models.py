@@ -21,7 +21,27 @@ except NameError:
 cr = copy.copy(smartsql.cr)
 
 
+class cached_property(object):
+    def __init__(self, func, name=None):
+        self.func = func
+        self.name = name or func.__name__
+
+    def __get__(self, instance, type=None):
+        if instance is None:
+            return self
+        res = instance.__dict__[self.name] = self.func(instance)
+        return res
+
+
+def to_tuple(val):
+    return val if type(val) == tuple else (val,)
+
+
 class ModelNotRegistered(Exception):
+    pass
+
+
+class ObjectDoesNotExist(Exception):
     pass
 
 
@@ -158,8 +178,8 @@ class Result(smartsql.Result):
         for key, q in self._prefetch.items():
             rel = relations[key]
             # recursive handle prefetch
-            field = rel.field if type(rel.field) == tuple else (rel.field,)
-            rel_field = rel.rel_field if type(rel.rel_field) == tuple else (rel.rel_field,)
+            field = rel.field
+            rel_field = rel.rel_field
 
             cond = reduce(operator.or_,
                           (reduce(operator.and_,
@@ -464,7 +484,7 @@ class Gateway(object):
 
     def _insert(self, obj):
         query = self.base_query
-        pk = self.pk if type(self.pk) == tuple else (self.pk,)
+        pk = to_tuple(self.pk)
         auto_pk = not all(getattr(obj, k, False) for k in pk)
         data = self.get_data(obj, exclude=(pk if auto_pk else ()), to_db=True)
         cursor = query.insert(data)
@@ -472,7 +492,7 @@ class Gateway(object):
             obj.pk = query.result.db.last_insert_id(cursor)
 
     def _update(self, obj):
-        pk = self.pk if type(self.pk) == tuple else (self.pk,)
+        pk = to_tuple(self.pk)
         cond = reduce(operator.and_, (smartsql.Field(self.fields[k].column, self.sql_table) == getattr(obj, k) for k in pk))
         data = self.get_data(obj, fields=self.get_changed(obj), to_db=True)
         self.base_query.where(cond).update(data)
@@ -495,7 +515,7 @@ class Gateway(object):
                 child = getattr(obj, key)
                 rel.on_delete(obj, child, rel, self._using, visited)
 
-        pk = self.pk if type(self.pk) == tuple else (self.pk,)
+        pk = to_tuple(self.pk)
         cond = reduce(operator.and_, (smartsql.Field(self.fields[k].column, self.sql_table) == getattr(obj, k) for k in pk))
         self.base_query.where(cond).delete()
         self.send_signal(obj, signal='post_delete', using=self._using)
@@ -504,11 +524,7 @@ class Gateway(object):
     def get(self, _obj_pk=None, **kwargs):
         """Returns Q object"""
         if _obj_pk is not None:
-            pk = self.pk
-            if type(self.pk) != tuple:
-                pk = (self.pk,)
-                _obj_pk = (_obj_pk,)
-            return self.get(**{k: v for k, v in zip(pk, _obj_pk)})
+            return self.get(**{k: v for k, v in zip(to_tuple(self.pk), to_tuple(_obj_pk))})
 
         if kwargs:
             q = self.query
@@ -557,12 +573,9 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         """Allows setting of fields using kwargs"""
         self._gateway.send_signal(self, signal='pre_init', args=args, kwargs=kwargs, using=self._gateway._using)
         self._cache = {}
-        pk = self._gateway.pk
-        if type(pk) == tuple:
-            for k in pk:
-                self.__dict__[k] = None
-        else:
-            self.__dict__[pk] = None
+        for k in to_tuple(self._gateway.pk):
+            self.__dict__[k] = None
+
         if args:
             for i, arg in enumerate(args):
                 setattr(self, self._gateway.fields.keys()[i], arg)
@@ -589,12 +602,8 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def _set_pk(self, value):
         """Sets the primary key"""
-        pk = self._gateway.pk
-        if type(pk) == tuple:
-            for k, v in zip(pk, value):
-                setattr(self, k, v)
-        else:
-            setattr(self, self._gateway.pk, value)
+        for k, v in zip(to_tuple(self._gateway.pk), to_tuple(value)):
+            setattr(self, k, v)
 
     pk = property(_get_pk, _set_pk)
 
@@ -677,9 +686,7 @@ class SelectRelatedMapping(object):
     def get_objects(self, models, rows, state):
         objs = []
         for model, model_row in zip(models, rows):
-            pk = model._gateway.pk
-            if type(pk) != tuple:
-                pk = (pk,)
+            pk = to_tuple(model._gateway.pk)
             pk_columns = tuple(model._gateway.fields[k].columns for k in pk)
             model_row_dict = dict(model_row)
             pk_values = tuple(model_row_dict[k] for k in pk_columns)
@@ -779,18 +786,6 @@ def do_nothing(parent, child, parent_rel, using, visited):
 # TODO: descriptor for FileField? Or custom postgresql data type? See http://www.postgresql.org/docs/8.4/static/sql-createtype.html
 
 
-class cached_property(object):
-    def __init__(self, func, name=None):
-        self.func = func
-        self.name = name or func.__name__
-
-    def __get__(self, instance, type=None):
-        if instance is None:
-            return self
-        res = instance.__dict__[self.name] = self.func(instance)
-        return res
-
-
 class BoundRelation(object):
 
     def __init__(self, owner, relation):
@@ -851,8 +846,8 @@ class Relation(object):
 
     def __init__(self, rel_model, rel_field=None, field=None, on_delete=cascade, rel_name=None):
         self.rel_model_or_name = rel_model
-        self._rel_field = rel_field
-        self._field = field
+        self._rel_field = rel_field and to_tuple(rel_field)
+        self._field = field and to_tuple(field)
         self.on_delete = on_delete
         self._rel_name = rel_name
 
@@ -884,14 +879,17 @@ class Relation(object):
             return registry[name]
         return self.rel_model_or_name
 
+    def _do_query(self, query):
+        return query
+
 
 class ForeignKey(Relation):
 
     def field(self, owner):
-        return self._field or '{0}_id'.format(self.rel_model(owner)._gateway.db_table.rsplit("_", 1).pop())
+        return self._field or ('{0}_id'.format(self.rel_model(owner)._gateway.db_table.rsplit("_", 1).pop()),)
 
     def rel_field(self, owner):
-        return self._rel_field or self.rel_model(owner)._gateway.pk
+        return self._rel_field or (self.rel_model(owner)._gateway.pk,)
 
     def rel_name(self, owner):
         if self._rel_name is None:
@@ -916,13 +914,12 @@ class ForeignKey(Relation):
         ))
 
     def __get__(self, instance, owner):
-        # TODO: owner is self.model. self.model is useless (do remove it). It cause problems with inheritance.
         if not instance:
             return self
-        field = self.field(owner) if type(self.field(owner)) == tuple else (self.field(owner),)
-        rel_field = self.rel_field(owner) if type(self.rel_field(owner)) == tuple else (self.rel_field(owner),)
+        field = self.field(owner)
+        rel_field = self.rel_field(owner)
         val = tuple(getattr(instance, f) for f in field)
-        if not [i for i in val if i is not None]:
+        if not all(val):
             return None
 
         cached_obj = instance._cache.get(self.name(owner), None)
@@ -931,12 +928,13 @@ class ForeignKey(Relation):
             q = self.rel_model(owner)._gateway.base_query
             for f, v in zip(rel_field, val):
                 q = q.where(t.__getattr__(f) == v)
-            # TODO: Add hook here?
+            q = self._do_query(q)
             instance._cache[self.name(owner)] = q[0]
         return instance._cache[self.name(owner)]
 
     def __set__(self, instance, value):
         owner = instance.__class__
+        field = self.field(owner)
         if isinstance(value, Model):
             if not isinstance(value, self.rel_model(owner)):
                 raise Exception(
@@ -946,21 +944,18 @@ class ForeignKey(Relation):
                     )
                 )
             instance._cache[self.name(owner)] = value
-            value = value._get_pk()
-        if type(self.field(owner)) == tuple:
-            for a, v in zip(self.field(owner), value):
-                setattr(instance, a, v)
-        else:
-            setattr(instance, self.field(owner), value)
+            rel_field = self.rel_field(owner)
+            value = tuple(getattr(value, f) for f in rel_field)
+
+        value = to_tuple(value)
+        for a, v in zip(field, value):
+            setattr(instance, a, v)
 
     def __delete__(self, instance):
         owner = instance.__class__
         instance._cache.pop(self.name(owner), None)
-        if type(self.field(owner)) == tuple:
-            for a in self.field(owner):
-                setattr(instance, a, None)
-        else:
-            setattr(instance, self.field(owner), None)
+        for a in self.field(owner):
+            setattr(instance, a, None)
 
 
 class OneToOne(ForeignKey):
@@ -989,20 +984,21 @@ class OneToMany(Relation):
         return self._field or owner._gateway.pk
 
     def rel_field(self, owner):
-        return self._rel_field or '{0}_id'.format(owner._gateway.db_table.rsplit("_", 1).pop())
+        return self._rel_field or ('{0}_id'.format(owner._gateway.db_table.rsplit("_", 1).pop()),)
 
     def rel_name(self, owner):
-        return self._rel_name or self.rel_model(owner).__name__.lower()
+        return self._rel_name or (self.rel_model(owner).__name__.lower(),)
 
     def __get__(self, instance, owner):
         if not instance:
             return self
-        field = self.field(owner) if type(self.field(owner)) == tuple else (self.field(owner),)
-        rel_field = self.rel_field(owner) if type(self.rel_field(owner)) == tuple else (self.rel_field(owner),)
+        field = self.field(owner)
+        rel_field = self.rel_field(owner)
         val = tuple(getattr(instance, f) for f in field)
-        # Cache attr already exists in Q, so, can be even setable.
+        # TODO: Cacheable and setable for prefetch?
         t = self.rel_model(owner)._gateway.sql_table
         q = self.rel_model(owner)._gateway.base_query
         for f, v in zip(rel_field, val):
             q = q.where(t.__getattr__(f) == v)
+        q = self._do_query(q)
         return q
