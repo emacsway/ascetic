@@ -921,14 +921,15 @@ class ForeignKey(Relation):
             return self
         field = self.field(owner) if type(self.field(owner)) == tuple else (self.field(owner),)
         rel_field = self.rel_field(owner) if type(self.rel_field(owner)) == tuple else (self.rel_field(owner),)
-        fk_val = tuple(getattr(instance, f) for f in field)
-        if not [i for i in fk_val if i is not None]:
+        val = tuple(getattr(instance, f) for f in field)
+        if not [i for i in val if i is not None]:
             return None
 
-        if (getattr(instance._cache.get(self.name(owner), None), f, None) for f in self.rel_field(owner)) != fk_val:
+        cached_obj = instance._cache.get(self.name(owner), None)
+        if cached_obj is None or tuple(getattr(cached_obj, f, None) for f in self.rel_field(owner)) != val:
             t = self.rel_model(owner)._gateway.sql_table
             q = self.rel_model(owner)._gateway.base_query
-            for f, v in zip(rel_field, fk_val):
+            for f, v in zip(rel_field, val):
                 q = q.where(t.__getattr__(f) == v)
             # TODO: Add hook here?
             instance._cache[self.name(owner)] = q[0]
