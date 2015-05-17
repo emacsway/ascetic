@@ -5,6 +5,9 @@ from autumn import utils
 from autumn.connections import get_db
 from autumn.models import Model, ForeignKey
 from sqlbuilder import smartsql
+from sqlbuilder.smartsql.tests import TestSmartSQL
+
+TestSmartSQL
 
 Author = Book = AuthorC = BookC = None
 

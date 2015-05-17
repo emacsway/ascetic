@@ -1,4 +1,4 @@
-from ..models import ForeignKey, OneToMany, cascade, registry, to_tuple
+from ..models import ForeignKey, OneToMany, cascade, registry
 
 # Under construction!!! Not testet yet!!!
 
@@ -25,15 +25,14 @@ class GenericForeignKey(ForeignKey):
             return self
         type_val = getattr(instance, self.type_field)
         rel_model = registry[type_val]
-        field = to_tuple(self.field(owner))
-        rel_field = to_tuple(self.rel_field(owner))
-        val = tuple(getattr(instance, f) for f in field)
+        val = tuple(getattr(instance, f) for f in self.field(owner))
 
         if not [i for i in val if i is not None]:
             return None
 
         cached_obj = instance._cache.get(self.name(owner), None)
-        if not isinstance(cached_obj, rel_model) or tuple(getattr(cached_obj, f, None) for f in self.rel_field(owner)) != val:
+        rel_field = self.rel_field(owner)
+        if not isinstance(cached_obj, rel_model) or tuple(getattr(cached_obj, f, None) for f in rel_field) != val:
             t = self.rel_model._gateway.sql_table
             q = self.rel_model._gateway.base_query
             for f, v in zip(rel_field, val):

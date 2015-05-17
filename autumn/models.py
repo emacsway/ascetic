@@ -342,9 +342,9 @@ class Gateway(object):
 
     def get_sql_fields(self, prefix=None):
         """Returns field list."""
-        return [smartsql.Field(f.column, prefix if prefix is not None else self.sql_table)
-                for f in self.fields.values()
-                if not getattr(f, 'virtual', False)]
+        if prefix is None:
+            prefix = self.sql_table
+        return [smartsql.Field(f.column, prefix) for f in self.fields.values() if not getattr(f, 'virtual', False)]
 
     def _prepare_model(self, model):
         model._gateway = model._meta = self
@@ -633,7 +633,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     @classproperty
     def qs(cls):
-        smartsql.warn('Table.qs', 'Table.q')
+        smartsql.warn('Model.qs', 'Model.q')
         return cls._gateway.query
 
     @classmethod
@@ -935,14 +935,13 @@ class ForeignKey(Relation):
     def __get__(self, instance, owner):
         if not instance:
             return self
-        field = self.field(owner)
-        rel_field = self.rel_field(owner)
-        val = tuple(getattr(instance, f) for f in field)
+        val = tuple(getattr(instance, f) for f in self.field(owner))
         if not all(val):
             return None
 
         cached_obj = self._get_cache(instance, self.name(owner))
-        if cached_obj is None or tuple(getattr(cached_obj, f, None) for f in self.rel_field(owner)) != val:
+        rel_field = self.rel_field(owner)
+        if cached_obj is None or tuple(getattr(cached_obj, f, None) for f in rel_field) != val:
             t = self.rel_model(owner)._gateway.sql_table
             q = self.rel_model(owner)._gateway.base_query
             for f, v in zip(rel_field, val):
@@ -953,7 +952,6 @@ class ForeignKey(Relation):
 
     def __set__(self, instance, value):
         owner = instance.__class__
-        field = self.field(owner)
         if isinstance(value, Model):
             if not isinstance(value, self.rel_model(owner)):
                 raise Exception(
@@ -963,11 +961,9 @@ class ForeignKey(Relation):
                     )
                 )
             self._set_cache(instance, self.name(owner), value)
-            rel_field = self.rel_field(owner)
-            value = tuple(getattr(value, f) for f in rel_field)
-
+            value = tuple(getattr(value, f) for f in self.rel_field(owner))
         value = to_tuple(value)
-        for a, v in zip(field, value):
+        for a, v in zip(self.field(owner), value):
             setattr(instance, a, v)
 
     def __delete__(self, instance):
@@ -1011,13 +1007,10 @@ class OneToMany(Relation):
     def __get__(self, instance, owner):
         if not instance:
             return self
-        field = self.field(owner)
-        rel_field = self.rel_field(owner)
-        val = tuple(getattr(instance, f) for f in field)
+        val = tuple(getattr(instance, f) for f in self.field(owner))
         # TODO: Cacheable and setable for prefetch?
         t = self.rel_model(owner)._gateway.sql_table
         q = self.rel_model(owner)._gateway.base_query
-        for f, v in zip(rel_field, val):
+        for f, v in zip(self.rel_field(owner), val):
             q = q.where(t.__getattr__(f) == v)
-        q = self._do_query(q)
-        return q
+        return self._do_query(q)
