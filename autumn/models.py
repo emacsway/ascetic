@@ -52,7 +52,7 @@ class ModelRegistry(dict):
 
     def __getitem__(self, name):
         try:
-            return self[name]
+            return super(ModelRegistry, self).__getitem__(name)
         except KeyError:
             raise ModelNotRegistered
 
@@ -357,7 +357,7 @@ class Gateway(object):
         # add templates support for related_name,
         # support copy.
         for key, rel in model.__dict__.items():
-            if isinstance(rel, Relation):
+            if isinstance(rel, Relation) and hasattr(rel, 'add_related'):
                 try:
                     rel.add_related(model)
                 except ModelNotRegistered:
@@ -905,14 +905,14 @@ class Relation(object):
 class ForeignKey(Relation):
 
     def field(self, owner):
-        return self._field or ('{0}_id'.format(self.rel_model(owner)._gateway.db_table.rsplit("_", 1).pop()),)
+        return self._field or ('{0}_id'.format(self.rel_model(owner).__name__.lower()),)
 
     def rel_field(self, owner):
         return self._rel_field or (self.rel_model(owner)._gateway.pk,)
 
     def rel_name(self, owner):
         if self._rel_name is None:
-            return '{0}_set'.format(self.rel_model(owner).__name__.lower())
+            return '{0}_set'.format(owner.__name__.lower())
         elif isinstance(self._rel_name, collections.Callable):
             return self._rel_name(self, owner)
         else:
@@ -999,10 +999,10 @@ class OneToMany(Relation):
         return self._field or owner._gateway.pk
 
     def rel_field(self, owner):
-        return self._rel_field or ('{0}_id'.format(owner._gateway.db_table.rsplit("_", 1).pop()),)
+        return self._rel_field or ('{0}_id'.format(owner.__name__.lower()),)
 
     def rel_name(self, owner):
-        return self._rel_name or (self.rel_model(owner).__name__.lower(),)
+        return self._rel_name or (owner.__name__.lower(),)
 
     def __get__(self, instance, owner):
         if not instance:
