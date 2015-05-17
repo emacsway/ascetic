@@ -408,11 +408,17 @@ class Gateway(object):
 
     def create_instance(self, data, from_db=True):
         if from_db:
-            data = {self.columns[key].name if key in self.columns else key: value for key, value in data}
+            cols = self.columns
+            data_mapped = {}
+            for key, value in data:
+                try:
+                    data_mapped[cols[key].name] = value
+                except KeyError:
+                    data_mapped[key] = value
         else:
-            data = dict(data)
-        obj = self.model(**data)
-        obj._original_data = data
+            data_mapped = dict(data)
+        obj = self.model(**data_mapped)
+        obj._original_data = data_mapped
         obj._new_record = False
         return obj
 
@@ -562,6 +568,8 @@ class ModelBase(type):
         else:
             NewGateway = new_cls.gateway_class
         NewGateway(new_cls)
+        for k in to_tuple(new_cls._gateway.pk):
+            setattr(new_cls, k, None)
 
         return new_cls
 
@@ -574,18 +582,13 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def __init__(self, *args, **kwargs):
         """Allows setting of fields using kwargs"""
-        self._gateway.send_signal(self, signal='pre_init', args=args, kwargs=kwargs, using=self._gateway._using)
-        self._cache = {}
-        for k in to_tuple(self._gateway.pk):
-            self.__dict__[k] = None
-
+        gateway = self._gateway
+        signals.send_signal(signal='pre_init', sender=self.__class__, instance=self, args=args, kwargs=kwargs, using=gateway._using)
         if args:
-            for i, arg in enumerate(args):
-                setattr(self, self._gateway.fields.keys()[i], arg)
+            self.__dict__.update(zip(gateway.fields.keys(), args))
         if kwargs:
-            for k, v in kwargs.items():
-                setattr(self, k, v)
-        self._gateway.send_signal(self, signal='post_init', using=self._gateway._using)
+            self.__dict__.update(kwargs)
+        signals.send_signal(signal='post_init', sender=self.__class__, instance=self, using=gateway._using)
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self._get_pk() == other._get_pk()
@@ -882,6 +885,19 @@ class Relation(object):
             return registry[name]
         return self.rel_model_or_name
 
+    def _get_cache(self, instance, key):
+        try:
+            return instance._cache[key]
+        except (AttributeError, KeyError):
+            return None
+
+    def _set_cache(self, instance, key, value):
+        try:
+            instance._cache[key] = value
+        except AttributeError:
+            instance._cache = {}
+            self._set_cache(instance, key, value)
+
     def _do_query(self, query):
         return query
 
@@ -925,14 +941,14 @@ class ForeignKey(Relation):
         if not all(val):
             return None
 
-        cached_obj = instance._cache.get(self.name(owner), None)
+        cached_obj = self._get_cache(instance, self.name(owner))
         if cached_obj is None or tuple(getattr(cached_obj, f, None) for f in self.rel_field(owner)) != val:
             t = self.rel_model(owner)._gateway.sql_table
             q = self.rel_model(owner)._gateway.base_query
             for f, v in zip(rel_field, val):
                 q = q.where(t.__getattr__(f) == v)
             q = self._do_query(q)
-            instance._cache[self.name(owner)] = q[0]
+            self._set_cache(instance, self.name(owner), q[0])
         return instance._cache[self.name(owner)]
 
     def __set__(self, instance, value):
@@ -946,7 +962,7 @@ class ForeignKey(Relation):
                         self.rel_model(owner)._gateway.name
                     )
                 )
-            instance._cache[self.name(owner)] = value
+            self._set_cache(instance, self.name(owner), value)
             rel_field = self.rel_field(owner)
             value = tuple(getattr(value, f) for f in rel_field)
 
@@ -956,7 +972,7 @@ class ForeignKey(Relation):
 
     def __delete__(self, instance):
         owner = instance.__class__
-        instance._cache.pop(self.name(owner), None)
+        self._set_cache(instance, self.name(owner), None)
         for a in self.field(owner):
             setattr(instance, a, None)
 
