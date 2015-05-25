@@ -54,7 +54,7 @@ class ModelRegistry(dict):
         try:
             return super(ModelRegistry, self).__getitem__(name)
         except KeyError:
-            raise ModelNotRegistered
+            raise ModelNotRegistered("""Model {} is not registered in {}""".format(name, self.keys()))
 
 registry = ModelRegistry()
 
@@ -953,7 +953,7 @@ class ForeignKey(Relation):
     def __set__(self, instance, value):
         owner = instance.__class__
         if isinstance(value, Model):
-            if not isinstance(value, self.rel_model(owner)):
+            if hasattr(self, 'rel_model') and not isinstance(value, self.rel_model(owner)):
                 raise Exception(
                     ('Value should be an instance of "{0}" ' +
                      'or primary key of related instance.').format(
@@ -1002,7 +1002,7 @@ class OneToMany(Relation):
         return self._rel_field or ('{0}_id'.format(owner.__name__.lower()),)
 
     def rel_name(self, owner):
-        return self._rel_name or (owner.__name__.lower(),)
+        return self._rel_name or owner.__name__.lower()
 
     def __get__(self, instance, owner):
         if not instance:

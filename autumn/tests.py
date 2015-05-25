@@ -328,7 +328,8 @@ class TestCompositeRelation(unittest.TestCase):
                 lang VARCHAR(6) NOT NULL,
                 first_name VARCHAR(40) NOT NULL,
                 last_name VARCHAR(40) NOT NULL,
-                bio TEXT
+                bio TEXT,
+                PRIMARY KEY (id, lang)
             );
             DROP TABLE IF EXISTS autumn_composite_book;
             CREATE TABLE autumn_composite_book (
@@ -336,6 +337,7 @@ class TestCompositeRelation(unittest.TestCase):
                 lang VARCHAR(6) NOT NULL,
                 title VARCHAR(255),
                 author_id INT(11),
+                PRIMARY KEY (id, lang),
                 FOREIGN KEY (author_id, lang) REFERENCES autumn_composite_author (id, lang)
             );
         """
