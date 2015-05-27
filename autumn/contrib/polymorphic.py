@@ -19,7 +19,7 @@ class PolymorphicGateway(models.Gateway):
                 return parent._gateway
 
     @models.classproperty
-    def polymorphic_root(cls):
+    def polymorphic_root(self):
         for parent in self.model.mro().reverse():
             if parent is not self.model and hasattr(parent, '_gateway') and getattr(parent._gateway, 'polymorphic', False):
                 return parent
@@ -49,6 +49,28 @@ class PolymorphicGateway(models.Gateway):
         else:
             q = super(PolymorphicGateway, self)._create_query()
         return q
+
+    def _do_prepare_model(self, model):
+        for base in model.__bases__:
+            if getattr(base._gateway, 'polymorphic', False):
+                pk_rel_name = "{}_ptr".format(base.__name__.lower())
+                model.pk = "{}_id".format(pk_rel_name)
+                setattr(model, pk_rel_name, models.OneToOne(
+                    base,
+                    field=model.pk,
+                    to_field=base.pk,
+                    rel_name=model.__name__.lower(),
+                    qs=lambda rel: rel.rel_model.s.q.polymorphic(False)
+                ))
+                break
+        else:
+            if getattr(model._gateway, 'polymorphic', False) and not model.root_model:
+                gfk.GenericForeignKey(
+                    type_field="polymorphic_type_id",
+                    field=model.pk
+                ).add_to_class(
+                    model, "real_instance"
+                )
 
     def create_instance(self, data, from_db=True):
         if from_db:
@@ -88,46 +110,6 @@ class PolymorphicGateway(models.Gateway):
             # TODO: _base_save()
             self.polymorphic_parent.save(copy.copy(obj))
         return super(PolymorphicGateway, self).save(obj)
-
-
-class PolymorphicModelBase(models.ModelBase):
-    """Metaclass for Model"""
-
-    def __new__(cls, name, bases, attrs):
-        new_cls = super(PolymorphicModel, cls).__new__(cls, name, bases, attrs)
-
-        if not hasattr(new_cls, '_meta'):
-            return new_cls
-
-        for base in new_cls.__bases__:
-            if getattr(base._meta, 'polymorphic', False):
-                pk_rel_name = "{}_ptr".format(base.__name__.lower())
-                new_cls.pk = "{}_id".format(pk_rel_name)
-                models.OneToOne(
-                    base,
-                    field=new_cls.pk,
-                    to_field=base.pk,
-                    rel_name=new_cls.__name__.lower(),
-                    qs=lambda rel: rel.rel_model.s.q.polymorphic(False)
-                ).add_to_class(
-                    new_cls, pk_rel_name
-                )
-                break
-        else:
-            if getattr(new_cls._meta, 'polymorphic', False) and not new_cls.root_model:
-                gfk.GenericForeignKey(
-                    type_field="polymorphic_type_id",
-                    field=new_cls.pk
-                ).add_to_class(
-                    new_cls, "real_model_instance"
-                )
-        return new_cls
-
-
-class PolymorphicModel(PolymorphicModelBase(b"NewBase", (models.Model, ), {})):
-
-    class Meta:
-        abstract = True
 
 
 class PolymorphicQuerySet(models.Q):

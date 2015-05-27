@@ -346,6 +346,9 @@ class Gateway(object):
             prefix = self.sql_table
         return [smartsql.Field(f.column, prefix) for f in self.fields.values() if not getattr(f, 'virtual', False)]
 
+    def _do_prepare_model(self, model):
+        pass
+
     def _prepare_model(self, model):
         model._gateway = model._meta = self
         for name in self.model.__dict__:
@@ -370,6 +373,7 @@ class Gateway(object):
                         rel.add_related(rel_model)
                 except ModelNotRegistered:
                     pass
+        self._do_prepare_model(model)
         signals.send_signal(signal='class_prepared', sender=model, using=self._using)
 
     def _inherit(self, successor, parents):
