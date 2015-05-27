@@ -58,6 +58,14 @@ class GenericForeignKey(ForeignKey):
 
 class GenericRelation(OneToMany):
 
+    def field(self, owner):
+        rel_model = self.rel_model(owner)
+        return getattr(rel_model, self.rel_name(owner)).rel_field(rel_model)
+
+    def rel_field(self, owner):
+        rel_model = self.rel_model(owner)
+        return getattr(rel_model, self.rel_name(owner)).field(rel_model)
+
     def rel_type_field(self, owner):
         rel_model = self.rel_model(owner)
         return getattr(rel_model, self.rel_name(owner)).type_field(rel_model)

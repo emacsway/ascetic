@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import copy
 from .. import models, validators
 from . import gfk
 
@@ -6,6 +7,61 @@ from . import gfk
 
 # TODO: multilingual based on polymorphic???
 # Django-way with fields and local_fields???
+
+
+class PolymorphicGateway(models.Gateway):
+
+    @models.cached_property
+    def polymorphic_parent(self):
+        for parent in self.model.mro():
+            if parent is not self.model and hasattr(parent, '_gateway') and getattr(parent._gateway, 'polymorphic', False):
+                return parent._gateway
+
+    @models.cached_property
+    def polymorphic_columns(self):
+        cols = {}
+        g = self
+        while g:
+            cols.update(g.columns)
+            g = g.polymorphic_parent
+
+    def create_instance(self, data, from_db=True):
+        if from_db:
+            cols = self.polymorphic_columns
+            data_mapped = {}
+            for key, value in data:
+                try:
+                    data_mapped[cols[key].name] = value
+                except KeyError:
+                    data_mapped[key] = value
+        else:
+            data_mapped = dict(data)
+        obj = self.model(**data_mapped)
+        obj._original_data = data_mapped
+        obj._new_record = False
+        return obj
+
+    def validate(self, obj, fields=frozenset(), exclude=frozenset()):
+        errors = {}
+        try:
+            self.polymorphic_parent.validate(self, obj, fields=fields, exclude=exclude)
+        except validators.ValidationError as e:
+            errors.update(e.args[0])
+
+        try:
+            super(PolymorphicGateway, self).validate(self, obj, fields=fields, exclude=exclude)
+        except validators.ValidationError as e:
+            errors.update(e.args[0])
+
+        if errors:
+            raise validators.ValidationError(errors)
+
+    def save(self, obj):
+        if not self.polymorphic_type_id:
+            self.polymorphic_type_id = type(self)._gateway.name
+        if self.polymorphic_parent:
+            self.polymorphic_parent.save(copy.copy(obj))
+        return super(PolymorphicGateway, self).save(obj)
 
 
 class PolymorphicModelBase(models.ModelBase):
@@ -59,86 +115,6 @@ class PolymorphicModel(PolymorphicModelBase(b"NewBase", (models.Model, ), {})):
         for parent in cls.mro().reverse():
             if parent is not cls and hasattr(parent, '_meta') and getattr(parent._meta, 'polymorphic', False):
                 return parent
-
-    @models.classproperty
-    def parent_model(cls):
-        for parent in cls.mro():
-            if parent is not cls and hasattr(parent, '_meta') and getattr(parent._meta, 'polymorphic', False):
-                return parent
-
-    @property
-    def root_model_instance(self):
-        obj = self
-        while obj.parent_model_instance:
-            obj = obj.parent_model_instance
-        if obj != self:
-            return obj
-
-    @property
-    def parent_model_instance_(self):
-        if self.parent_model:
-            obj = getattr(self, "{}_prt".format(
-                self.parent_model.__name__.lower()
-            ))
-            return obj
-
-    def __setattr__(self, name, value):
-        if name not in type(self)._meta.fields and self.parent_model_instance:
-            self.parent_model_instance.__setattr__(name, value)
-        else:
-            super(PolymorphicModel, self).__setattr__(name, value)
-
-    def __getattr__(self, name):
-        if name not in type(self)._meta.fields and self.parent_model_instance:
-            self.parent_model_instance.__getattr__(name)
-        else:
-            super(PolymorphicModel, self).__getattr__(name)
-
-    def _set_data(self, data):
-        super(PolymorphicModel, self)._set_data(data)
-        for column in self._meta.columns:
-            data.pop(column, None)
-        if self.parent_model_instance:
-            self.parent_model_instance._set_data(data)
-        return self
-
-    def validate(self, *a, **kw):
-        errors = {}
-        try:
-            super(PolymorphicModel, self).validate(*a, **kw)
-        except validators.ValidationError as e:
-            errors.update(e.message)
-
-        if self.parent_model_instance:
-            try:
-                self.parent_model_instance.validate(*a, **kw)
-            except validators.ValidationError as e:
-                errors.update(e.message)
-
-        if errors:
-            raise validators.ValidationError(errors)
-
-    def save(self, *a, **kw):
-        if self.parent_model_instance:
-            self.parent_model_instance.save(*a, **kw)
-        if not self.pk:
-            self.pk = self.parent_model_instance.pk
-        if not self.polymorphic_type_id:
-            self.polymorphic_type_id = type(self)._meta.name
-        return super(PolymorphicModel, self).save(*a, **kw)
-
-    def delete(self, *a, **kw):
-        result = super(PolymorphicModel, self).delete(*a, **kw)
-        if self.parent_model_instance:
-            self.parent_model_instance.delete(*a, **kw)
-        return result
-
-    def serialize(self, *a, **kw):
-        result = {}
-        if self.parent_model_instance:
-            result.update(self.parent_model_instance.serialize(*a, **kw))
-        result.update(super(PolymorphicModel, self).serialize(*a, **kw))
-        return result
 
     @models.classproperty
     def s(cls):

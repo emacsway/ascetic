@@ -78,7 +78,7 @@ class TestModelTranslation(unittest.TestCase):
     def create_models(cls):
 
         class Author(Model):
-            books = GenericRelation('autumn.contrib.tests.test_gfk.Book', field=('id', 'lang'), rel_field=('object_id', 'lang'))
+            books = GenericRelation('autumn.contrib.tests.test_gfk.Book', rel_name='author')
 
             class Gateway(object):
                 db_table = 'autumn_gfk_author'
