@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import copy
+from collections import OrderedDict
 from .. import models, validators
 from . import gfk
 
@@ -17,13 +18,37 @@ class PolymorphicGateway(models.Gateway):
             if parent is not self.model and hasattr(parent, '_gateway') and getattr(parent._gateway, 'polymorphic', False):
                 return parent._gateway
 
+    @models.classproperty
+    def polymorphic_root(cls):
+        for parent in self.model.mro().reverse():
+            if parent is not self.model and hasattr(parent, '_gateway') and getattr(parent._gateway, 'polymorphic', False):
+                return parent
+
     @models.cached_property
     def polymorphic_columns(self):
-        cols = {}
-        g = self
-        while g:
-            cols.update(g.columns)
-            g = g.polymorphic_parent
+        if self.polymorphic_parent:
+            cols = self.polymorphic_parent.polymorphic_columns
+        else:
+            cols = OrderedDict()
+        for k, v in self.columns.items():
+            cols[k] = v
+        return cols
+
+    def _create_query(self):
+        p = self.polymorphic_parent
+        if p:
+            t = self.sql_table
+            q = self.parent_model._create_query()
+            q = q.fields(
+                *self.get_fields()
+            ).tables((
+                q.tables() & t
+            ).on(
+                t.pk == p.sql_table.pk
+            )).polymorphic(False)
+        else:
+            q = super(PolymorphicGateway, self)._create_query()
+        return q
 
     def create_instance(self, data, from_db=True):
         if from_db:
@@ -57,9 +82,10 @@ class PolymorphicGateway(models.Gateway):
             raise validators.ValidationError(errors)
 
     def save(self, obj):
-        if not self.polymorphic_type_id:
-            self.polymorphic_type_id = type(self)._gateway.name
+        if not obj.polymorphic_type_id:
+            obj.polymorphic_type_id = type(self)._gateway.name
         if self.polymorphic_parent:
+            # TODO: _base_save()
             self.polymorphic_parent.save(copy.copy(obj))
         return super(PolymorphicGateway, self).save(obj)
 
@@ -100,39 +126,8 @@ class PolymorphicModelBase(models.ModelBase):
 
 class PolymorphicModel(PolymorphicModelBase(b"NewBase", (models.Model, ), {})):
 
-    def __init__(self, *a, **kw):
-        if self.parent_model:
-            self.parent_model_instance = self.parent_model()
-        else:
-            self.parent_model_instance = None
-        super(PolymorphicModel, self).__init__(*a, **kw)
-
     class Meta:
         abstract = True
-
-    @models.classproperty
-    def root_model(cls):
-        for parent in cls.mro().reverse():
-            if parent is not cls and hasattr(parent, '_meta') and getattr(parent._meta, 'polymorphic', False):
-                return parent
-
-    @models.classproperty
-    def s(cls):
-        if '_s' not in cls.__dict__:
-            cls._s = t = models.Table(cls)
-            if cls.parent_model:
-                q = cls.parent_model.q
-                q = q.fields(
-                    *t.get_fields()
-                ).tables((
-                    q.tables() & t
-                ).on(
-                    t.pk == cls.parent_model.s.pk
-                )).polymorphic(False)
-                t.q = q
-            else:
-                t.q = PolymorphicQuerySet(t).fields(t.get_fields())
-        return cls._s
 
 
 class PolymorphicQuerySet(models.Q):
