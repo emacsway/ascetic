@@ -60,17 +60,15 @@ class PolymorphicGateway(models.Gateway):
                     field=model.pk,
                     to_field=base.pk,
                     rel_name=model.__name__.lower(),
-                    qs=lambda rel: rel.rel_model.s.q.polymorphic(False)
+                    query=lambda rel, owner: rel.rel_model.q.polymorphic(False)
                 ))
                 break
         else:
             if getattr(model._gateway, 'polymorphic', False) and not model.root_model:
-                gfk.GenericForeignKey(
+                setattr(model, "real_instance", gfk.GenericForeignKey(
                     type_field="polymorphic_type_id",
                     field=model.pk
-                ).add_to_class(
-                    model, "real_instance"
-                )
+                ))
 
     def create_instance(self, data, from_db=True):
         if from_db:
@@ -112,8 +110,7 @@ class PolymorphicGateway(models.Gateway):
         return super(PolymorphicGateway, self).save(obj)
 
 
-class PolymorphicQuerySet(models.Q):
-    """Custom QuerySet for real instances."""
+class PolymorphicResult(models.Result):
 
     _polymorphic = True
 
@@ -124,7 +121,7 @@ class PolymorphicQuerySet(models.Q):
 
     def fill_cache(self):
         if self._cache is not None or not self._polymorphic:
-            return super(PolymorphicQuerySet, self).fill_cache()
+            return super(PolymorphicResult, self).fill_cache()
 
         if self._cache is None:
             polymorphic, self._polymorphic = self._polymorphic, False
@@ -135,11 +132,11 @@ class PolymorphicQuerySet(models.Q):
         return self
 
     def iterator(self):
-        for obj in super(PolymorphicQuerySet, self).iterator():
+        for obj in super(PolymorphicResult, self).iterator():
             yield obj.real_model_instance if self._polymorphic and hasattr(obj, 'real_model_instance') else obj
 
     def _clone(self, *args, **kwargs):
-        c = super(PolymorphicQuerySet, self)._clone(*args, **kwargs)
+        c = super(PolymorphicResult, self)._clone(*args, **kwargs)
         c._polymorphic = self._polymorphic
         return c
 

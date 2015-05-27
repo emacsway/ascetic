@@ -803,10 +803,6 @@ class BoundRelation(object):
         self._relation = relation
 
     @cached_property
-    def query(self):
-        return self.rel_model._gateway.base_query
-
-    @cached_property
     def relation(self):
         return self._relation
 
@@ -821,6 +817,10 @@ class BoundRelation(object):
     @cached_property
     def descriptor_object(self):
         return self._relation.descriptor_object(self._owner)
+
+    @cached_property
+    def query(self):
+        return self._relation.query(self._owner)
 
     @cached_property
     def name(self):
@@ -854,12 +854,13 @@ class BoundRelation(object):
 
 class Relation(object):
 
-    def __init__(self, rel_model, rel_field=None, field=None, on_delete=cascade, rel_name=None):
+    def __init__(self, rel_model, rel_field=None, field=None, on_delete=cascade, rel_name=None, query=None):
         self.rel_model_or_name = rel_model
         self._rel_field = rel_field and to_tuple(rel_field)
         self._field = field and to_tuple(field)
         self.on_delete = on_delete
         self._rel_name = rel_name
+        self._query = query
 
     def descriptor_class(self, owner):
         for cls in owner.__mro__:
@@ -889,6 +890,12 @@ class Relation(object):
             return registry[name]
         return self.rel_model_or_name
 
+    def query(self, owner):
+        if isinstance(self._query, collections.Callable):
+            return self._query(self, owner)
+        else:
+            return self.rel_model(owner)._gateway.base_query
+
     def _get_cache(self, instance, key):
         try:
             return instance._cache[key]
@@ -901,9 +908,6 @@ class Relation(object):
         except AttributeError:
             instance._cache = {}
             self._set_cache(instance, key, value)
-
-    def _do_query(self, query):
-        return query
 
 
 class ForeignKey(Relation):
@@ -947,20 +951,18 @@ class ForeignKey(Relation):
         rel_field = self.rel_field(owner)
         if cached_obj is None or tuple(getattr(cached_obj, f, None) for f in rel_field) != val:
             t = self.rel_model(owner)._gateway.sql_table
-            q = self.rel_model(owner)._gateway.base_query
+            q = self.query(owner)
             for f, v in zip(rel_field, val):
                 q = q.where(t.__getattr__(f) == v)
-            q = self._do_query(q)
             self._set_cache(instance, self.name(owner), q[0])
         return instance._cache[self.name(owner)]
 
     def __set__(self, instance, value):
         owner = instance.__class__
         if isinstance(value, Model):
-            if hasattr(self, 'rel_model') and not isinstance(value, self.rel_model(owner)):
+            if not isinstance(value, self.rel_model(owner)):
                 raise Exception(
-                    ('Value should be an instance of "{0}" ' +
-                     'or primary key of related instance.').format(
+                    'Value should be an instance of "{0}" or primary key of related instance.'.format(
                         self.rel_model(owner)._gateway.name
                     )
                 )
@@ -1014,7 +1016,7 @@ class OneToMany(Relation):
         val = tuple(getattr(instance, f) for f in self.field(owner))
         # TODO: Cacheable and setable for prefetch?
         t = self.rel_model(owner)._gateway.sql_table
-        q = self.rel_model(owner)._gateway.base_query
+        q = self.query(owner)
         for f, v in zip(self.rel_field(owner), val):
             q = q.where(t.__getattr__(f) == v)
-        return self._do_query(q)
+        return q
