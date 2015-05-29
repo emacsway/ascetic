@@ -442,7 +442,7 @@ class Gateway(object):
 
     def send_signal(self, sender, *a, **kw):
         """Sends signal"""
-        kw.update({'sender': type(sender), 'instance': sender})
+        kw.update({'sender': self.model, 'instance': sender})
         return signals.send_signal(*a, **kw)
 
     def set_defaults(self, obj):
@@ -491,7 +491,9 @@ class Gateway(object):
         self.send_signal(obj, signal='pre_save', using=self._using)
         result = self._insert(obj) if obj._new_record else self._update(obj)
         self.send_signal(obj, signal='post_save', created=obj._new_record, using=self._using)
-        obj._original_data = dict(self.get_data(obj, to_db=False))
+        if not hasattr(obj, '_original_data'):
+            obj._original_data = {}
+        obj._original_data.update(dict(self.get_data(obj, to_db=False)))
         obj._new_record = False
         return result
 
@@ -502,7 +504,8 @@ class Gateway(object):
         data = self.get_data(obj, exclude=(pk if auto_pk else ()), to_db=True)
         cursor = query.insert(data)
         if auto_pk:
-            obj.pk = query.result.db.last_insert_id(cursor)
+            for k, v in zip(pk, to_tuple(query.result.db.last_insert_id(cursor))):
+                setattr(obj, k, v)
 
     def _update(self, obj):
         pk = to_tuple(self.pk)

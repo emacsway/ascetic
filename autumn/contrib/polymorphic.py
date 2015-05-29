@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 import copy
 from collections import OrderedDict
-from .. import models, validators
-from . import gfk
+from .. import validators
+from ..models import Gateway, OneToOne, Result, cached_property, classproperty, registry, to_tuple
+from .gfk import GenericForeignKey
 
 # Under construction!!! Not testet yet!!!
 
@@ -10,21 +11,21 @@ from . import gfk
 # Django-way with fields and local_fields???
 
 
-class PolymorphicGateway(models.Gateway):
+class PolymorphicGateway(Gateway):
 
-    @models.cached_property
+    @cached_property
     def polymorphic_parent(self):
         for parent in self.model.mro():
             if parent is not self.model and hasattr(parent, '_gateway') and getattr(parent._gateway, 'polymorphic', False):
                 return parent._gateway
 
-    @models.classproperty
+    @classproperty
     def polymorphic_root(self):
         for parent in self.model.mro().reverse():
             if parent is not self.model and hasattr(parent, '_gateway') and getattr(parent._gateway, 'polymorphic', False):
-                return parent
+                return parent._gateway
 
-    @models.cached_property
+    @cached_property
     def polymorphic_columns(self):
         if self.polymorphic_parent:
             cols = self.polymorphic_parent.polymorphic_columns
@@ -55,7 +56,7 @@ class PolymorphicGateway(models.Gateway):
             if getattr(base._gateway, 'polymorphic', False):
                 pk_rel_name = "{}_ptr".format(base.__name__.lower())
                 model.pk = "{}_id".format(pk_rel_name)
-                setattr(model, pk_rel_name, models.OneToOne(
+                setattr(model, pk_rel_name, OneToOne(
                     base,
                     field=model.pk,
                     to_field=base.pk,
@@ -65,7 +66,7 @@ class PolymorphicGateway(models.Gateway):
                 break
         else:
             if getattr(model._gateway, 'polymorphic', False) and not model.root_model:
-                setattr(model, "real_instance", gfk.GenericForeignKey(
+                setattr(model, "real_instance", GenericForeignKey(
                     type_field="polymorphic_type_id",
                     field=model.pk
                 ))
@@ -105,12 +106,15 @@ class PolymorphicGateway(models.Gateway):
         if not obj.polymorphic_type_id:
             obj.polymorphic_type_id = type(self)._gateway.name
         if self.polymorphic_parent:
-            # TODO: _base_save()
+            new_record = obj._new_record
             self.polymorphic_parent.save(copy.copy(obj))
+            for key, parent_key in zip(to_tuple(self.pk), to_tuple(self.polymorphic_parent.pk)):
+                setattr(obj, key, getattr(obj, parent_key))
+            obj._new_record = new_record
         return super(PolymorphicGateway, self).save(obj)
 
 
-class PolymorphicResult(models.Result):
+class PolymorphicResult(Result):
 
     _polymorphic = True
 
@@ -149,7 +153,7 @@ def populate_polymorphic(rows):
     content_types -= set((type(rows[0]),))
     typical_objects = {}
     for ct in content_types:
-        model = models.registry[ct]
+        model = registry[ct]
         if model.root_model:  # TODO: remove this condition?
             typical_objects[ct] = {i.pk: i for i in model.q.where(model.s.pk.in_(pks))}
     for i, obj in enumerate(rows):
