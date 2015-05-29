@@ -390,6 +390,7 @@ class Gateway(object):
         c = copy.copy(self)
         c._using = alias
         c.query = c.query.using(c._using)
+        c.base_query = c.base_query.using(c._using)
         return c
 
     @property

@@ -49,6 +49,7 @@ class PolymorphicGateway(Gateway):
             )).polymorphic(False)
         else:
             q = super(PolymorphicGateway, self)._create_query()
+            q.result = PolymorphicResult(self)
         return q
 
     def _do_prepare_model(self, model):
@@ -137,7 +138,7 @@ class PolymorphicResult(Result):
 
     def iterator(self):
         for obj in super(PolymorphicResult, self).iterator():
-            yield obj.real_model_instance if self._polymorphic and hasattr(obj, 'real_model_instance') else obj
+            yield obj.real_instance if self._polymorphic and hasattr(obj, 'real_instance') else obj
 
     def _clone(self, *args, **kwargs):
         c = super(PolymorphicResult, self)._clone(*args, **kwargs)
