@@ -378,9 +378,10 @@ class Gateway(object):
 
     def _inherit(self, successor, parents):
         for base in parents:  # recursive
-            for name, field in base.declared_fields.items():
-                if name not in successor.declared_fields:
-                    successor.declared_fields[name] = field
+            if not base.__dict__.get('polymorphic'):
+                for name, field in base.declared_fields.items():
+                    if name not in successor.declared_fields:
+                        successor.declared_fields[name] = field
 
     def using(self, alias=False):
         if alias is False:
@@ -811,16 +812,16 @@ class BoundRelation(object):
         return self._relation
 
     @cached_property
-    def model(self):
-        return self._owner
-
-    @cached_property
     def descriptor_class(self):
         return self._relation.descriptor_class(self._owner)
 
     @cached_property
     def descriptor_object(self):
         return self._relation.descriptor_object(self._owner)
+
+    @cached_property
+    def model(self):
+        return self._relation.model(self._owner)
 
     @cached_property
     def query(self):
@@ -871,7 +872,7 @@ class Relation(object):
             for name, attr in cls.__dict__.items():
                 if attr is self:
                     return cls
-        raise Exception("Can't find descriptor class")
+        raise Exception("Can't find descriptor class for {} in {}.".format(owner, owner.__mro__))
 
     def descriptor_object(self, owner):
         for cls in owner.__mro__:
@@ -880,17 +881,30 @@ class Relation(object):
                     return getattr(cls, name)
         raise Exception("Can't find descriptor object")
 
+    def _polymorphic_class(self, owner):
+        result_cls = self.descriptor_class(owner)
+        mro_reversed = list(reversed(owner.__mro__))
+        mro_reversed = mro_reversed[mro_reversed.index(result_cls) + 1:]
+        for cls in mro_reversed:
+            if cls._gateway.__dict__.get('polymorphic'):
+                break
+            result_cls = cls
+        return result_cls
+
     def name(self, owner):
         self_id = id(self)
         for name in dir(owner):
             if id(getattr(owner, name, None)) == self_id:
                 return name
 
+    def model(self, owner):
+        return self._polymorphic_class(owner)
+
     def rel_model(self, owner):
         if isinstance(self.rel_model_or_name, string_types):
             name = self.rel_model_or_name
             if name == 'self':
-                name = self.model._gateway.name
+                name = self.model(owner)._gateway.name
             return registry[name]
         return self.rel_model_or_name
 
@@ -924,7 +938,7 @@ class ForeignKey(Relation):
 
     def rel_name(self, owner):
         if self._rel_name is None:
-            return '{0}_set'.format(owner.__name__.lower())
+            return '{0}_set'.format(self.model(owner).__name__.lower())
         elif isinstance(self._rel_name, collections.Callable):
             return self._rel_name(self, owner)
         else:
@@ -1006,13 +1020,13 @@ class OneToMany(Relation):
     # TODO: is it need add_related() here to construct related FK?
 
     def field(self, owner):
-        return self._field or owner._gateway.pk
+        return self._field or self.model(owner)._gateway.pk
 
     def rel_field(self, owner):
-        return self._rel_field or ('{0}_id'.format(owner.__name__.lower()),)
+        return self._rel_field or ('{0}_id'.format(self.model(owner).__name__.lower()),)
 
     def rel_name(self, owner):
-        return self._rel_name or owner.__name__.lower()
+        return self._rel_name or self.model(owner).__name__.lower()
 
     def __get__(self, instance, owner):
         if not instance:

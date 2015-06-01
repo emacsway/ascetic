@@ -25,7 +25,7 @@ class GenericForeignKey(ForeignKey):
 
     def rel_name(self, owner):
         if self._rel_name is None:
-            return '{0}_set'.format(owner.__name__.lower())
+            return '{0}_set'.format(self.model(owner).__name__.lower())
         elif isinstance(self._rel_name, collections.Callable):
             return self._rel_name(self, owner)
         else:
