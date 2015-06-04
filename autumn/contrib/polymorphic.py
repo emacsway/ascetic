@@ -7,7 +7,6 @@ from .gfk import GenericForeignKey
 
 # Under construction!!! Not testet yet!!!
 
-# TODO: multilingual based on polymorphic???
 # Django-way with fields and local_fields???
 
 
