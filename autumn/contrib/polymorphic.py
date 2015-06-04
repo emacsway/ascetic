@@ -150,13 +150,14 @@ class PolymorphicResult(Result):
 def populate_polymorphic(rows):
     if not rows:
         return
+    current_model = rows[0]
     pks = {i.pk for i in rows}
     content_types = {i.polymorphic_type_id for i in rows}
-    content_types -= set((rows[0]._gateway.name,))
+    content_types -= set((current_model._gateway.name,))
     typical_objects = {}
     for ct in content_types:
         model = registry[ct]
-        if model is model._gateway.root_model:  # TODO: remove this condition?
+        if model is not current_model:  # TODO: remove this condition?
             typical_objects[ct] = {i.pk: i for i in model.q.where(model.s.pk.in_(pks))}
     for i, obj in enumerate(rows):
         if obj.polymorphic_type_id in typical_objects:
