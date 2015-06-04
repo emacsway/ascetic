@@ -53,23 +53,23 @@ class PolymorphicGateway(Gateway):
         return q
 
     def _do_prepare_model(self, model):
-        for base in model.__bases__:
-            if getattr(base._gateway, 'polymorphic', False):
+        for base in model.mro():
+            if getattr(getattr(base, '_gateway', None), 'polymorphic', False):
                 pk_rel_name = "{}_ptr".format(base.__name__.lower())
-                model.pk = "{}_id".format(pk_rel_name)
+                # self.pk = "{}_id".format(pk_rel_name)  # Useless, pk read from DB
                 setattr(model, pk_rel_name, OneToOne(
                     base,
-                    field=model.pk,
-                    to_field=base.pk,
+                    field=model._gateway.pk,
+                    to_field=base._gateway.pk,
                     rel_name=model.__name__.lower(),
                     query=lambda rel, owner: rel.rel_model.q.polymorphic(False)
                 ))
                 break
         else:
-            if getattr(model._gateway, 'polymorphic', False) and not model.root_model:
+            if getattr(model._gateway, 'polymorphic', False) and model is model._gateway.polymorphic_root:
                 setattr(model, "real_instance", GenericForeignKey(
                     type_field="polymorphic_type_id",
-                    field=model.pk
+                    field=model._gateway.pk
                 ))
 
     def create_instance(self, data, from_db=True):
@@ -90,13 +90,14 @@ class PolymorphicGateway(Gateway):
 
     def validate(self, obj, fields=frozenset(), exclude=frozenset()):
         errors = {}
-        try:
-            self.polymorphic_parent.validate(self, obj, fields=fields, exclude=exclude)
-        except validators.ValidationError as e:
-            errors.update(e.args[0])
+        if self.polymorphic_parent:
+            try:
+                self.polymorphic_parent.validate(obj, fields=fields, exclude=exclude)
+            except validators.ValidationError as e:
+                errors.update(e.args[0])
 
         try:
-            super(PolymorphicGateway, self).validate(self, obj, fields=fields, exclude=exclude)
+            super(PolymorphicGateway, self).validate(obj, fields=fields, exclude=exclude)
         except validators.ValidationError as e:
             errors.update(e.args[0])
 
@@ -104,8 +105,8 @@ class PolymorphicGateway(Gateway):
             raise validators.ValidationError(errors)
 
     def save(self, obj):
-        if not obj.polymorphic_type_id:
-            obj.polymorphic_type_id = type(self)._gateway.name
+        if not getattr(obj, 'polymorphic_type_id', None):
+            obj.polymorphic_type_id = obj.__class__._gateway.name
         if self.polymorphic_parent:
             new_record = obj._new_record
             self.polymorphic_parent.save(copy.copy(obj))
@@ -151,11 +152,11 @@ def populate_polymorphic(rows):
         return
     pks = {i.pk for i in rows}
     content_types = {i.polymorphic_type_id for i in rows}
-    content_types -= set((type(rows[0]),))
+    content_types -= set((rows[0]._gateway.name,))
     typical_objects = {}
     for ct in content_types:
         model = registry[ct]
-        if model.root_model:  # TODO: remove this condition?
+        if model is model._gateway.root_model:  # TODO: remove this condition?
             typical_objects[ct] = {i.pk: i for i in model.q.where(model.s.pk.in_(pks))}
     for i, obj in enumerate(rows):
         if obj.polymorphic_type_id in typical_objects:
