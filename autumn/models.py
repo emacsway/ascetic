@@ -230,7 +230,7 @@ class Gateway(object):
         )
 
         self._prepare_model(model)
-        self._inherit(self, (base for base in self.model.__bases__ if hasattr(base, '_gateway')))  # recursive
+        self._inherit(self, (base._gateway for base in self.model.__bases__ if hasattr(base, '_gateway')))  # recursive
 
         if self.abstract:
             return

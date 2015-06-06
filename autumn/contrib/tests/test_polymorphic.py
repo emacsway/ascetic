@@ -32,6 +32,22 @@ class TestModelTranslation(unittest.TestCase):
                 PRIMARY KEY (id, lang),
                 FOREIGN KEY (author_id, lang) REFERENCES autumn_polymorphic_author (id, lang) ON DELETE CASCADE
             );
+            DROP TABLE IF EXISTS autumn_polymorphic_nonfiction CASCADE;
+            CREATE TABLE autumn_polymorphic_nonfiction (
+                nonfiction_ptr_id integer NOT NULL,
+                nonfiction_ptr_lang VARCHAR(6) NOT NULL,
+                branch VARCHAR(255),
+                PRIMARY KEY (nonfiction_ptr_id, nonfiction_ptr_lang),
+                FOREIGN KEY (nonfiction_ptr_id, nonfiction_ptr_lang) REFERENCES autumn_polymorphic_book (id, lang) ON DELETE CASCADE
+            );
+            DROP TABLE IF EXISTS autumn_polymorphic_avia CASCADE;
+            CREATE TABLE autumn_polymorphic_avia (
+                avia_ptr_id integer NOT NULL,
+                avia_ptr_lang VARCHAR(6) NOT NULL,
+                model VARCHAR(255),
+                PRIMARY KEY (avia_ptr_id, avia_ptr_lang),
+                FOREIGN KEY (avia_ptr_id, avia_ptr_lang) REFERENCES autumn_polymorphic_nonfiction (nonfiction_ptr_id, nonfiction_ptr_lang) ON DELETE CASCADE
+            );
          """,
         'mysql': """
             DROP TABLE IF EXISTS autumn_polymorphic_author CASCADE;
@@ -94,6 +110,14 @@ class TestModelTranslation(unittest.TestCase):
             class Gateway(PolymorphicGateway):
                 name = 'autumn.contrib.tests.test_polymorphic.Book'
                 db_table = 'autumn_polymorphic_book'
+                polymorphic = True
+
+        class Nonfiction(Book):
+
+            class Gateway(PolymorphicGateway):
+                name = 'autumn.contrib.tests.test_polymorphic.Nonfiction'
+                db_table = 'autumn_polymorphic_nonfiction'
+                polymorphic = True
 
         return locals()
 

@@ -38,9 +38,9 @@ class PolymorphicGateway(Gateway):
         p = self.polymorphic_parent
         if p:
             t = self.sql_table
-            q = self.parent_model._create_query()
+            q = p._create_query()
             q = q.fields(
-                *self.get_fields()
+                *self.get_sql_fields()
             ).tables((
                 q.tables() & t
             ).on(
@@ -53,19 +53,19 @@ class PolymorphicGateway(Gateway):
 
     def _do_prepare_model(self, model):
         for base in model.mro():
-            if getattr(getattr(base, '_gateway', None), 'polymorphic', False):
+            if base is not model and getattr(getattr(base, '_gateway', None), 'polymorphic', False):
                 pk_rel_name = "{}_ptr".format(base.__name__.lower())
                 # self.pk = "{}_id".format(pk_rel_name)  # Useless, pk read from DB
                 setattr(model, pk_rel_name, OneToOne(
                     base,
                     field=model._gateway.pk,
-                    to_field=base._gateway.pk,
+                    rel_field=base._gateway.pk,
                     rel_name=model.__name__.lower(),
-                    query=lambda rel, owner: rel.rel_model.q.polymorphic(False)
+                    query=lambda rel, owner: rel.rel_model._gateway.query.polymorphic(False)
                 ))
                 break
         else:
-            if getattr(model._gateway, 'polymorphic', False) and model is model._gateway.polymorphic_root:
+            if getattr(model._gateway, 'polymorphic', False):
                 setattr(model, "real_instance", GenericForeignKey(
                     type_field="polymorphic_type_id",
                     field=model._gateway.pk
@@ -141,7 +141,7 @@ class PolymorphicResult(Result):
             yield obj.real_instance if self._polymorphic and hasattr(obj, 'real_instance') else obj
 
     def _clone(self, *args, **kwargs):
-        c = super(PolymorphicResult, self)._clone(*args, **kwargs)
+        c = super(PolymorphicResult, self).clone(*args, **kwargs)
         c._polymorphic = self._polymorphic
         return c
 
