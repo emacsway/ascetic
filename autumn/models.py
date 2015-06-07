@@ -886,7 +886,7 @@ class Relation(object):
                     return getattr(cls, name)
         raise Exception("Can't find descriptor object")
 
-    def _polymorphic_class(self, owner):
+    def polymorphic_class(self, owner):
         result_cls = self.descriptor_class(owner)
         mro_reversed = list(reversed(owner.__mro__))
         mro_reversed = mro_reversed[mro_reversed.index(result_cls) + 1:]
@@ -903,7 +903,7 @@ class Relation(object):
                 return name
 
     def model(self, owner):
-        return self._polymorphic_class(owner)
+        return self.polymorphic_class(owner)
 
     def rel(self, owner):
         return getattr(self.rel_model(owner), self.rel_name(owner))

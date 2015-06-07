@@ -1,19 +1,11 @@
 from __future__ import absolute_import
 from sqlbuilder import smartsql
-from .. import models
-from . import polymorphic
+from ..models import ForeignKey, to_tuple, cached_property
 
 # Under construction!!! Not testet yet!!!
 
 
-def get_root_model(cls):
-    """Returns base model for MTI"""
-    if isinstance(cls, polymorphic.PolymorphicModel) and cls.root_model:
-        return cls.root_model
-    return cls
-
-
-class MpModel(object):
+class MpGateway(object):
     """The simplest Materialized Path realization.
 
     Strong KISS principle.
@@ -22,126 +14,135 @@ class MpModel(object):
     """
 
     PATH_SEPARATOR = '/'
+    KEY_SEPARATOR = ':'
     PATH_DIGITS = 10
 
-    parent = models.ForeignKey(
-        'self',
-        rel_name="children"
-    )
+    def _do_prepare_model(self, model):
 
-    class Meta:
-        abstract = True
+        setattr(model, 'parent', ForeignKey(
+            'self',
+            rel_name="children"
+        ))
 
-    def save(self, using=None):
+    def _mp_encode(self, value):
+        return str(value).replace('&', '&a').replace(self.KEY_SEPARATOR, '&k').replace(self.PATH_SEPARATOR, '&p')
+
+    def _mp_decode(self, value):
+        return value.replace('&p', self.PATH_SEPARATOR).replace('&k', self.KEY_SEPARATOR).replace('&a', '&')
+
+    @cached_property
+    def mp_root(self):
+        return self.bound_relations['parent'].descriptor_class
+
+    def save(self, obj):
         """Sets content_type and calls parent method."""
-        using = using or self._meta.using
-        base_model = get_root_model(type(self))
-        if self.pk:
-            old_tree_path = base_model.q.get(pk=self.pk).tree_path
-        else:
+        try:
+            old_tree_path = obj._original_data['tree_path']
+        except (AttributeError, KeyError):
             old_tree_path = None
-        super(MpModel, self).save(using=using)
 
-        tree_path = str(self.pk).zfill(self.PATH_DIGITS)
-        if self.parent:
+        super(MpGateway, self).save(obj)
+
+        tree_path = self.KEY_SEPARATOR.join(self._mp_encode(i).zfill(self.PATH_DIGITS) for i in to_tuple(obj.pk))
+        if obj.parent:
             tree_path = self.PATH_SEPARATOR.join((self.parent.tree_path, tree_path))
-        self.tree_path = tree_path
-        type(self).q.using(using).where(
-            type(self).s.pk == self.pk
-        ).update({
-            'tree_path': self.tree_path
-        })
 
-        if old_tree_path is not None and old_tree_path != tree_path:
-            for obj in type(self).q.using(using).where(
-                type(self).s.tree_path.startswith(old_tree_path) &
-                type(self).s.pk != self.pk
-            ).iterator():
-                type(self).q.using(using).where(
-                    type(self).s.pk == obj.pk
-                ).update({
-                    'tree_path': obj.tree_path.replace(old_tree_path, tree_path)
-                })
+        if old_tree_path != tree_path:
+            obj.tree_path = obj._original_data['tree_path'] = tree_path
+            self.mp_root.base_query.where(
+                self.mp_root.sql_table.pk == obj.pk
+            ).update({
+                'tree_path': tree_path
+            })
+
+            if old_tree_path is not None:
+                for obj in self.mp_root.base_query.where(
+                    self.mp_root.sql_table.tree_path.startswith(old_tree_path) &
+                    self.mp_root.sql_table.pk != obj.pk
+                ).iterator():
+                    self.mp_root.base_query.where(
+                        self.mp_root.sql_table.pk == obj.pk
+                    ).update({
+                        'tree_path': tree_path + obj.tree_path[len(old_tree_path):]
+                    })
         return self
 
-    def get_ancestors_chained(self, root=False, me=False, reverse=True):
+    def get_ancestors_chained(self, obj, root=False, me=False, reverse=True):
         objs = []
-        current = self
+        current = obj
         while (current if root else current.parent_id):
-            if current != self or me:
+            if current != obj or me:
                 objs.append(current)
             current = current.parent
         if reverse:
             objs.reverse()
         return objs
 
-    def get_ancestors_by_path(self, root=False, me=False, reverse=True):
-        base_model = get_root_model(type(self))
-        t = base_model.s
-        q = base_model.q.where(
-            smartsql.P(self.tree_path).startswith(t.tree_path)
+    def get_ancestors_by_path(self, obj, root=False, me=False, reverse=True):
+        t = self.mp_root.sql_table
+        q = self.query.where(
+            smartsql.P(obj.tree_path).startswith(t.tree_path)
         )
         if not root:
-            q = q.where(base_model.s.parent.is_not(None))
+            q = q.where(t.parent.is_not(None))
         if not me:
-            q = q.where(base_model.s.pk != self.pk)
+            q = q.where(t.pk != obj.pk)
         if reverse:
-            q = q.order_by(base_model.s.tree_path)
+            q = q.order_by((t.tree_path,))
         else:
-            q = q.order_by(base_model.s.tree_path.desc())
+            q = q.order_by((t.tree_path.desc(),))
         return q
 
-    def get_ancestors_by_paths(self, root=False, me=False, reverse=True):
-        base_model = get_root_model(type(self))
-        q = base_model.q
+    def get_ancestors_by_paths(self, obj, root=False, me=False, reverse=True):
+        q = self.query
+        t = self.mp_root.sql_table
         cond = None
-        paths = self.tree_path.split(self.PATH_SEPARATOR)
+        paths = obj.tree_path.split(self.PATH_SEPARATOR)
         while paths:
-            q = (base_model.s.tree_path == self.PATH_SEPARATOR.join(paths))
+            q = (t.tree_path == self.PATH_SEPARATOR.join(paths))
             cond = cond | q if cond is not None else q
             paths.pop()
 
         q = q.where(cond)
 
         if not root:
-            q = q.where(base_model.s.parent.is_not(None))
+            q = q.where(t.parent.is_not(None))
         if not me:
-            q = q.where(base_model.s.pk != self.pk)
+            q = q.where(t.pk != self.pk)
 
         if reverse:
-            q = q.order_by(base_model.s.tree_path)
+            q = q.order_by(t.tree_path)
         else:
-            q = q.order_by(base_model.s.tree_path.desc())
+            q = q.order_by(t.tree_path.desc())
         return q
 
-    def get_ancestors(self, root=False, me=False, reverse=True):
-        return self.get_ancestors_by_paths(root=root, me=me, reverse=reverse)
+    def get_ancestors(self, obj, root=False, me=False, reverse=True):
+        return self.get_ancestors_by_paths(obj, root=root, me=me, reverse=reverse)
 
-    def get_hierarchical_name(self, sep=', ', root=False, me=True, reverse=True):
+    def get_hierarchical_name(self, obj, sep=', ', root=False, me=True, reverse=True, namegetter=unicode):
         """returns children QuerySet instance for given parent_id"""
-        return sep.join(map(unicode, self.get_ancestors(root=root, me=me, reverse=reverse)))
+        return sep.join(map(namegetter, self.get_ancestors(obj, root=root, me=me, reverse=reverse)))
 
-    def get_children(self):
+    def get_children(self, obj):
         """Fix for MTI"""
-        base_model = get_root_model(type(self))
-        return base_model.q.where(base_model.s.parent == self.pk)
+        return self.query.where(self.mp_root.sql_table.parent == obj.pk)
 
-    def _descendants(self):
-        r = list(self.get_children())
+    def _descendants(self, obj):
+        r = list(self.get_children(obj))
         for i in r:
-            r += i._descendants()
+            r += i._descendants(obj)
         return r
 
-    def get_descendants_recursive(self, me=False):
+    def get_descendants_recursive(self, obj, me=False):
         r = []
         if me:
-            r.append(self)
-        r += self._descendants()
+            r.append(obj)
+        r += self._descendants(obj)
         return r
 
-    def get_descendants(self, me=False):
-        base_model = get_root_model(type(self))
-        q = base_model.q.where(base_model.s.tree_path.startswith(self.tree_path))
+    def get_descendants(self, obj, me=False):
+        t = self.mp_root.sql_table
+        q = self.query.where(t.tree_path.startswith(obj.tree_path))
         if not me:
-            q = q.where(base_model.s.pk != self.pk)
+            q = q.where(t.pk != obj.pk)
         return q

@@ -67,6 +67,7 @@ class PolymorphicGateway(object):
                     type_field="polymorphic_type_id",
                     field=model._gateway.pk
                 ))
+        super(PolymorphicGateway, self)._do_prepare_model(self.model)
 
     def create_instance(self, data, from_db=True):
         if from_db:
