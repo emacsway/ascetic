@@ -159,7 +159,7 @@ Other projects
 
 See also:
 
-* **`Storm <https://storm.canonical.com/>`_** (properties from class) - excellent and simple ORM!
+* `**Storm** <https://storm.canonical.com/>`_ (properties from class) - excellent and simple ORM!
 * `SQLAlchemy <http://www.sqlalchemy.org/>`_ (scheme from class or database, see "autoload" option)
 * `SQLObject <http://www.sqlobject.org/>`_ (scheme from class or database, see "fromDatabase" option)
 * `Peewee <http://peewee.readthedocs.org/>`_ (scheme from class)
