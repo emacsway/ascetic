@@ -159,9 +159,9 @@ Other projects
 
 See also:
 
+* **`Storm <https://storm.canonical.com/>`_** (properties from class) - excellent and simple ORM!
 * `SQLAlchemy <http://www.sqlalchemy.org/>`_ (scheme from class or database, see "autoload" option)
 * `SQLObject <http://www.sqlobject.org/>`_ (scheme from class or database, see "fromDatabase" option)
-* `Storm <https://storm.canonical.com/>`_ (properties from class)
 * `Peewee <http://peewee.readthedocs.org/>`_ (scheme from class)
 * `Twistar <http://findingscience.com/twistar/>`_ (scheme from database), provides asynchronous DB interaction
 * `Openorm <http://code.google.com/p/openorm/source/browse/python/>`_ (lightweight datamapper)
