@@ -4,7 +4,7 @@ from autumn.connections import get_db
 from autumn.contrib.polymorphic import PolymorphicGateway
 from autumn.models import Model, ForeignKey
 
-Author = Book = None
+Author = Book = Nonfiction = Avia = None
 
 
 class TestModelTranslation(unittest.TestCase):
@@ -105,7 +105,13 @@ class TestModelTranslation(unittest.TestCase):
                                'last_name': (validators.Length(), lambda x: x != 'BadGuy!' or 'Bad last name', )}
 
         class Book(Model):
-            author = ForeignKey(Author, rel_field=('id', 'lang'), field=('author_id', 'lang'), rel_name='books')
+            author = ForeignKey(
+                Author,
+                rel_field=('id', 'lang'),
+                field=('author_id', 'lang'),
+                rel_name='books',
+                rel_query=(lambda rel, owner: rel.rel_model(owner)._gateway.query)
+            )
 
             class Gateway(PolymorphicGateway):
                 name = 'autumn.contrib.tests.test_polymorphic.Book'
@@ -117,6 +123,13 @@ class TestModelTranslation(unittest.TestCase):
             class Gateway(PolymorphicGateway):
                 name = 'autumn.contrib.tests.test_polymorphic.Nonfiction'
                 db_table = 'autumn_polymorphic_nonfiction'
+                polymorphic = True
+
+        class Avia(Nonfiction):
+
+            class Gateway(PolymorphicGateway):
+                name = 'autumn.contrib.tests.test_polymorphic.Avia'
+                db_table = 'autumn_polymorphic_avia'
                 polymorphic = True
 
         return locals()
@@ -133,7 +146,7 @@ class TestModelTranslation(unittest.TestCase):
         for table in ('autumn_polymorphic_author', 'autumn_polymorphic_book',):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 
-    def test_model(self):
+    def test_book(self):
         author = Author(
             id=1,
             lang='en',
@@ -159,3 +172,82 @@ class TestModelTranslation(unittest.TestCase):
 
         author = Author.get(author_pk)
         self.assertEqual(author.books[0].pk, book_pk)
+
+    def test_nonfiction(self):
+        author = Author(
+            id=1,
+            lang='en',
+            first_name='First name',
+            last_name='Last name',
+        )
+        author.save()
+        author_pk = (1, 'en')
+        author = Author.get(author_pk)
+        self.assertEqual(author.pk, author_pk)
+
+        nonfiction_data = dict(
+            id=5,
+            lang='en',
+            title='Book title',
+            branch='instruction',
+        )
+        nonfiction = Nonfiction(**nonfiction_data)
+        nonfiction.author = author
+        nonfiction.save()
+        nonfiction_pk = (5, 'en')
+
+        nonfiction = Book.get(nonfiction_pk)
+        self.assertIsInstance(nonfiction, Nonfiction)
+        for k, v in nonfiction_data.items():
+            self.assertEqual(getattr(nonfiction, k), v)
+        self.assertEqual(nonfiction.pk, nonfiction_pk)
+        self.assertEqual(nonfiction.author.pk, author_pk)
+        self.assertEqual(author.books[0], nonfiction)
+
+        nonfiction = Nonfiction.get(nonfiction_pk)
+        self.assertIsInstance(nonfiction, Nonfiction)
+        for k, v in nonfiction_data.items():
+            self.assertEqual(getattr(nonfiction, k), v)
+        self.assertEqual(nonfiction.pk, nonfiction_pk)
+        self.assertEqual(nonfiction.author.pk, author_pk)
+        self.assertEqual(author.books[0], nonfiction)
+
+    def test_avia(self):
+        author = Author(
+            id=1,
+            lang='en',
+            first_name='First name',
+            last_name='Last name',
+        )
+        author.save()
+        author_pk = (1, 'en')
+        author = Author.get(author_pk)
+        self.assertEqual(author.pk, author_pk)
+
+        avia_data = dict(
+            id=5,
+            lang='en',
+            title='Book title',
+            branch='instruction',
+            model='An'
+        )
+        avia = Avia(**avia_data)
+        avia.author = author
+        avia.save()
+        avia_pk = (5, 'en')
+
+        avia = Book.get(avia_pk)
+        self.assertIsInstance(avia, Nonfiction)
+        for k, v in avia_data.items():
+            self.assertEqual(getattr(avia, k), v)
+        self.assertEqual(avia.pk, avia_pk)
+        self.assertEqual(avia.author.pk, author_pk)
+        self.assertEqual(author.books[0], avia)
+
+        avia = Avia.get(avia_pk)
+        self.assertIsInstance(avia, Nonfiction)
+        for k, v in avia_data.items():
+            self.assertEqual(getattr(avia, k), v)
+        self.assertEqual(avia.pk, avia_pk)
+        self.assertEqual(avia.author.pk, author_pk)
+        self.assertEqual(author.books[0], avia)

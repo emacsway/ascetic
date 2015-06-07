@@ -1,11 +1,8 @@
 # -*- coding: utf-8 -*-
-import copy
 from collections import OrderedDict
 from .. import validators
 from ..models import Gateway, OneToOne, Result, cached_property, classproperty, registry, to_tuple
 from .gfk import GenericForeignKey
-
-# Under construction!!! Not testet yet!!!
 
 # Django-way with fields and local_fields???
 
@@ -45,10 +42,10 @@ class PolymorphicGateway(Gateway):
                 q.tables() & t
             ).on(
                 t.pk == p.sql_table.pk
-            )).polymorphic(False)
+            ))
         else:
             q = super(PolymorphicGateway, self)._create_query()
-            q.result = PolymorphicResult(self)
+        q.result = PolymorphicResult(self)
         return q
 
     def _do_prepare_model(self, model):
@@ -61,7 +58,7 @@ class PolymorphicGateway(Gateway):
                     field=model._gateway.pk,
                     rel_field=base._gateway.pk,
                     rel_name=model.__name__.lower(),
-                    query=lambda rel, owner: rel.rel_model._gateway.query.polymorphic(False)
+                    query=(lambda rel, owner: rel.rel_model(owner)._gateway.query.polymorphic(False))
                 ))
                 break
         else:
@@ -108,7 +105,7 @@ class PolymorphicGateway(Gateway):
             obj.polymorphic_type_id = obj.__class__._gateway.name
         if self.polymorphic_parent:
             new_record = obj._new_record
-            self.polymorphic_parent.save(copy.copy(obj))
+            self.polymorphic_parent.save(obj)
             for key, parent_key in zip(to_tuple(self.pk), to_tuple(self.polymorphic_parent.pk)):
                 setattr(obj, key, getattr(obj, parent_key))
             obj._new_record = new_record
@@ -156,8 +153,7 @@ def populate_polymorphic(rows):
     typical_objects = {}
     for ct in content_types:
         model = registry[ct]
-        if model is not current_model:  # TODO: remove this condition?
-            typical_objects[ct] = {i.pk: i for i in model.q.where(model.s.pk.in_(pks))}
+        typical_objects[ct] = {i.pk: i for i in model._gateway.query.where(model.s.pk.in_(pks))}
     for i, obj in enumerate(rows):
         if obj.polymorphic_type_id in typical_objects:
             rows[i] = typical_objects[obj.polymorphic_type_id][obj.pk]

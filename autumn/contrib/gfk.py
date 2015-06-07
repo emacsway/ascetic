@@ -1,8 +1,6 @@
 import collections
 from ..models import Model, ForeignKey, OneToMany, cascade, registry, to_tuple
 
-# Under construction!!! Not testet yet!!!
-
 
 class GenericForeignKey(ForeignKey):
 

@@ -836,6 +836,10 @@ class BoundRelation(object):
         return self._relation.field(self._owner)
 
     @cached_property
+    def rel(self):
+        return self._relation.rel(self._owner)
+
+    @cached_property
     def rel_name(self):
         return self._relation.rel_name(self._owner)
 
@@ -859,13 +863,14 @@ class BoundRelation(object):
 
 class Relation(object):
 
-    def __init__(self, rel_model, rel_field=None, field=None, on_delete=cascade, rel_name=None, query=None):
+    def __init__(self, rel_model, rel_field=None, field=None, on_delete=cascade, rel_name=None, query=None, rel_query=None):
         self.rel_model_or_name = rel_model
         self._rel_field = rel_field and to_tuple(rel_field)
         self._field = field and to_tuple(field)
         self.on_delete = on_delete
         self._rel_name = rel_name
         self._query = query
+        self._rel_query = rel_query
 
     def descriptor_class(self, owner):
         for cls in owner.__mro__:
@@ -899,6 +904,9 @@ class Relation(object):
 
     def model(self, owner):
         return self._polymorphic_class(owner)
+
+    def rel(self, owner):
+        return getattr(self.rel_model(owner), self.rel_name(owner))
 
     def rel_model(self, owner):
         if isinstance(self.rel_model_or_name, string_types):
@@ -955,7 +963,8 @@ class ForeignKey(Relation):
 
         setattr(rel_model, self.rel_name(owner), OneToMany(
             owner, self.field(owner), self.rel_field(owner),
-            on_delete=self.on_delete, rel_name=self.name(owner)
+            on_delete=self.on_delete, rel_name=self.name(owner),
+            query=self._rel_query
         ))
 
     def __get__(self, instance, owner):
@@ -1010,7 +1019,8 @@ class OneToOne(ForeignKey):
 
         setattr(rel_model, self.rel_name(owner), OneToOne(
             owner, self.field(owner), self.rel_field(owner),
-            on_delete=self.on_delete, rel_name=self.name(owner)
+            on_delete=self.on_delete, rel_name=self.name(owner),
+            query=self._rel_query
         ))
         # self.on_delete = do_nothing
 

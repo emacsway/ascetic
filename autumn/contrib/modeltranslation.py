@@ -1,8 +1,6 @@
 import collections
 from .. import models
 
-# This contrib already working and tested.
-
 # We can't use TranslationRegistry, because Gateway can be inherited, and we need to fix hierarchy???
 
 
