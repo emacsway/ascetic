@@ -1,12 +1,12 @@
 import unittest
 from autumn.connections import get_db
 from autumn.models import Model
-from autumn.contrib.modeltranslation import TranslationGatewayMixIn
+from autumn.contrib.modeltranslation import TranslationGateway
 
 Author = None
 
 
-class TranslationGateway(TranslationGatewayMixIn):
+class TranslationGateway(TranslationGateway):
 
     _language = 'ru'
 

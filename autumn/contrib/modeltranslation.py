@@ -19,12 +19,12 @@ class TranslationField(models.Field):
     column = TranslationColumnDescriptor()
 
 
-class TranslationGatewayMixIn(object):
+class TranslationGateway(object):
 
     translated_fields = ()
 
     def create_translation_field(self, name, data, declared_fields=None):
-        field = super(TranslationGatewayMixIn, self).create_field(name, data, declared_fields)
+        field = super(TranslationGateway, self).create_field(name, data, declared_fields)
         if name in self.translated_fields and not isinstance(field, TranslationField):
             class NewField(TranslationField, field.__class__):
                 pass

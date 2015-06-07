@@ -7,7 +7,7 @@ from .gfk import GenericForeignKey
 # Django-way with fields and local_fields???
 
 
-class PolymorphicGateway(Gateway):
+class PolymorphicGateway(object):
 
     @cached_property
     def polymorphic_parent(self):
