@@ -18,7 +18,6 @@ class MpGateway(object):
     PATH_DIGITS = 10
 
     def _do_prepare_model(self, model):
-
         setattr(model, 'parent', ForeignKey(
             'self',
             rel_name="children"
@@ -108,7 +107,7 @@ class MpGateway(object):
         if not root:
             q = q.where(t.parent.is_not(None))
         if not me:
-            q = q.where(t.pk != self.pk)
+            q = q.where(t.pk != obj.pk)
 
         if reverse:
             q = q.order_by(t.tree_path)
@@ -146,3 +145,18 @@ class MpGateway(object):
         if not me:
             q = q.where(t.pk != obj.pk)
         return q
+
+
+class MpModel(object):
+
+    def get_ancestors(self, root=False, me=False, reverse=True):
+        return self._gateway.get_ancestors(self, root, me, reverse)
+
+    def get_hierarchical_name(self, sep=', ', root=False, me=True, reverse=True, namegetter=unicode):
+        return self._gateway.get_hierarchical_name(self, sep, root, me, reverse, namegetter)
+
+    def get_children(self):
+        return self._gateway.get_children(self)
+
+    def get_descendants(self, me=False):
+        return self._gateway.get_descendants(self, me)

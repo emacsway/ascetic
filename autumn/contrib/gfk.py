@@ -40,7 +40,7 @@ class GenericForeignKey(ForeignKey):
         if isinstance(self._query, collections.Callable):
             return self._query(self, instance)
         else:
-            return self.rel_model(instance)._gateway.base_query
+            return self.rel_model(instance)._gateway.query
 
     @property
     def add_related(self):

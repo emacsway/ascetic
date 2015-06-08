@@ -58,7 +58,8 @@ class PolymorphicGateway(object):
                     field=model._gateway.pk,
                     rel_field=base._gateway.pk,
                     rel_name=model.__name__.lower(),
-                    query=(lambda rel, owner: rel.rel_model(owner)._gateway.query.polymorphic(False))
+                    query=(lambda rel, owner: rel.rel_model(owner)._gateway.query.polymorphic(False)),
+                    rel_query=(lambda rel, owner: rel.rel_model(owner)._gateway.query.polymorphic(False))
                 ))
                 break
         else:

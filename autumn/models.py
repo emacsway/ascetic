@@ -920,7 +920,7 @@ class Relation(object):
         if isinstance(self._query, collections.Callable):
             return self._query(self, owner)
         else:
-            return self.rel_model(owner)._gateway.base_query
+            return self.rel_model(owner)._gateway.query
 
     def _get_cache(self, instance, key):
         try:
