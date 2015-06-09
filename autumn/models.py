@@ -942,7 +942,7 @@ class ForeignKey(Relation):
         return self._field or ('{0}_id'.format(self.rel_model(owner).__name__.lower()),)
 
     def rel_field(self, owner):
-        return self._rel_field or (self.rel_model(owner)._gateway.pk,)
+        return self._rel_field or to_tuple(self.rel_model(owner)._gateway.pk)
 
     def rel_name(self, owner):
         if self._rel_name is None:
@@ -970,7 +970,7 @@ class ForeignKey(Relation):
     def __get__(self, instance, owner):
         if not instance:
             return self
-        val = tuple(getattr(instance, f) for f in self.field(owner))
+        val = tuple(getattr(instance, f, None) for f in self.field(owner))
         if not all(val):
             return None
 
@@ -1030,7 +1030,7 @@ class OneToMany(Relation):
     # TODO: is it need add_related() here to construct related FK?
 
     def field(self, owner):
-        return self._field or self.model(owner)._gateway.pk
+        return self._field or to_tuple(self.model(owner)._gateway.pk)
 
     def rel_field(self, owner):
         return self._rel_field or ('{0}_id'.format(self.model(owner).__name__.lower()),)

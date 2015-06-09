@@ -20,6 +20,7 @@ class MpGateway(object):
     def _do_prepare_model(self, model):
         setattr(model, 'parent', ForeignKey(
             'self',
+            field=tuple('parent_{}'.format(k) for k in to_tuple(self.pk)),
             rel_name="children"
         ))
 
@@ -31,7 +32,7 @@ class MpGateway(object):
 
     @cached_property
     def mp_root(self):
-        return self.bound_relations['parent'].descriptor_class
+        return self.bound_relations['parent'].descriptor_class._gateway
 
     def save(self, obj):
         """Sets content_type and calls parent method."""
