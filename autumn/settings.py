@@ -8,7 +8,6 @@ DATABASES_MYSQL = {
         'passwd': "devel",
         'debug': True,
         'initial_sql': "SET NAMES 'UTF8';",
-        'thread_safe': True,
     }
 }
 
@@ -20,7 +19,6 @@ DATABASES_POSTGRESQL = {
         'password': "devel",
         'debug': True,
         'initial_sql': "SET NAMES 'UTF8';",
-        'thread_safe': True,
     }
 }
 
@@ -30,6 +28,23 @@ DEBUG = True
 
 SIGNAL_SENDER = 'autumn.signals.send_signal'
 
+LOGGER_INIT = 'autumn.settings.init_logger'
+
+
+def init_logger(settings):
+    import logging
+    if settings.DEBUG:
+        import warnings
+        warnings.simplefilter('default')
+
+        logger = logging.getLogger('autumn')
+        logger.setLevel(logging.DEBUG)
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        ch.setFormatter(formatter)
+        logger.addHandler(ch)
+
 try:
     m = __import__(os.getenv('AUTUMN_SETTINGS', 'autumn_settings'))
 except ImportError:
@@ -38,3 +53,7 @@ else:
     for key in dir(m):
         if key[0] != '_':
             globals()[key] = getattr(m, key)
+
+
+def configure(settings):
+    globals().update(settings)

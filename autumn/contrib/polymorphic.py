@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 from collections import OrderedDict
 from .. import validators
-from ..models import Gateway, OneToOne, Result, cached_property, classproperty, registry, to_tuple
+from ..models import OneToOne, Result, classproperty, registry, to_tuple
+from ..utils import cached_property
 from .gfk import GenericForeignKey
 
 # Django-way with fields and local_fields???

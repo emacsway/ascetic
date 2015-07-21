@@ -6,8 +6,8 @@ import operator
 from functools import reduce
 from sqlbuilder import smartsql
 from . import signals
-from .connections import get_db
-from .utils import classproperty
+from .connections import databases
+from .utils import classproperty, cached_property
 from .validators import ValidationError
 
 try:
@@ -19,18 +19,6 @@ except NameError:
     integer_types = (int,)
 
 cr = copy.copy(smartsql.cr)
-
-
-class cached_property(object):
-    def __init__(self, func, name=None):
-        self.func = func
-        self.name = name or func.__name__
-
-    def __get__(self, instance, type=None):
-        if instance is None:
-            return self
-        res = instance.__dict__[self.name] = self.func(instance)
-        return res
 
 
 def to_tuple(val):
@@ -157,7 +145,7 @@ class Result(smartsql.Result):
 
     @property
     def db(self):
-        return get_db(self._using)
+        return databases[self._using]
 
     def map(self, mapping):
         """Sets mapping."""
@@ -284,14 +272,14 @@ class Gateway(object):
         return result
 
     def _read_pk(self, db_table, using, columns):
-        db = get_db(using)
+        db = databases[using]
         if hasattr(db, 'get_pk'):
             pk = tuple(columns[i].name for i in db.get_pk(db_table))
             return pk[0] if len(pk) == 1 else pk
         return self.__class__.pk
 
     def _read_columns(self, db_table, using):
-        db = get_db(using)
+        db = databases[using]
         schema = db.describe_table(db_table)
         q = db.execute('SELECT * FROM {0} LIMIT 1'.format(db.qn(self.db_table)))
         # See cursor.description http://www.python.org/dev/peps/pep-0249/

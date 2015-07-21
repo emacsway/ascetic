@@ -3,9 +3,11 @@ import collections
 import logging
 from functools import wraps
 from threading import local
+from uuid import uuid4
 from sqlbuilder import smartsql
 from sqlbuilder.smartsql.compilers import mysql, sqlite
 from autumn import settings
+from autumn.utils import resolve
 
 try:
     str = unicode  # Python 2.* compatible
@@ -17,19 +19,14 @@ except NameError:
 
 PLACEHOLDER = '%s'
 
-# TODO: thread safe dict emulating?
-databases = {}
-
-
-class DummyCtx(object):
-    pass
+resolve(settings.LOGGER_INIT)(settings)
 
 
 class Transaction(object):
 
     def __init__(self, using='default'):
         """Constructor of Transaction instance."""
-        self.db = get_db(using)
+        self.db = databases[using]
 
     def __call__(self, f=None):
         if f is None:
@@ -64,6 +61,8 @@ class Database(object):
 
     placeholder = '%s'
     compile = smartsql.compile
+    connection = None
+    begin_level = 0
 
     def __init__(self, **kwargs):
         self.using = kwargs.pop('using')
@@ -71,32 +70,28 @@ class Database(object):
         self.engine = kwargs.pop('engine')
         self.debug = kwargs.pop('debug', False)
         self.initial_sql = kwargs.pop('initial_sql', '')
-        self.thread_safe = kwargs.pop('thread_safe', True)
+        self.always_reconnect = kwargs.pop('always_reconnect', False)
+        self.autocommit = kwargs.pop('autocommit', True)
         self._conf = kwargs
-        self.ctx = local() if self.thread_safe else DummyCtx()
 
     def _connect(self, *args, **kwargs):
         raise NotImplementedError
 
-    @property
-    def conn(self):
-        try:
-            return self.ctx.conn
-        except AttributeError:
-            return self.reconnect()
-
-    def reconnect(self):
-        self.ctx.conn = self._connect(**self._conf)
+    def _ensure_connected(self):
+        self.connection = self._connect(**self._conf)
         if self.initial_sql:
-            self.conn.cursor().execute(self.initial_sql)
-        return self.ctx.conn
+            self.connection.cursor().execute(self.initial_sql)
+        return self
 
     def _execute(self, sql, params=()):
         cursor = self.cursor()
         try:
             cursor.execute(sql, params)
         except Exception:
-            cursor = self.reconnect().cursor()
+            if self.begin_level > 0 and not self.always_reconnect:
+                raise
+            self._ensure_connected()
+            cursor = self.cursor()
             cursor.execute(sql, params)
         return cursor
 
@@ -109,8 +104,6 @@ class Database(object):
             sql = sql.replace(PLACEHOLDER, self.placeholder)
         try:
             cursor = self._execute(sql, params)
-            if self.get_autocommit() and self.begin_level() == 0:
-                self.commit()
         except BaseException as e:
             if self.debug:
                 self.logger.exception(e)
@@ -119,48 +112,52 @@ class Database(object):
             return cursor
 
     def cursor(self):
-        try:
-            return self.conn.cursor()
-        except Exception:
-            return self.reconnect().cursor()
+        if not self.connection:
+            self._ensure_connected()
+        return self.connection.cursor()
 
     def last_insert_id(self, cursor):
         return cursor.lastrowid
 
     def get_autocommit(self):
-        return getattr(self.ctx, 'autocommit', True)
+        return self.autocommit and self.begin_level == 0
 
     def set_autocommit(self, autocommit=True):
-        self.ctx.autocommit = autocommit
+        self.autocommit = autocommit
         return self
-
-    def begin_level(self, val=None):
-        if not hasattr(self.ctx, 'begin_level'):
-            self.ctx.begin_level = 0
-        if val is not None:
-            self.ctx.begin_level += val
-        if self.ctx.begin_level < 0:
-            self.ctx.begin_level = 0
-        return self.ctx.begin_level
 
     @property
     def transaction(self):
         return Transaction(self.using)
 
     def begin(self):
-        self.begin_level(+1)
+        if self.begin_level > 0:
+            self.savepoint_begin()
+        self.begin_level += 1
 
     def commit(self):
-        try:
-            self.conn.commit()
-        finally:
-            self.begin_level(-1)
+        self.begin_level = max(0, self.begin_level - 1)
+        if self.begin_level == 0:
+            self.connection.commit()
+        else:
+            self.savepoint_commit()
 
     def rollback(self):
-        try:
-            self.conn.rollback()
-        finally:
-            self.begin_level(-1)
+        self.begin_level = max(0, self.begin_level - 1)
+        if self.begin_level == 0:
+            self.connection.rollback()
+        else:
+            self.savepoint_rollback()
+
+    def savepoint_begin(self):
+        self._last_savepoint = 's' + uuid4().hex
+        self.execute("SAVEPOINT %s", self._last_savepoint)
+
+    def savepoint_commit(self):
+        self.execute("RELEASE SAVEPOINT %s", self._last_savepoint)
+
+    def savepoint_rollback(self):
+        self.execute("ROLLBACK TO SAVEPOINT %s", self._last_savepoint)
 
     def describe_table(self, table_name):
         return {}
@@ -188,28 +185,16 @@ class DjangoMixin(object):
         self.django_using = kwargs.pop('django_using')
         super(DjangoMixin, self).__init__(**kwargs)
 
-    @property
-    def django_conn(self):
+    def get_django_connection(self):
         from django.db import connections
         return connections[self.django_using]
 
-    @property
-    def conn(self):
+    def _connect(self, *args, **kwargs):
         # self.django_conn.ensure_connection()
-        if not self.django_conn.connection:
-            self.cursor()
-        return self.django_conn.connection
-
-    def cursor(self):
-        return self.django_conn.cursor()
-
-    def get_autocommit_(self):
-        from django.db.transaction import get_autocommit
-        return get_autocommit(self.django_using)
-
-    def set_autocommit_(self, autocommit=True):
-        from django.db.transaction import set_autocommit
-        return set_autocommit(autocommit, self.django_using)
+        django_connection = self.get_django_connection()
+        if not django_connection.connection:
+            django_connection.cursor()
+        return django_connection.connection
 
 
 class SqliteDatabase(Database):
@@ -306,9 +291,23 @@ class PostgreSQLDatabase(Database):
         return schema
 
 
+class Databases(object):
+
+    def __init__(self, conf):
+        self._settings = conf
+        self._databases = local()
+
+    def __getitem__(self, alias):
+        try:
+            return getattr(self._databases, alias)
+        except AttributeError:
+            setattr(self._databases, alias, Database.factory(using=alias, **self._settings[alias]))
+            return getattr(self._databases, alias)
+
+
 def get_db(using=None):
+    smartsql.warn('get_db', 'databases')
     return databases[using or 'default']
 
 
-for name, conf in settings.DATABASES.items():
-    databases[name] = Database.factory(using=name, **conf)
+databases = Databases(settings.DATABASES)

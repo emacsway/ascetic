@@ -10,6 +10,18 @@ except NameError:
     integer_types = (int,)
 
 
+class cached_property(object):
+    def __init__(self, func, name=None):
+        self.func = func
+        self.name = name or func.__name__
+
+    def __get__(self, instance, type=None):
+        if instance is None:
+            return self
+        res = instance.__dict__[self.name] = self.func(instance)
+        return res
+
+
 class classproperty(object):
     """Class property decorator"""
     def __init__(self, getter):

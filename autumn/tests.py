@@ -42,8 +42,8 @@ class TestUtils(unittest.TestCase):
     maxDiff = None
 
     def test_resolve(self):
-        from autumn.connections import DummyCtx
-        self.assertTrue(utils.resolve('autumn.connections.DummyCtx') is DummyCtx)
+        from autumn.connections import Database
+        self.assertTrue(utils.resolve('autumn.connections.Database') is Database)
 
 
 class TestModels(unittest.TestCase):

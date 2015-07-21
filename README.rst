@@ -32,24 +32,29 @@ Using these tables:
         author_id integer REFERENCES autumn_tests_models_author(id) ON DELETE CASCADE
     );
 
-Put in your PYTHONPATH file autumn_settings.py with your settings.
+You can configure in one the following ways:
+
+1. Put in your PYTHONPATH file autumn_settings.py with your settings.
 See file autumn/settings.py for more details.
 
-You can also set the settings directly::
+2. Define settings module in evironment variable AUTUMN_SETTINGS.
 
-    import autumn.settings
-    autumn.settings.DATABASES = {
-        'default': {
-            'engine': "postgresql",
-            'user': "devel",
-            'database': "devel_autumn",
-            'password': "devel",
-            'debug': True,
-            'initial_sql': "SET NAMES 'UTF8';",
-            'thread_safe': True,
+3. Call autumn.settings.configure, for example::
+
+    import autumn.settings.configure
+    autumn.settings.configure({
+        'DATABASES': {
+            'default': {
+                'engine': "postgresql",
+                'user': "devel",
+                'database': "devel_autumn",
+                'password': "devel",
+                'debug': True,
+                'initial_sql': "SET NAMES 'UTF8';",
+            }
         }
-    }
-
+    })
+    
 We setup our objects like so:
 
 ::

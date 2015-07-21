@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 from sqlbuilder import smartsql
-from ..models import ForeignKey, to_tuple, cached_property
+from ..models import ForeignKey, to_tuple
+from ..utils import cached_property
 
 # Under construction!!! Not testet yet!!!
 
