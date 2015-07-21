@@ -6,7 +6,7 @@ import operator
 from functools import reduce
 from sqlbuilder import smartsql
 from . import signals
-from .connections import databases
+from .databases import databases
 from .utils import classproperty, cached_property
 from .validators import ValidationError
 

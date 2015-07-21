@@ -2,7 +2,7 @@
 import unittest
 from autumn import validators
 from autumn import utils
-from autumn.connections import get_db
+from autumn.databases import get_db
 from autumn.models import Model, ForeignKey
 from sqlbuilder import smartsql
 from sqlbuilder.smartsql.tests import TestSmartSQL
@@ -42,8 +42,8 @@ class TestUtils(unittest.TestCase):
     maxDiff = None
 
     def test_resolve(self):
-        from autumn.connections import Database
-        self.assertTrue(utils.resolve('autumn.connections.Database') is Database)
+        from autumn.databases import Database
+        self.assertTrue(utils.resolve('autumn.databases.Database') is Database)
 
 
 class TestModels(unittest.TestCase):

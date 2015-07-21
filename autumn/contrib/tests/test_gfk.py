@@ -1,6 +1,6 @@
 import unittest
 from autumn import validators
-from autumn.connections import get_db
+from autumn.databases import get_db
 from autumn.contrib.gfk import GenericForeignKey, GenericRelation
 from autumn.models import Model
 

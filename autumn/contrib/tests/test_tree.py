@@ -1,5 +1,5 @@
 import unittest
-from autumn.connections import get_db
+from autumn.databases import get_db
 from autumn.models import Model
 from autumn.contrib.tree import MpGateway, MpModel
 
