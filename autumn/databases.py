@@ -62,7 +62,8 @@ class Database(object):
     placeholder = '%s'
     compile = smartsql.compile
     connection = None
-    begin_level = 0
+    _begin_level = 0
+    _autocommit = False
 
     def __init__(self, **kwargs):
         self.using = kwargs.pop('using')
@@ -71,7 +72,8 @@ class Database(object):
         self.debug = kwargs.pop('debug', False)
         self.initial_sql = kwargs.pop('initial_sql', '')
         self.always_reconnect = kwargs.pop('always_reconnect', False)
-        self.autocommit = kwargs.pop('autocommit', True)
+        self.autocommit = kwargs.pop('autocommit', False)
+        self._savepoints = []
         self._conf = kwargs
 
     def _connect(self, *args, **kwargs):
@@ -79,6 +81,8 @@ class Database(object):
 
     def _ensure_connected(self):
         self.connection = self._connect(**self._conf)
+        if self.autocommit:
+            self.set_autocommit(self.autocommit)
         if self.initial_sql:
             self.connection.cursor().execute(self.initial_sql)
         return self
@@ -88,7 +92,7 @@ class Database(object):
         try:
             cursor.execute(sql, params)
         except Exception:
-            if self.begin_level > 0 and not self.always_reconnect:
+            if self._begin_level > 0 and not self.always_reconnect:
                 raise
             self._ensure_connected()
             cursor = self.cursor()
@@ -120,10 +124,10 @@ class Database(object):
         return cursor.lastrowid
 
     def get_autocommit(self):
-        return self.autocommit and self.begin_level == 0
+        return self._autocommit and self._begin_level == 0
 
     def set_autocommit(self, autocommit=True):
-        self.autocommit = autocommit
+        self._autocommit = autocommit
         return self
 
     @property
@@ -131,33 +135,35 @@ class Database(object):
         return Transaction(self.using)
 
     def begin(self):
-        if self.begin_level > 0:
+        if self._begin_level == 0:
+            self.execute("BEGIN")
+        else:
             self.savepoint_begin()
-        self.begin_level += 1
+        self._begin_level += 1
 
     def commit(self):
-        self.begin_level = max(0, self.begin_level - 1)
-        if self.begin_level == 0:
+        self._begin_level = max(0, self._begin_level - 1)
+        if self._begin_level == 0:
             self.connection.commit()
         else:
             self.savepoint_commit()
 
     def rollback(self):
-        self.begin_level = max(0, self.begin_level - 1)
-        if self.begin_level == 0:
+        self._begin_level = max(0, self._begin_level - 1)
+        if self._begin_level == 0:
             self.connection.rollback()
         else:
             self.savepoint_rollback()
 
     def savepoint_begin(self):
-        self._last_savepoint = 's' + uuid4().hex
+        self._savepoints.append('s' + uuid4().hex)
         self.execute("SAVEPOINT %s", self._last_savepoint)
 
     def savepoint_commit(self):
-        self.execute("RELEASE SAVEPOINT %s", self._last_savepoint)
+        self.execute("RELEASE SAVEPOINT %s", self._savepoints.pop())
 
     def savepoint_rollback(self):
-        self.execute("ROLLBACK TO SAVEPOINT %s", self._last_savepoint)
+        self.execute("ROLLBACK TO SAVEPOINT %s", self._savepoints.pop())
 
     def describe_table(self, table_name):
         return {}
@@ -247,6 +253,10 @@ class MySQLDatabase(Database):
             schema[col['column']] = col
         return schema
 
+    def set_autocommit(self, autocommit=True):
+        self.execute("SET autocommit={}".format(int(autocommit)))
+        super(MySQLDatabase, self).set_autocommit(autocommit)
+
 
 class PostgreSQLDatabase(Database):
 
@@ -289,6 +299,10 @@ class PostgreSQLDatabase(Database):
             }
             schema[col['column']] = col
         return schema
+
+    def set_autocommit(self, autocommit=True):
+        self.execute("SET AUTOCOMMIT = {}".format('ON' if autocommit else 'OFF'))
+        super(PostgreSQLDatabase, self).set_autocommit(autocommit)
 
 
 class Databases(object):
