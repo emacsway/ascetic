@@ -214,7 +214,10 @@ class Database(object):
 
     @classmethod
     def factory(cls, **kwargs):
-        Cls = cls._engines.get(kwargs['engine'])
+        try:
+            Cls = cls._engines[kwargs['engine']]
+        except KeyError:
+            Cls = resolve(kwargs['engine'])
         database = Cls(**kwargs)
         if 'django_alias' in kwargs:
             database.connection_factory = django_connection_factory
