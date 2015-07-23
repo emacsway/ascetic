@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 import collections
 import logging
+from time import time
 from functools import wraps
 from threading import local
 from uuid import uuid4
@@ -59,40 +60,65 @@ class Transaction(object):
 
 class Database(object):
 
+    _engines = {}
     placeholder = '%s'
     compile = smartsql.compile
     connection = None
     _begin_level = 0
     _autocommit = False
 
-    def __init__(self, **kwargs):
-        self.using = kwargs.pop('using')
-        self.logger = logging.getLogger('.'.join((__name__, self.using)))
-        self.engine = kwargs.pop('engine')
-        self.debug = kwargs.pop('debug', False)
-        self.initial_sql = kwargs.pop('initial_sql', '')
-        self.always_reconnect = kwargs.pop('always_reconnect', False)
-        self.autocommit = kwargs.pop('autocommit', False)
+    def __init__(self, alias, engine, initial_sql, always_reconnect=False, autocommit=False, debug=False, **kwargs):
+        self.alias = alias
+        self.engine = engine
+        self.debug = debug
+        self.initial_sql = initial_sql
+        self.always_reconnect = always_reconnect
+        self.autocommit = autocommit
         self._savepoints = []
         self._conf = kwargs
+        self._logger = logging.getLogger('.'.join((__name__, self.alias)))
 
-    def _connect(self, *args, **kwargs):
+        if self.debug:
+            self._execute = self.log_sql(self._execute)
+
+    def connection_factory(self, **kwargs):
         raise NotImplementedError
 
     def _ensure_connected(self):
-        self.connection = self._connect(**self._conf)
+        self.connection = self.connection_factory(**self._conf)
         if self.autocommit:
             self.set_autocommit(self.autocommit)
         if self.initial_sql:
             self.connection.cursor().execute(self.initial_sql)
         return self
 
+    def log_sql(self, f):
+        alias = self.alias
+        logger = self._logger
+
+        @wraps(f)
+        def wrapper(sql, params=()):
+            start = time()
+            try:
+                return f(sql, params)
+            except Exception as e:
+                logger.exception(e)
+                raise
+            finally:
+                stop = time()
+                duration = stop - start
+                logger.debug(
+                    '%s - (%.4f) %s; args=%s' % (alias, duration, sql, params),
+                    extra={'alias': alias, 'duration': duration, 'sql': sql, 'params': params}
+                )
+        return wrapper
+
     def _execute(self, sql, params=()):
         cursor = self.cursor()
         try:
             cursor.execute(sql, params)
         except Exception:
-            if self._begin_level > 0 and not self.always_reconnect:
+            if (not self._autocommit or self._begin_level > 0) and not self.always_reconnect:
                 raise
             self._ensure_connected()
             cursor = self.cursor()
@@ -102,18 +128,11 @@ class Database(object):
     def execute(self, sql, params=()):
         if not isinstance(sql, string_types):
             sql, params = self.compile(sql)
-        if self.debug:
-            self.logger.debug("%s - %s", sql, params)
         if self.placeholder != PLACEHOLDER:
             sql = sql.replace(PLACEHOLDER, self.placeholder)
-        try:
-            cursor = self._execute(sql, params)
-        except BaseException as e:
-            if self.debug:
-                self.logger.exception(e)
-            raise
-        else:
-            return cursor
+        sql = sql.rstrip("; \t\n\r")
+        cursor = self._execute(sql, params)
+        return cursor
 
     def cursor(self):
         if not self.connection:
@@ -132,7 +151,7 @@ class Database(object):
 
     @property
     def transaction(self):
-        return Transaction(self.using)
+        return Transaction(self.alias)
 
     def begin(self):
         if self._begin_level == 0:
@@ -155,15 +174,25 @@ class Database(object):
         else:
             self.savepoint_rollback()
 
-    def savepoint_begin(self):
-        self._savepoints.append('s' + uuid4().hex)
-        self.execute("SAVEPOINT %s", self._last_savepoint)
+    def savepoint_begin(self, name=None):
+        if name is None:
+            name = 's' + uuid4().hex
+        self._savepoints.append(name)
+        self.execute("SAVEPOINT %s", name)
 
-    def savepoint_commit(self):
-        self.execute("RELEASE SAVEPOINT %s", self._savepoints.pop())
+    def savepoint_commit(self, name=None):
+        if name is None:
+            name = self._savepoints.pop()
+        else:
+            del self._savepoints[self._savepoints.index(name):]
+        self.execute("RELEASE SAVEPOINT %s", name)
 
-    def savepoint_rollback(self):
-        self.execute("ROLLBACK TO SAVEPOINT %s", self._savepoints.pop())
+    def savepoint_rollback(self, name=None):
+        if name is None:
+            name = self._savepoints.pop()
+        else:
+            del self._savepoints[self._savepoints.index(name):]
+        self.execute("ROLLBACK TO SAVEPOINT %s", name)
 
     def describe_table(self, table_name):
         return {}
@@ -171,53 +200,53 @@ class Database(object):
     def qn(self, name):
         return self.compile(smartsql.Name(name))[0]
 
+    def close(self):
+        if self.connection:
+            self.connection.close()
+            self.connection = None
+
+    @classmethod
+    def register(cls, engine):
+        def _deco(engine_cls):
+            cls._engines[engine] = engine_cls
+            return cls
+        return _deco
+
     @classmethod
     def factory(cls, **kwargs):
-        relations = {
-            'sqlite3': SqliteDatabase,
-            'mysql': MySQLDatabase,
-            'postgresql': PostgreSQLDatabase,
-        }
-        Cls = relations.get(kwargs['engine'])
-        if 'django_using' in kwargs:
-            class Cls(DjangoMixin, Cls):
-                pass
-        return Cls(**kwargs)
+        Cls = cls._engines.get(kwargs['engine'])
+        database = Cls(**kwargs)
+        if 'django_alias' in kwargs:
+            database.connection_factory = django_connection_factory
+        return database
 
 
-class DjangoMixin(object):
-
-    def __init__(self, **kwargs):
-        self.django_using = kwargs.pop('django_using')
-        super(DjangoMixin, self).__init__(**kwargs)
-
-    def get_django_connection(self):
-        from django.db import connections
-        return connections[self.django_using]
-
-    def _connect(self, *args, **kwargs):
-        # self.django_conn.ensure_connection()
-        django_connection = self.get_django_connection()
-        if not django_connection.connection:
-            django_connection.cursor()
-        return django_connection.connection
+def django_connection_factory(django_alias, **kwargs):
+    # self.django_conn.ensure_connection()
+    from django.db import connections
+    django_connection = connections[django_alias]
+    if not django_connection.connection:
+        django_connection.cursor()
+    return django_connection.connection
 
 
+@Database.register('sqlite3')
 class SqliteDatabase(Database):
 
     placeholder = '?'
     compile = sqlite.compile
 
-    def _connect(self, *args, **kwargs):
+    def connection_factory(self, **kwargs):
         import sqlite3
-        return sqlite3.connect(*args)
+        return sqlite3.connect(**kwargs)
 
 
+@Database.register('mysql')
 class MySQLDatabase(Database):
 
     compile = mysql.compile
 
-    def _connect(self, *args, **kwargs):
+    def connection_factory(self, **kwargs):
         import MySQLdb
         return MySQLdb.connect(**kwargs)
 
@@ -258,9 +287,10 @@ class MySQLDatabase(Database):
         super(MySQLDatabase, self).set_autocommit(autocommit)
 
 
+@Database.register('postgresql')
 class PostgreSQLDatabase(Database):
 
-    def _connect(self, *args, **kwargs):
+    def connection_factory(self, **kwargs):
         import psycopg2
         return psycopg2.connect(**kwargs)
 
@@ -311,17 +341,32 @@ class Databases(object):
         self._settings = conf
         self._databases = local()
 
+    def create_database(self, alias):
+        return Database.factory(alias=alias, **self._settings[alias])
+
+    def close(self):
+        for alias in self:
+            del self[alias]
+
     def __getitem__(self, alias):
         try:
             return getattr(self._databases, alias)
         except AttributeError:
-            setattr(self._databases, alias, Database.factory(using=alias, **self._settings[alias]))
+            setattr(self._databases, alias, self.create_database(alias))
             return getattr(self._databases, alias)
 
+    def __delitem__(self, alias):
+        if hasattr(self._databases, alias):
+            getattr(self._databases, alias).close()
+            delattr(self._databases, alias)
 
-def get_db(using=None):
+    def __iter__(self):
+        return iter(self._settings)
+
+
+def get_db(alias=None):
     smartsql.warn('get_db', 'databases')
-    return databases[using or 'default']
+    return databases[alias or 'default']
 
 
 databases = Databases(settings.DATABASES)
