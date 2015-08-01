@@ -39,7 +39,7 @@ See file autumn/settings.py for more details.
 
 2. Define settings module in evironment variable AUTUMN_SETTINGS.
 
-3. Call autumn.settings.configure, for example::
+3. Call autumn.settings.configure(), for example::
 
     import autumn.settings.configure
     autumn.settings.configure({
