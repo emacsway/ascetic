@@ -27,8 +27,8 @@ except NameError:
     string_types = (str,)
     integer_types = (int,)
 
-PICKLED_MARKER = 'pickled:'
-STR_MARKER = 'str:'
+PICKLED_MARKER = 'pickled'
+STR_MARKER = 'str'
 
 dmp = diff_match_patch()
 
@@ -124,7 +124,7 @@ class Transaction(object):
             obj.revision_info = {}
             return
 
-        info['delta'] = obj_diff(prev, obj)
+        info['delta'] = create_diff(prev, obj)
         request = getattr(self.ctx, 'request', None)
         if request:
             if not info.get('editor'):
@@ -187,55 +187,61 @@ def revisions_for_object(instance):
     return Revision.objects.get_for_object(instance)
 
 
-def diff(txt_prev, txt_next):
-    """Create a 'diff' from txt_prev to txt_new."""
-    patch = dmp.patch_make(txt_next, txt_prev)
-    return dmp.patch_toText(patch)
-
-
-def set_field_data(obj, field, data):
-    field_inst = obj._meta.get_field(field)
-    # data = decode(data)
-    if field_inst.null and data == 'None':
-        data = None
-    elif isinstance(field_inst, models.ManyToManyField):
-        data = json.loads(data)
-    elif isinstance(field_inst, (models.DateTimeField, models.DateField, models.TimeField)) and not data and field_inst.null:
-        data = None
-    else:
-        data = field_inst.to_python(data)
-    setattr(obj, field_inst.attname, data)
-
-
-def get_field_data(obj, field):
-    """Returns field's data"""
-    # return encode(obj._meta.get_field(field)._get_val_from_obj(obj))
-    field_inst = obj._meta.get_field(field)
-    if isinstance(field_inst, models.ManyToManyField) and not obj.pk:
-        return '[]'
-    return field_inst.value_to_string(obj)
-
-
 def get_field_str(obj, field):
     """Returns field's string"""
     return obj._meta.get_field(field).value_to_string(obj)
 
 
-def obj_diff(obj_prev, obj_next):
-    """Create a 'diff' from obj_prev to obj_new."""
-    model = obj_next.__class__
-    fields = _registry[model]
-    lines = []
-    for field in fields:
-        data_prev = get_field_data(obj_prev, field)
-        data_next = get_field_data(obj_next, field)
-        # data_diff = unified_diff(data_prev.splitlines(), data_next.splitlines(), context=3)
-        data_diff = diff(data_prev, data_next)
-        lines.extend(["--- {0}.{1}".format(model.__name__, field),
-                     "+++ {0}.{1}".format(model.__name__, field)])
-        lines.append(data_diff.strip())
+class Comparator(object):
 
-    return "\n".join(lines)
+    _registry = {}
+
+    @staticmethod
+    def encode(val):
+        if not isinstance(val, string_types):
+            # XML? JSON? pickle?
+            return ':'.join(PICKLED_MARKER, base64.standard_b64encode(
+                pickle.dumps(val, protocol=pickle.HIGHEST_PROTOCOL)
+            ).decode('ascii'))
+        return ':'.join(STR_MARKER, val)  # prevent to user to falsify PICKLED_MARKER
+
+    @staticmethod
+    def decode(val):
+        marker, data = val.split(':', 1)
+        if marker == PICKLED_MARKER:
+            try:
+                return pickle.loads(base64.standard_b64decode(val[len(PICKLED_MARKER):].encode('ascii')))
+            except Exception:
+                pass
+        elif marker == STR_MARKER:
+            return val
+
+    @staticmethod
+    def _diff(prev_str, next_str):
+        """Create a 'diff' from txt_prev to txt_new."""
+        patch = dmp.patch_make(next_str, prev_str)
+        return dmp.patch_toText(patch)
+
+    def create_diff(self, prev_obj, next_obj):
+        """Create a 'diff' from obj_prev to obj_new."""
+        model = next_obj.__class__
+        fields = self._registry[model]
+        lines = []
+        for field in fields:
+            prev_value = getattr(prev_obj, field)
+            next_value = getattr(next_obj, field)
+            lines.extend(["--- {0}.{1}".format(model.__name__, field),
+                          "+++ {0}.{1}".format(model.__name__, field)])
+            if isinstance(next_value, string_types):
+                if not isinstance(prev_value, string_types):
+                    prev_value = ""
+                # data_diff = unified_diff(data_prev.splitlines(), data_next.splitlines(), context=3)
+                data_diff = self._diff(prev_value, next_value)
+                lines.append(self.encode(data_diff.strip()))
+            else:
+                lines.append(self.encode(next_value))
+
+        return "\n".join(lines)
 
 
 def apply_diff(obj, delta):
@@ -298,26 +304,6 @@ def diff_split_by_fields(txt):
     for k, v in result.items():
         result[k] = "\n".join(v)
     return result
-
-
-def encode(val):
-    if not isinstance(val, string_types):
-        # XML? JSON? pickle?
-        return PICKLED_MARKER + base64.standard_b64encode(
-            pickle.dumps(val, protocol=pickle.HIGHEST_PROTOCOL)
-        ).decode('ascii')
-    return STR_MARKER + force_unicode(val)  # prevent to user to falsify PICKLED_MARKER
-
-
-def decode(val):
-    if val.startswith(PICKLED_MARKER):
-        try:
-            return pickle.loads(base64.standard_b64decode(val[len(PICKLED_MARKER):].encode('ascii')))
-        except Exception:
-            pass
-    elif val.startswith(STR_MARKER):
-        return val[len(STR_MARKER):]
-    return val
 
 
 def unified_diff(fromlines, tolines, context=None):
