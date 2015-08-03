@@ -6,8 +6,8 @@ class GenericForeignKey(ForeignKey):
 
     def __init__(self, type_field="object_type_id", rel_field=None, field=None, on_delete=cascade, rel_name=None, query=None):
         self._type_field = type_field
-        self._rel_field = rel_field
-        self._field = field
+        self._rel_field = rel_field and to_tuple(rel_field)
+        self._field = field and to_tuple(field)
         self.on_delete = on_delete
         self._rel_name = rel_name
         self._query = query
