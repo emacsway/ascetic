@@ -1,8 +1,12 @@
 from __future__ import absolute_import, unicode_literals
 import sys
+import copy
 import base64
 # import json
-
+import hashlib
+from datetime import datetime
+from functools import wraps
+from threading import local
 # Under construction!!! Not testet yet!!!
 
 try:
@@ -10,14 +14,43 @@ try:
 except ImportError:
     import pickle
 
-# Use json instead pickle?
-
 from difflib import SequenceMatcher
 
 if sys.version_info > (3, ):
     from .vendor.diff_match_patch.python3.diff_match_patch import diff_match_patch
 else:
     from .vendor.diff_match_patch.python2.diff_match_patch import diff_match_patch
+
+"""
+BEGIN;
+CREATE TABLE "versioning_revision" (
+    "id" serial NOT NULL PRIMARY KEY,
+    "object_id" varchar(255) NOT NULL,
+    "content_type_id" integer NOT NULL REFERENCES "django_content_type" ("id") DEFERRABLE INITIALLY DEFERRED,
+    "revision" integer NOT NULL,
+    "reverted" boolean NOT NULL,
+    "sha1" varchar(40) NOT NULL,
+    "delta" text NOT NULL,
+    "created_at" timestamp with time zone NOT NULL,
+    "comment" varchar(255) NOT NULL,
+    "editor_id" integer REFERENCES "auth_user" ("id") DEFERRABLE INITIALLY DEFERRED,
+    "editor_ip" inet,
+    UNIQUE ("object_id", "content_type_id", "revision")
+)
+;
+CREATE INDEX "versioning_revision_object_id" ON "versioning_revision" ("object_id");
+CREATE INDEX "versioning_revision_object_id_like" ON "versioning_revision" ("object_id" varchar_pattern_ops);
+CREATE INDEX "versioning_revision_content_type_id" ON "versioning_revision" ("content_type_id");
+CREATE INDEX "versioning_revision_revision" ON "versioning_revision" ("revision");
+CREATE INDEX "versioning_revision_reverted" ON "versioning_revision" ("reverted");
+CREATE INDEX "versioning_revision_sha1" ON "versioning_revision" ("sha1");
+CREATE INDEX "versioning_revision_sha1_like" ON "versioning_revision" ("sha1" varchar_pattern_ops);
+CREATE INDEX "versioning_revision_created_at" ON "versioning_revision" ("created_at");
+CREATE INDEX "versioning_revision_editor_id" ON "versioning_revision" ("editor_id");
+
+COMMIT;
+"""
+
 
 try:
     str = unicode  # Python 2.* compatible
@@ -37,36 +70,34 @@ class AlreadyRegistered(Exception):
     pass
 
 
-class VersioningRegistry(dict):
+class Registry(dict):
 
-    def __init__(self):
-        if hasattr(VersioningRegistry, 'registry'):
-            raise Exception("Already registered {}".format(
-                type(VersioningRegistry.registry).__name__)
-            )
-        TranslationRegistry.registry = self
+    _singleton = None
+
+    def __new__(cls, *args, **kwargs):
+        if not Registry._singleton:
+            Registry._singleton = super(Registry, cls).__new__(cls, *args, **kwargs)
+        return Registry._singleton
 
     def __call__(self, model, fields):
-        if model._meta.name in self:
+        if model in self:
             raise AlreadyRegistered("Already registered {}".format(
                 model.__name__)
             )
-
-        self[model._meta.name] = d = {}
 
 
 class Transaction(object):
 
     def __init__(self,):
         """Constructor of Transaction instance."""
-        self.ctx = local()
+        self._ctx = local()
 
     @property
     def scopes(self):
         """Get transaction scopes."""
-        if not hasattr(self.ctx, 'transaction_scopes'):
-            self.ctx.transaction_scopes = []
-        return self.ctx.transaction_scopes
+        if not hasattr(self._ctx, 'transaction_scopes'):
+            self._ctx.transaction_scopes = []
+        return self._ctx.transaction_scopes
 
     def begin(self):
         """Begin transaction."""
@@ -90,16 +121,16 @@ class Transaction(object):
         self.scopes.pop()
 
     def lock(self):
-        self.ctx.locked = 0
+        self._ctx.locked = 0
         return self
 
     def locked(self, val=None):
-        if not hasattr(self.ctx, 'locked'):
+        if not hasattr(self._ctx, 'locked'):
             return False
         if val is not None:
-            self.ctx.locked += val
-        if self.ctx.locked == 0:
-            delattr(self.ctx, 'locked')
+            self._ctx.locked += val
+        if self._ctx.locked == 0:
+            delattr(self._ctx, 'locked')
             return False
         return True
 
@@ -108,39 +139,19 @@ class Transaction(object):
         self.pre_save(obj)
         self.scopes[-1].add(obj)
 
-    def pre_save(self, obj):
-        """Pre-save object"""
-        model = obj.__class__
-        if not hasattr(obj, 'revision_info'):
-            obj.revision_info = {}
-        info = obj.revision_info
-
-        try:
-            prev = model._default_manager.get(pk=obj.pk)
-        except model.DoesNotExist:
-            prev = model()
-
-        if not obj_is_changed(prev, obj):
-            obj.revision_info = {}
-            return
-
-        info['delta'] = create_delta(prev, obj)
-        request = getattr(self.ctx, 'request', None)
+    def post_save(self, obj):
+        """Post-save object"""
+        info = getattr(obj, 'revision_info', {})
+        request = getattr(self._ctx, 'request', None)
         if request:
             if not info.get('editor'):
                 info['editor'] = request.user
             if not info.get('editor_ip'):
                 info['editor_ip'] = request.META.get("REMOTE_ADDR")
-        if not getattr(info.get('editor'), 'pk', None):  # Anonymuous
+        if not getattr(info.get('editor'), 'id', None):  # Anonymuous
             info['editor'] = None
 
-    def post_save(self, obj):
-        """Post-save object"""
-        info = getattr(obj, 'revision_info', {})
-        if info:
-            rev = Revision(**info)
-            rev.content_object = obj
-            rev.save()
+        # DataBaseRepository().commit(obj, **info)
 
     def __call__(self, f=None):
         if f is None:
@@ -171,12 +182,6 @@ class Transaction(object):
 transaction = Transaction()
 
 
-def pre_save(sender, instance, **kwargs):
-    """Pre-save signal handler"""
-    transaction.begin()
-    transaction.add_obj(instance)
-
-
 def post_save(sender, instance, **kwargs):
     """Post-save signal handler"""
     transaction.commit()
@@ -187,14 +192,86 @@ def revisions_for_object(instance):
     return Revision.objects.get_for_object(instance)
 
 
-def get_field_str(obj, field):
-    """Returns field's string"""
-    return obj._meta.get_field(field).value_to_string(obj)
+class IRepository(object):
+
+    def commit(self, obj):
+        raise NotImplementedError
+
+    def versions(self, obj):
+        raise NotImplementedError
+
+    def version(self, obj, rev=None):
+        raise NotImplementedError
+
+    def object_version(self, obj, rev=None):
+        raise NotImplementedError
+
+
+class DataBaseRepository(IRepository):
+
+    def __init__(self, model):
+        self._model = model
+        self._comparator = Comparator()
+
+    def commit(self, obj, **info):
+        prev_obj = self.object_version(obj, rev=None)
+        if self._comparator.is_equal(prev_obj, obj):
+            return
+
+        latest = self.version()
+        delta = self._comparator.create_delta(prev_obj, obj)
+        hash_ = hashlib.sha1(
+            delta.encode("utf-8")
+        ).hexdigest()
+        rev = self._model(
+            content_object=obj,
+            revision=latest.revision,
+            hash=hash_,
+            delta=delta,
+            created_at=datetime.now(),
+            **info
+        )
+        self._do_commit(rev)
+
+        try:
+            rev.save()
+        except Exception:
+            # Added new revision by concurent process
+            raise
+
+        return rev
+
+    def _do_commit(self, rev):
+        pass
+
+    def object_version(self, obj, rev=None):
+        object_version = copy.copy(obj)
+        for field_name in Registry()[obj.__class__]:
+            setattr(object_version, field_name, None)
+        revisions = self.revisions()
+        if rev is not None:
+            revisions = revisions.where((self._model._gateway.sql_table.revision <= rev))
+        for revision in revisions:
+            self._comparator.apply_delta(object_version, revision.delta)
+        return object_version
+
+    def versions(self, obj):
+        t = self._model._gateway.sql_table
+        return self._model._gateway.query.where(
+            (t.content_object == obj)
+        ).order_by(
+            t.revision
+        )
+
+    def version(self, obj, rev=None):
+        t = self._model._gateway.sql_table
+        q = self.versions()
+        if rev is not None:
+            q = q.where((t.revision == rev))
+        return q[0]
 
 
 class Comparator(object):
-
-    _registry = {}
 
     @staticmethod
     def encode_v2(val):
@@ -237,13 +314,13 @@ class Comparator(object):
     @staticmethod
     def _diff(prev_str, next_str):
         """Create a 'diff' from txt_prev to txt_new."""
-        patch = dmp.patch_make(next_str, prev_str)
+        patch = dmp.patch_make(prev_str, next_str)
         return dmp.patch_toText(patch)
 
     def create_delta(self, prev_obj, next_obj):
-        """Create a 'diff' from obj_prev to obj_new."""
+        """Create a 'diff' from prev_obj to obj_new."""
         model = next_obj.__class__
-        fields = self._registry[model]
+        fields = Registry()[model]
         lines = []
         for field in fields:
             prev_value = getattr(prev_obj, field)
@@ -263,8 +340,8 @@ class Comparator(object):
 
     def apply_delta(self, obj, delta):
         model = obj.__class__
-        fields = self._registry[model]
-        diffs = self.split_delta_by_fields(delta)
+        fields = Registry()[model]
+        diffs = self._split_delta_by_fields(delta)
         for key, diff_or_value in diffs.items():
             model_name, field_name = key.split('.')
             if model_name != model.__name__ or field_name not in fields:
@@ -278,7 +355,7 @@ class Comparator(object):
             setattr(obj, field_name, prev_value)
 
     @staticmethod
-    def split_delta_by_fields(txt):
+    def _split_delta_by_fields(txt):
         """Returns dictionary object, key is fieldname, value is it's diff"""
         result = {}
         current = None
@@ -297,34 +374,36 @@ class Comparator(object):
             result[k] = "\n".join(v)
         return result
 
+    def is_equal(self, prev_obj, next_obj):
+        """Returns True, if watched attributes of obj1 deffer from obj2."""
+        for field_name in Registry()[next_obj.__class__].fields:
+            if getattr(prev_obj, field_name) != getattr(next_obj, field_name):
+                return True
+        return False
 
-def obj_is_changed(obj_prev, obj_next):
-    """Returns True, if watched attributes of obj1 deffer from obj2."""
-    model = obj_next.__class__
-    fields = _registry[model]
-    for field in fields:
-        original_data = get_field_data(obj_next, field)
-        new_data = get_field_data(obj_prev, field)
-        if original_data != new_data:
-            return True
-    return False
-
-
-def display_diff(obj_prev, obj_next):
-    """Returns a HTML representation of the diff."""
-    model = obj_next.__class__
-    fields = _registry[model]
-
-    result = []
-    for field_name in fields:
-        result.append("<b>{0}</b>".format(field_name))
-        diffs = dmp.diff_main(
-            get_field_str(obj_prev, field_name),
-            get_field_str(obj_next, field_name)
-        )
-        dmp.diff_cleanupSemantic(diffs)
-        result.append(dmp.diff_prettyHtml(diffs))
-    return "<br />\n".join(result)
+    def display_diff(self, prev_obj, next_obj):
+        """Returns a HTML representation of the diff."""
+        result = []
+        for field_name in Registry()[next_obj.__class__].fields:
+            result.append("<b>{0}</b>".format(field_name))
+            prev_value = getattr(prev_obj, field_name)
+            next_value = getattr(next_obj, field_name)
+            if isinstance(prev_value, string_types) and isinstance(next_value, string_types):
+                diffs = dmp.diff_main(prev_value, next_value)
+                dmp.diff_cleanupSemantic(diffs)
+                result.append(dmp.diff_prettyHtml(diffs))
+            else:
+                if prev_value != next_value:
+                    result.append(
+                        """
+                        <span>
+                            <del style="background:#ffe6e6;">{}</del>
+                            <ins style="background:#e6ffe6;">{}</ins>
+                        <span>
+                        """.format(prev_value, next_value))
+                else:
+                    result.append("""<span>{}</span>""".format(next_value))
+        return "<br />\n".join(result)
 
 
 def unified_diff(fromlines, tolines, context=None):
