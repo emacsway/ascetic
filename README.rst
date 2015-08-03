@@ -20,7 +20,7 @@ In autumn.contrib (currently under development) you can found solutions for:
 
 All solutions support composite primary/foreign keys.
 
-What Autumn does not? Autumn does not make any data type conversions (use connection features like `this <http://initd.org/psycopg/docs/advanced.html#adapting-new-python-types-to-sql-syntax>`__), does not has Registry of model instances (you can have many copies of single object), and does not has "`Unit of Work <http://martinfowler.com/eaaCatalog/unitOfWork.html>`__". I recommend using a `Storm ORM <https://storm.canonical.com/>`__, if you need it all.
+What Autumn does not? Autumn does not make any data type conversions (use connection features like `this <http://initd.org/psycopg/docs/advanced.html#adapting-new-python-types-to-sql-syntax>`__), does not has Registry of model instances (you can have many copies of same object), and does not has "`Unit of Work <http://martinfowler.com/eaaCatalog/unitOfWork.html>`__". I recommend using a `Storm ORM <https://storm.canonical.com/>`__, if you need it all.
 
 Autumn is released under the MIT License (see LICENSE file for details).
 
@@ -48,12 +48,12 @@ Using these tables:
 
 You can configure in one the following ways:
 
-1. Put in your PYTHONPATH file autumn_settings.py with your settings.
+\1. Put in your PYTHONPATH file autumn_settings.py with your settings.
 See file autumn/settings.py for more details.
 
-2. Define settings module in evironment variable AUTUMN_SETTINGS.
+\2. Define settings module in evironment variable AUTUMN_SETTINGS.
 
-3. Call autumn.settings.configure(), for example::
+\3. Call autumn.settings.configure(), for example::
 
     import autumn.settings.configure
     autumn.settings.configure({
