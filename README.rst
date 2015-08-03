@@ -3,14 +3,26 @@ Autumn, a lightweight Python ORM
 =================================
 
 Autumn exists as a super-lightweight Object-relational mapper (ORM) for Python.
+Autumn based on "`Data Mapper <http://martinfowler.com/eaaCatalog/dataMapper.html>`_" and "`Table Data Gateway <http://martinfowler.com/eaaCatalog/tableDataGateway.html>`_".
+It also supports "`Active Record <http://www.martinfowler.com/eaaCatalog/activeRecord.html>`_" wrapper, but it's just a wrapper, - model class is free from service logic.
 Autumn ORM follows the `KISS principle <http://en.wikipedia.org/wiki/KISS_principle>`_.
 Has automatic population of fields from database (see the example below), and minimal size.
 You do not have to specify the columns in the class. This follows the `DRY <http://en.wikipedia.org/wiki/DRY_code>`_ principle. 
 Autumn as small as possible.
 
+In autumn.contrib (currently under development) you can found solutions for:
+
+- multilingual
+- polymorphic relations
+- polymorphic models (supports for "`Single Table Inheritance <http://martinfowler.com/eaaCatalog/singleTableInheritance.html>`_", "`Concrete Table Inheritance <http://martinfowler.com/eaaCatalog/concreteTableInheritance.html>`_" and "`Class Table Inheritance <http://martinfowler.com/eaaCatalog/classTableInheritance.html>`_" aka Django "`Multi-table inheritance <https://docs.djangoproject.com/en/1.8/topics/db/models/#multi-table-inheritance>`_")
+- "Materialized Path" implementation of tree
+- versioning (that stores only diff, not content copy)
+
+All solutions support composite primary/foreign keys.
+
 It is released under the MIT License (see LICENSE file for details).
 
-This project is currently considered beta software.
+This project is currently under development, and not stable. If you are looking for stable KISS-style ORM, pay attention to `Storm ORM <https://storm.canonical.com/>`__.
 
 
 PostgreSQL Example
