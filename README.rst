@@ -26,6 +26,8 @@ Autumn is released under the MIT License (see LICENSE file for details).
 
 This project is currently under development, and not stable. If you are looking for stable KISS-style ORM, pay attention to `Storm ORM <https://storm.canonical.com/>`__.
 
+Home Page: https://bitbucket.org/emacsway/autumn
+
 
 PostgreSQL Example
 ===================
