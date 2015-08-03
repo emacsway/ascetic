@@ -1,7 +1,7 @@
-from __future__ import absolute_import
+from __future__ import absolute_import, unicode_literals
 import sys
 import base64
-import json
+# import json
 
 # Under construction!!! Not testet yet!!!
 
@@ -124,7 +124,7 @@ class Transaction(object):
             obj.revision_info = {}
             return
 
-        info['delta'] = create_diff(prev, obj)
+        info['delta'] = create_delta(prev, obj)
         request = getattr(self.ctx, 'request', None)
         if request:
             if not info.get('editor'):
@@ -197,7 +197,8 @@ class Comparator(object):
     _registry = {}
 
     @staticmethod
-    def encode(val):
+    def encode_v2(val):
+        # We are sending data to db in string format. Just use converters of connection here.
         if not isinstance(val, string_types):
             # XML? JSON? pickle?
             return ':'.join(PICKLED_MARKER, base64.standard_b64encode(
@@ -206,11 +207,28 @@ class Comparator(object):
         return ':'.join(STR_MARKER, val)  # prevent to user to falsify PICKLED_MARKER
 
     @staticmethod
+    def decode_v2(val):
+        marker, data = val.split(':', 1)
+        if marker == PICKLED_MARKER:
+            try:
+                return pickle.loads(base64.standard_b64decode(data.encode('ascii')))
+            except Exception:
+                pass
+        elif marker == STR_MARKER:
+            return val
+
+    @staticmethod
+    def encode(val):
+        if not isinstance(val, string_types):  # FIXME: Pickle all types?
+            return ':'.join(PICKLED_MARKER, pickle.dumps(val, protocol=pickle.HIGHEST_PROTOCOL))
+        return ':'.join(STR_MARKER, val)  # prevent to user to falsify PICKLED_MARKER
+
+    @staticmethod
     def decode(val):
         marker, data = val.split(':', 1)
         if marker == PICKLED_MARKER:
             try:
-                return pickle.loads(base64.standard_b64decode(val[len(PICKLED_MARKER):].encode('ascii')))
+                return pickle.loads(data.encode('ascii'))
             except Exception:
                 pass
         elif marker == STR_MARKER:
@@ -222,7 +240,7 @@ class Comparator(object):
         patch = dmp.patch_make(next_str, prev_str)
         return dmp.patch_toText(patch)
 
-    def create_diff(self, prev_obj, next_obj):
+    def create_delta(self, prev_obj, next_obj):
         """Create a 'diff' from obj_prev to obj_new."""
         model = next_obj.__class__
         fields = self._registry[model]
@@ -243,19 +261,41 @@ class Comparator(object):
 
         return "\n".join(lines)
 
+    def apply_delta(self, obj, delta):
+        model = obj.__class__
+        fields = self._registry[model]
+        diffs = self.split_delta_by_fields(delta)
+        for key, diff_or_value in diffs.items():
+            model_name, field_name = key.split('.')
+            if model_name != model.__name__ or field_name not in fields:
+                continue
+            last_value = getattr(obj, field_name)
+            if isinstance(last_value, string_types) and isinstance(diff_or_value, string_types):
+                patch = dmp.patch_fromText(diff_or_value)
+                prev_value = dmp.patch_apply(patch, last_value)[0]
+            else:
+                prev_value = diff_or_value
+            setattr(obj, field_name, prev_value)
 
-def apply_diff(obj, delta):
-    model = obj.__class__
-    fields = _registry[model]
-    diffs = diff_split_by_fields(delta)
-    for key, diff in diffs.items():
-        model_name, field_name = key.split('.')
-        if model_name != model.__name__ or field_name not in fields:
-            continue
-        content = get_field_data(obj, field_name)
-        patch = dmp.patch_fromText(diff)
-        content = dmp.patch_apply(patch, content)[0]
-        set_field_data(obj, field_name, content)
+    @staticmethod
+    def split_delta_by_fields(txt):
+        """Returns dictionary object, key is fieldname, value is it's diff"""
+        result = {}
+        current = None
+        lines = txt.split("\n")
+        # FIXME: prevent injection of field markers
+        for line in lines:
+            if line[:4] == "--- ":
+                continue
+            if line[:4] == "+++ ":
+                line = line[4:].strip()
+                result[line] = current = []
+                continue
+            if current is not None:
+                current.append(line)
+        for k, v in result.items():
+            result[k] = "\n".join(v)
+        return result
 
 
 def obj_is_changed(obj_prev, obj_next):
@@ -285,25 +325,6 @@ def display_diff(obj_prev, obj_next):
         dmp.diff_cleanupSemantic(diffs)
         result.append(dmp.diff_prettyHtml(diffs))
     return "<br />\n".join(result)
-
-
-def diff_split_by_fields(txt):
-    """Returns dictionary object, key is fieldname, value is it's diff"""
-    result = {}
-    current = None
-    lines = txt.split("\n")
-    for line in lines:
-        if line[:4] == "--- ":
-            continue
-        if line[:4] == "+++ ":
-            line = line[4:].strip()
-            result[line] = current = []
-            continue
-        if current is not None:
-            current.append(line)
-    for k, v in result.items():
-        result[k] = "\n".join(v)
-    return result
 
 
 def unified_diff(fromlines, tolines, context=None):
