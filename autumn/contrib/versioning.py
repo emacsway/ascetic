@@ -101,25 +101,25 @@ class IRepository(object):
         raise NotImplementedError
 
 
-class DataBaseRepository(IRepository):
+class DatabaseRepository(IRepository):
 
     def __init__(self, model):
         self._model = model
         self._comparator = Comparator()
 
     def commit(self, obj, **info):
-        prev_obj = self.object_version(obj, rev=None)
+        latest_rev = self.version()
+        prev_obj = self.object_version(obj, rev=latest_rev)
         if self._comparator.is_equal(prev_obj, obj):
             return
 
-        latest = self.version()
         delta = self._comparator.create_delta(prev_obj, obj)
         hash_ = hashlib.sha1(
             delta.encode("utf-8")
         ).hexdigest()
         rev = self._model(
             content_object=obj,
-            revision=latest.revision,
+            revision=latest_rev.revision,
             hash=hash_,
             delta=delta,
             created_at=datetime.now(),
@@ -130,7 +130,7 @@ class DataBaseRepository(IRepository):
         try:
             rev.save()
         except Exception:
-            # Added new revision by concurent process
+            # New revision was added by concurent process
             raise
 
         return rev
