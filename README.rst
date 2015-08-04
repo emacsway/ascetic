@@ -20,7 +20,7 @@ In autumn.contrib (currently under development) you can found solutions for:
 
 All solutions support composite primary/foreign keys.
 
-What Autumn does not? Autumn does not make any data type conversions (use connection features like `this <http://initd.org/psycopg/docs/advanced.html#adapting-new-python-types-to-sql-syntax>`__), does not has Registry of model instances (you can have many copies of same object), and does not has "`Unit of Work <http://martinfowler.com/eaaCatalog/unitOfWork.html>`__". I recommend using a `Storm ORM <https://storm.canonical.com/>`__, if you need it all.
+What Autumn does not? Autumn does not make any data type conversions (use connection features like `this <http://initd.org/psycopg/docs/advanced.html#adapting-new-python-types-to-sql-syntax>`__), and does not has "`Unit of Work <http://martinfowler.com/eaaCatalog/unitOfWork.html>`__". I recommend using a `Storm ORM <https://storm.canonical.com/>`__, if you need it all.
 
 Autumn is released under the MIT License (see LICENSE file for details).
 

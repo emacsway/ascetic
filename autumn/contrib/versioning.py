@@ -5,8 +5,7 @@ import base64
 # import json
 import hashlib
 from datetime import datetime
-from functools import wraps
-from threading import local
+
 # Under construction!!! Not testet yet!!!
 
 try:

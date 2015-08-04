@@ -3,7 +3,7 @@ import unittest
 from autumn import validators
 from autumn import utils
 from autumn.databases import get_db
-from autumn.models import Model, ForeignKey
+from autumn.models import Model, ForeignKey, IdentityMap
 from sqlbuilder import smartsql
 from sqlbuilder.smartsql.tests import TestSmartSQL
 
@@ -130,6 +130,7 @@ class TestModels(unittest.TestCase):
 
     def setUp(self):
         db = get_db()
+        IdentityMap().clear()
         for table in ('autumn_tests_author', 'books'):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 
@@ -152,6 +153,7 @@ class TestModels(unittest.TestCase):
         slww = Book(title='Still Life with Woodpecker', author_id=tom.id)
         slww.save()
 
+        IdentityMap().clear()
         # Test Model.pk getter and setter
         pk = slww.pk
         self.assertEqual(slww.pk, slww.id)
@@ -197,6 +199,7 @@ class TestModels(unittest.TestCase):
         a.last_name = new_last_name
         a.save()
 
+        IdentityMap().clear()
         a = Author.get(kid)
         self.assertEqual(a.last_name, new_last_name)
 
@@ -371,6 +374,7 @@ class TestCompositeRelation(unittest.TestCase):
 
     def setUp(self):
         db = get_db()
+        IdentityMap().clear()
         for table in ('autumn_composite_author', 'autumn_composite_book'):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 
@@ -383,6 +387,7 @@ class TestCompositeRelation(unittest.TestCase):
         )
         author.save()
         author_pk = (1, 'en')
+        IdentityMap().clear()
         author = AuthorC.get(author_pk)
         self.assertEqual(author.pk, author_pk)
 
@@ -394,6 +399,7 @@ class TestCompositeRelation(unittest.TestCase):
         book.author = author
         book.save()
         book_pk = (5, 'en')
+        IdentityMap().clear()
         book = BookC.get(book_pk)
         self.assertEqual(book.pk, book_pk)
         self.assertEqual(book.author.pk, author_pk)

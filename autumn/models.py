@@ -4,6 +4,9 @@ import copy
 import collections
 import operator
 from functools import reduce
+from threading import local
+from weakref import WeakValueDictionary
+
 from sqlbuilder import smartsql
 from . import signals
 from .databases import databases
@@ -45,6 +48,46 @@ class ModelRegistry(dict):
             raise ModelNotRegistered("""Model {} is not registered in {}""".format(name, self.keys()))
 
 registry = ModelRegistry()
+
+
+class IdentityMap(object):
+
+    _ctx = local()
+    _size = 1000
+
+    def __new__(cls, *args, **kwargs):
+        if not hasattr(IdentityMap._ctx, 'singleton'):
+            self = IdentityMap._ctx.singleton = super(IdentityMap, cls).__new__(cls, *args, **kwargs)
+            self._cache = []
+            self._alive = WeakValueDictionary()
+        return IdentityMap._ctx.singleton
+
+    def add(self, key, value):
+        self._cache.append(value)
+        if len(self._cache) > self._size:
+            self._cache.pop(0)
+        self._alive[key] = value
+
+    def get(self, key):
+        value = self._alive[key]
+        self._cache.remove(value)
+        self._cache.append(value)
+        return value
+
+    def remove(self, key):
+        value = self._alive[key]
+        self._cache.remove(value)
+        del self._alive[key]
+
+    def clear(self):
+        del self._cache[:]
+        self._alive.clear()
+
+    def exists(self, key):
+        return key in self._alive
+
+    def set_size(self, size):
+        self._size = size
 
 
 class Field(object):
@@ -411,10 +454,14 @@ class Gateway(object):
                     data_mapped[key] = value
         else:
             data_mapped = dict(data)
-        obj = self.model(**data_mapped)
-        obj._original_data = data_mapped
-        obj._new_record = False
-        return obj
+        identity_map = IdentityMap()
+        key = (self.model, tuple(data_mapped[i] for i in to_tuple(self.pk)))
+        if not identity_map.exists(key):
+            obj = self.model(**data_mapped)
+            obj._original_data = data_mapped
+            obj._new_record = False
+            identity_map.add(key, obj)
+        return identity_map.get(key)
 
     def get_data(self, obj, fields=frozenset(), exclude=frozenset(), to_db=True):
         data = tuple((name, getattr(obj, name, None))
@@ -530,6 +577,10 @@ class Gateway(object):
     def get(self, _obj_pk=None, **kwargs):
         """Returns Q object"""
         if _obj_pk is not None:
+            identity_map = IdentityMap()
+            key = (self.model, tuple(to_tuple(_obj_pk)))
+            if identity_map.exists(key):
+                return identity_map.get(key)
             return self.get(**{k: v for k, v in zip(to_tuple(self.pk), to_tuple(_obj_pk))})
 
         if kwargs:
