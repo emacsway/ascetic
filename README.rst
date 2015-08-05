@@ -141,7 +141,7 @@ Deleting
 
 ::
 
-    object_list = Book.qs.tables(
+    object_list = Book.q.tables(
         (Book.s & Author.s).on(Book.s.author_id == Author.s.id)
     ).where(
         (Author.s.first_name != 'James') & (Author.s.last_name != 'Joyce')
