@@ -1,6 +1,6 @@
 import unittest
 from autumn.databases import get_db
-from autumn.models import Model
+from autumn.models import Model, IdentityMap
 from autumn.contrib.tree import MpGateway, MpModel
 
 Location = None
@@ -69,6 +69,7 @@ class TestMpTree(unittest.TestCase):
             globals()[model_name] = model
 
     def setUp(self):
+        IdentityMap().disable()
         db = get_db()
         for table in ('autumn_tree_location',):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))

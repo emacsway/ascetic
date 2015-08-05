@@ -2,7 +2,7 @@ import unittest
 from autumn import validators
 from autumn.databases import get_db
 from autumn.contrib.polymorphic import PolymorphicGateway
-from autumn.models import Model, ForeignKey
+from autumn.models import Model, ForeignKey, IdentityMap
 
 Author = Book = Nonfiction = Avia = None
 
@@ -174,6 +174,7 @@ class TestModelTranslation(unittest.TestCase):
             globals()[model_name] = model
 
     def setUp(self):
+        IdentityMap().disable()
         db = get_db()
         for table in ('autumn_polymorphic_author', 'autumn_polymorphic_book',):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))

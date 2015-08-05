@@ -4,6 +4,9 @@ import copy
 import collections
 import operator
 from functools import reduce
+from threading import local
+from weakref import WeakValueDictionary
+
 from sqlbuilder import smartsql
 from . import signals
 from .databases import databases
@@ -45,6 +48,57 @@ class ModelRegistry(dict):
             raise ModelNotRegistered("""Model {} is not registered in {}""".format(name, self.keys()))
 
 registry = ModelRegistry()
+
+
+class IdentityMap(object):
+
+    _ctx = local()
+    _size = 1000
+    _enabled = False
+
+    def __new__(cls, *args, **kwargs):
+        if not hasattr(IdentityMap._ctx, 'singleton'):
+            self = IdentityMap._ctx.singleton = super(IdentityMap, cls).__new__(cls, *args, **kwargs)
+            self._cache = []
+            self._alive = WeakValueDictionary()
+        return IdentityMap._ctx.singleton
+
+    def add(self, key, value):
+        if not self._enabled:
+            return
+        self._cache.append(value)
+        if len(self._cache) > self._size:
+            self._cache.pop(0)
+        self._alive[key] = value
+
+    def get(self, key):
+        if not self._enabled:
+            raise KeyError
+        value = self._alive[key]
+        self._cache.remove(value)
+        self._cache.append(value)
+        return value
+
+    def remove(self, key):
+        value = self._alive[key]
+        self._cache.remove(value)
+        del self._alive[key]
+
+    def clear(self):
+        del self._cache[:]
+        self._alive.clear()
+
+    def exists(self, key):
+        return self._enabled and key in self._alive
+
+    def set_size(self, size):
+        self._size = size
+
+    def enable(self):
+        self._enabled = True
+
+    def disable(self):
+        self._enabled = False
 
 
 class Field(object):
@@ -411,9 +465,14 @@ class Gateway(object):
                     data_mapped[key] = value
         else:
             data_mapped = dict(data)
+        identity_map = IdentityMap()
+        key = (self.model, tuple(data_mapped[i] for i in to_tuple(self.pk)))
+        if identity_map.exists(key):
+            return identity_map.get(key)
         obj = self.model(**data_mapped)
         obj._original_data = data_mapped
         obj._new_record = False
+        identity_map.add(key, obj)
         return obj
 
     def get_data(self, obj, fields=frozenset(), exclude=frozenset(), to_db=True):
@@ -530,6 +589,10 @@ class Gateway(object):
     def get(self, _obj_pk=None, **kwargs):
         """Returns Q object"""
         if _obj_pk is not None:
+            identity_map = IdentityMap()
+            key = (self.model, tuple(to_tuple(_obj_pk)))
+            if identity_map.exists(key):
+                return identity_map.get(key)
             return self.get(**{k: v for k, v in zip(to_tuple(self.pk), to_tuple(_obj_pk))})
 
         if kwargs:
@@ -964,12 +1027,17 @@ class ForeignKey(Relation):
 
         cached_obj = self._get_cache(instance, self.name(owner))
         rel_field = self.rel_field(owner)
+        rel_model = self.rel_model(owner)
         if cached_obj is None or tuple(getattr(cached_obj, f, None) for f in rel_field) != val:
-            t = self.rel_model(owner)._gateway.sql_table
-            q = self.query(owner)
-            for f, v in zip(rel_field, val):
-                q = q.where(t.__getattr__(f) == v)
-            self._set_cache(instance, self.name(owner), q[0])
+            if self._query is None and rel_field == to_tuple(rel_model._gateway.pk):
+                obj = rel_model.get(val)  # to use IdentityMap
+            else:
+                t = rel_model._gateway.sql_table
+                q = self.query(owner)
+                for f, v in zip(rel_field, val):
+                    q = q.where(t.__getattr__(f) == v)
+                obj = q[0]
+            self._set_cache(instance, self.name(owner), obj)
         return instance._cache[self.name(owner)]
 
     def __set__(self, instance, value):

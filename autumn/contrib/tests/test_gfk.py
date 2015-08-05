@@ -2,7 +2,7 @@ import unittest
 from autumn import validators
 from autumn.databases import get_db
 from autumn.contrib.gfk import GenericForeignKey, GenericRelation
-from autumn.models import Model
+from autumn.models import Model, IdentityMap
 
 Author = Book = None
 
@@ -103,6 +103,7 @@ class TestModelTranslation(unittest.TestCase):
             globals()[model_name] = model
 
     def setUp(self):
+        IdentityMap().disable()
         db = get_db()
         for table in ('autumn_gfk_author', 'autumn_gfk_book',):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))

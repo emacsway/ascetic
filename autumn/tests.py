@@ -3,7 +3,7 @@ import unittest
 from autumn import validators
 from autumn import utils
 from autumn.databases import get_db
-from autumn.models import Model, ForeignKey
+from autumn.models import Model, ForeignKey, IdentityMap
 from sqlbuilder import smartsql
 from sqlbuilder.smartsql.tests import TestSmartSQL
 
@@ -129,6 +129,7 @@ class TestModels(unittest.TestCase):
             globals()[model_name] = model
 
     def setUp(self):
+        IdentityMap().disable()
         db = get_db()
         for table in ('autumn_tests_author', 'books'):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
@@ -370,6 +371,7 @@ class TestCompositeRelation(unittest.TestCase):
             globals()[model_name] = model
 
     def setUp(self):
+        IdentityMap().disable()
         db = get_db()
         for table in ('autumn_composite_author', 'autumn_composite_book'):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
