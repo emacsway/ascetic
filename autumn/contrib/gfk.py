@@ -104,6 +104,38 @@ class GenericRelation(OneToMany):
     def __get__(self, instance, owner):
         if not instance:
             return self
-        q = super(GenericRelation, self).__get__(instance, owner)
-        t = self.rel_model(owner)._gateway.sql_table
-        return q.where(t.__getattr__(self.rel_type_field(owner)) == type(instance)._gateway.name)
+        rel_field = self.rel_field(owner)
+        rel_type_field = self.rel_type_field(owner)
+        val = tuple(getattr(instance, f) for f in self.field(owner))
+        cached_query = self._get_cache(instance, self.name(owner))
+        # TODO: Be sure that value of related fields equals to value of field
+        if cached_query is not None and cached_query._cache is not None:
+            for cached_obj in cached_query._cache:
+                if (tuple(getattr(cached_obj, f, None) for f in rel_field) != val or
+                        getattr(cached_obj, rel_type_field) != type(instance)._gateway.name):
+                    cached_query = None
+                    break
+        if cached_query is None:
+            t = self.rel_model(owner)._gateway.sql_table
+            q = super(GenericRelation, self).__get__(instance, owner)
+            q = q.where(t.__getattr__(rel_type_field) == type(instance)._gateway.name)
+            self._set_cache(instance, self.name(owner), q)
+        return self._get_cache(instance, self.name(owner))
+
+    def __set__(self, instance, object_list):
+        owner = instance.__class__
+        rel_field = self.rel_field(owner)
+        rel_type_field = self.rel_type_field(owner)
+        val = tuple(getattr(instance, f) for f in self.field(owner))
+        for cached_obj in object_list:
+            if isinstance(cached_obj, Model):
+                if not isinstance(cached_obj, self.rel_model(owner)):
+                    raise Exception(
+                        'Value should be an instance of "{0}" or primary key of related instance.'.format(
+                            self.rel_model(owner)._gateway.name
+                        )
+                    )
+                if (tuple(getattr(cached_obj, f, None) for f in rel_field) != val or
+                        getattr(cached_obj, rel_type_field) != type(instance)._gateway.name):
+                    return
+        self.__get__(instance, owner)._cache = object_list
