@@ -52,9 +52,19 @@ registry = ModelRegistry()
 
 class IdentityMap(object):
 
+    READ_UNCOMMITTED = 0  # IdentityMap is disabled
+    READ_COMMITTED = 1  # IdentityMap is disabled
+    REPEATABLE_READ = 2  # Prevent repeated DB-query only for existent objects
+    SERIALIZABLE = 3  # Prevent repeated DB-query for both, existent and nonexistent objects
+
+    INFLUENCING_LEVELS = (REPEATABLE_READ, SERIALIZABLE)
+
     _ctx = local()
     _size = 1000
-    _enabled = False
+    _isolation_level = READ_UNCOMMITTED  # Disabled currently
+
+    class Nonexistent(object):
+        pass
 
     def __new__(cls, *args, **kwargs):
         if not hasattr(IdentityMap._ctx, 'singleton'):
@@ -63,20 +73,28 @@ class IdentityMap(object):
             self._alive = WeakValueDictionary()
         return IdentityMap._ctx.singleton
 
-    def add(self, key, value):
-        if not self._enabled:
+    def add(self, key, value=None):
+        if self._isolation_level not in self.INFLUENCING_LEVELS:
             return
+        if value is None:
+            if self._isolation_level != self.SERIALIZABLE:
+                return
+            value = self.Nonexistent()
         self._cache.append(value)
         if len(self._cache) > self._size:
             self._cache.pop(0)
         self._alive[key] = value
 
     def get(self, key):
-        if not self._enabled:
+        if self._isolation_level not in self.INFLUENCING_LEVELS:
             raise KeyError
         value = self._alive[key]
         self._cache.remove(value)
         self._cache.append(value)
+        if value.__class__ == self.Nonexistent:
+            if self._isolation_level != self.SERIALIZABLE:
+                raise KeyError
+            raise ObjectDoesNotExist
         return value
 
     def remove(self, key):
@@ -89,16 +107,25 @@ class IdentityMap(object):
         self._alive.clear()
 
     def exists(self, key):
-        return self._enabled and key in self._alive
+        if self._isolation_level not in self.INFLUENCING_LEVELS:
+            return False
+        return key in self._alive
 
     def set_size(self, size):
         self._size = size
 
+    def set_isolation_level(self, level):
+        self._isolation_level = level
+
     def enable(self):
-        self._enabled = True
+        if hasattr(self, '_last_isolation_level'):
+            self._isolation_level = self._last_isolation_level
+            del self._last_isolation_level
 
     def disable(self):
-        self._enabled = False
+        if not hasattr(self, '_last_isolation_level'):
+            self._last_isolation_level = self._isolation_level
+            self._isolation_level = self.READ_UNCOMMITTED
 
 
 class Field(object):
@@ -468,7 +495,10 @@ class Gateway(object):
         identity_map = IdentityMap()
         key = (self.model, tuple(data_mapped[i] for i in to_tuple(self.pk)))
         if identity_map.exists(key):
-            return identity_map.get(key)
+            try:
+                return identity_map.get(key)
+            except ObjectDoesNotExist:
+                pass
         obj = self.model(**data_mapped)
         obj._original_data = data_mapped
         obj._new_record = False
@@ -593,7 +623,13 @@ class Gateway(object):
             key = (self.model, tuple(to_tuple(_obj_pk)))
             if identity_map.exists(key):
                 return identity_map.get(key)
-            return self.get(**{k: v for k, v in zip(to_tuple(self.pk), to_tuple(_obj_pk))})
+            try:
+                obj = self.get(**{k: v for k, v in zip(to_tuple(self.pk), to_tuple(_obj_pk))})
+            except ObjectDoesNotExist:
+                identity_map.add(key)
+            else:
+                # obj added to identity_map by loader (self.create_instance())
+                return obj
 
         if kwargs:
             q = self.query
