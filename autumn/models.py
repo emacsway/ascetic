@@ -237,11 +237,11 @@ class Result(smartsql.Result):
                 if isinstance(rel.relation, (ForeignKey, OneToOne)):
                     val = val[0] if val else None
                     if val and isinstance(rel.relation, OneToOne):
-                        setattr(val, "{}_prefetch".format(rel.rel_name), obj)
+                        setattr(val, rel.rel_name, obj)
                 elif isinstance(rel.relation, OneToMany):
                     for i in val:
-                        setattr(i, "{}_prefetch".format(rel.rel_name), obj)
-                setattr(obj, "{}_prefetch".format(key), val)
+                        setattr(i, rel.rel_name, obj)
+                setattr(obj, key, val)
 
 
 class Gateway(object):
@@ -765,8 +765,8 @@ class SelectRelatedMapping(object):
     def build_relations(self, relations, objs):
         for i, rel in enumerate(relations):
             obj, rel_obj = objs[i], objs[i + 1]
-            name = '{}_prefetch'.format(rel.name)
-            rel_name = '{}_prefetch'.format(rel.rel_name)
+            name = rel.name
+            rel_name = rel.rel_name
             if isinstance(rel.relation, (ForeignKey, OneToOne)):
                 setattr(obj, name, rel_obj)
                 if not hasattr(rel_obj, rel_name):
@@ -1038,7 +1038,7 @@ class ForeignKey(Relation):
                     q = q.where(t.__getattr__(f) == v)
                 obj = q[0]
             self._set_cache(instance, self.name(owner), obj)
-        return instance._cache[self.name(owner)]
+        return self._get_cache(instance, self.name(owner))
 
     def __set__(self, instance, value):
         owner = instance.__class__
@@ -1097,10 +1097,35 @@ class OneToMany(Relation):
     def __get__(self, instance, owner):
         if not instance:
             return self
+        rel_field = self.rel_field(owner)
         val = tuple(getattr(instance, f) for f in self.field(owner))
-        # TODO: Cacheable and setable for prefetch?
-        t = self.rel_model(owner)._gateway.sql_table
-        q = self.query(owner)
-        for f, v in zip(self.rel_field(owner), val):
-            q = q.where(t.__getattr__(f) == v)
-        return q
+        cached_query = self._get_cache(instance, self.name(owner))
+        # TODO: Be sure that value of related fields equals to value of field
+        if cached_query is not None and cached_query._cache is not None:
+            for cached_obj in cached_query._cache:
+                if tuple(getattr(cached_obj, f, None) for f in rel_field) != val:
+                    cached_query = None
+                    break
+        if cached_query is None:
+            t = self.rel_model(owner)._gateway.sql_table
+            q = self.query(owner)
+            for f, v in zip(self.rel_field(owner), val):
+                q = q.where(t.__getattr__(f) == v)
+            self._set_cache(instance, self.name(owner), q)
+        return self._get_cache(instance, self.name(owner))
+
+    def __set__(self, instance, object_list):
+        owner = instance.__class__
+        rel_field = self.rel_field(owner)
+        val = tuple(getattr(instance, f) for f in self.field(owner))
+        for cached_obj in object_list:
+            if isinstance(cached_obj, Model):
+                if not isinstance(cached_obj, self.rel_model(owner)):
+                    raise Exception(
+                        'Value should be an instance of "{0}" or primary key of related instance.'.format(
+                            self.rel_model(owner)._gateway.name
+                        )
+                    )
+                if tuple(getattr(cached_obj, f, None) for f in rel_field) != val:
+                    return
+        self.__get__(instance, owner)._cache = object_list

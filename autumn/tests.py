@@ -267,14 +267,16 @@ class TestModels(unittest.TestCase):
 
         # prefetch
         for obj in Book.q.prefetch('author').order_by(Book.s.id):
-            self.assertTrue(hasattr(obj, 'author_prefetch'))
-            self.assertEqual(obj.author_prefetch, obj.author)
+            self.assertTrue(hasattr(obj, '_cache'))
+            self.assertTrue('author' in obj._cache)
+            self.assertEqual(obj._cache['author'], obj.author)
 
         for obj in Author.q.prefetch('books').order_by(Author.s.id):
-            self.assertTrue(hasattr(obj, 'books_prefetch'))
-            self.assertEqual(len(obj.books_prefetch), len(obj.books))
-            for i in obj.books_prefetch:
-                self.assertEqual(i.author_prefetch, obj)
+            self.assertTrue(hasattr(obj, '_cache'))
+            self.assertTrue('books' in obj._cache)
+            self.assertEqual(len(obj._cache['books']._cache), len(obj.books))
+            for i in obj._cache['books']._cache:
+                self.assertEqual(i._cache['author'], obj)
 
 
 class TestCompositeRelation(unittest.TestCase):
