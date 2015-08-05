@@ -49,7 +49,6 @@ class GenericForeignKey(ForeignKey):
     def __get__(self, instance, owner):
         if not instance:
             return self
-        rel_model = self.rel_model(instance)
         val = tuple(getattr(instance, f) for f in self.field(owner))
 
         if not [i for i in val if i is not None]:
@@ -57,12 +56,17 @@ class GenericForeignKey(ForeignKey):
 
         cached_obj = self._get_cache(instance, self.name(owner))
         rel_field = self.rel_field(owner)
+        rel_model = self.rel_model(instance)
         if not isinstance(cached_obj, rel_model) or tuple(getattr(cached_obj, f, None) for f in rel_field) != val:
-            t = rel_model._gateway.sql_table
-            q = self.query(instance)
-            for f, v in zip(rel_field, val):
-                q = q.where(t.__getattr__(f) == v)
-            self._set_cache(instance, self.name(owner), q[0])
+            if self._query is None and rel_field == to_tuple(rel_model._gateway.pk):
+                obj = rel_model.get(val)  # to use IdentityMap
+            else:
+                t = rel_model._gateway.sql_table
+                q = self.query(instance)
+                for f, v in zip(rel_field, val):
+                    q = q.where(t.__getattr__(f) == v)
+                obj = q[0]
+            self._set_cache(instance, self.name(owner), obj)
         return instance._cache[self.name(owner)]
 
     def __set__(self, instance, value):

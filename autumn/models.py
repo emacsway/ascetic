@@ -54,6 +54,7 @@ class IdentityMap(object):
 
     _ctx = local()
     _size = 1000
+    _enabled = False
 
     def __new__(cls, *args, **kwargs):
         if not hasattr(IdentityMap._ctx, 'singleton'):
@@ -63,12 +64,16 @@ class IdentityMap(object):
         return IdentityMap._ctx.singleton
 
     def add(self, key, value):
+        if not self._enabled:
+            return
         self._cache.append(value)
         if len(self._cache) > self._size:
             self._cache.pop(0)
         self._alive[key] = value
 
     def get(self, key):
+        if not self._enabled:
+            raise KeyError
         value = self._alive[key]
         self._cache.remove(value)
         self._cache.append(value)
@@ -84,10 +89,16 @@ class IdentityMap(object):
         self._alive.clear()
 
     def exists(self, key):
-        return key in self._alive
+        return self._enabled and key in self._alive
 
     def set_size(self, size):
         self._size = size
+
+    def enable(self):
+        self._enabled = True
+
+    def disable(self):
+        self._enabled = False
 
 
 class Field(object):
@@ -456,12 +467,13 @@ class Gateway(object):
             data_mapped = dict(data)
         identity_map = IdentityMap()
         key = (self.model, tuple(data_mapped[i] for i in to_tuple(self.pk)))
-        if not identity_map.exists(key):
-            obj = self.model(**data_mapped)
-            obj._original_data = data_mapped
-            obj._new_record = False
-            identity_map.add(key, obj)
-        return identity_map.get(key)
+        if identity_map.exists(key):
+            return identity_map.get(key)
+        obj = self.model(**data_mapped)
+        obj._original_data = data_mapped
+        obj._new_record = False
+        identity_map.add(key, obj)
+        return obj
 
     def get_data(self, obj, fields=frozenset(), exclude=frozenset(), to_db=True):
         data = tuple((name, getattr(obj, name, None))
@@ -1015,12 +1027,17 @@ class ForeignKey(Relation):
 
         cached_obj = self._get_cache(instance, self.name(owner))
         rel_field = self.rel_field(owner)
+        rel_model = self.rel_model(owner)
         if cached_obj is None or tuple(getattr(cached_obj, f, None) for f in rel_field) != val:
-            t = self.rel_model(owner)._gateway.sql_table
-            q = self.query(owner)
-            for f, v in zip(rel_field, val):
-                q = q.where(t.__getattr__(f) == v)
-            self._set_cache(instance, self.name(owner), q[0])
+            if self._query is None and rel_field == to_tuple(rel_model._gateway.pk):
+                obj = rel_model.get(val)  # to use IdentityMap
+            else:
+                t = rel_model._gateway.sql_table
+                q = self.query(owner)
+                for f, v in zip(rel_field, val):
+                    q = q.where(t.__getattr__(f) == v)
+                obj = q[0]
+            self._set_cache(instance, self.name(owner), obj)
         return instance._cache[self.name(owner)]
 
     def __set__(self, instance, value):

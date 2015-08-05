@@ -1,6 +1,6 @@
 import unittest
 from autumn.databases import get_db
-from autumn.models import Model
+from autumn.models import Model, IdentityMap
 from autumn.contrib.modeltranslation import TranslationGateway
 
 Author = None
@@ -78,6 +78,7 @@ class TestModelTranslation(unittest.TestCase):
             globals()[model_name] = model
 
     def setUp(self):
+        IdentityMap().disable()
         db = get_db()
         for table in ('autumn_modeltranslation_author',):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))

@@ -164,6 +164,7 @@ class Database(object):
         self._begin_level = max(0, self._begin_level - 1)
         if self._begin_level == 0:
             self.connection.commit()
+            from autumn.models import IdentityMap
             IdentityMap().clear()
         else:
             self.savepoint_commit()
@@ -172,6 +173,7 @@ class Database(object):
         self._begin_level = max(0, self._begin_level - 1)
         if self._begin_level == 0:
             self.connection.rollback()
+            from autumn.models import IdentityMap
             IdentityMap().clear()
         else:
             self.savepoint_rollback()
@@ -375,4 +377,3 @@ def get_db(alias=None):
 
 
 databases = Databases(settings.DATABASES)
-from autumn.models import IdentityMap
