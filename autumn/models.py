@@ -506,12 +506,12 @@ class Gateway(object):
         return obj
 
     def get_data(self, obj, fields=frozenset(), exclude=frozenset(), to_db=True):
-        data = tuple((name, getattr(obj, name, None))
-                     for name in self.fields
-                     if not (name in exclude or (fields and name not in fields)))
+        data = {name: getattr(obj, name, None)
+                for name in self.fields
+                if not (name in exclude or (fields and name not in fields))}
         if to_db:
             # check field is not virtual like annotation and subquery.
-            data = {self.fields[name].column: value for name, value in data if not getattr(self.fields[name], 'virtual', False)}
+            data = {self.fields[name].column: value for name, value in data.items() if not getattr(self.fields[name], 'virtual', False)}
         return data
 
     def get_changed(self, obj):
@@ -572,7 +572,7 @@ class Gateway(object):
         self.send_signal(obj, signal='post_save', created=obj._new_record, using=self._using)
         if not hasattr(obj, '_original_data'):
             obj._original_data = {}
-        obj._original_data.update(dict(self.get_data(obj, to_db=False)))
+        obj._original_data.update(self.get_data(obj, to_db=False))
         obj._new_record = False
         return result
 
@@ -754,20 +754,6 @@ class CompositeModel(object):
         self.models = models
 
     # TODO: build me.
-
-
-def suffix_mapping(result, row, state):
-    data = {}
-    for k, v in row:
-        fn = k
-        if fn in data:
-            c = 2
-            fn_base = fn
-            while fn in data:
-                fn = fn_base + c
-                c += 1
-        data[fn] = v
-    return default_mapping(result, data.items(), state)
 
 
 def default_mapping(result, row, state):
