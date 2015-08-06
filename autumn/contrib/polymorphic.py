@@ -71,7 +71,7 @@ class PolymorphicGateway(object):
                 ))
         super(PolymorphicGateway, self)._do_prepare_model(self.model)
 
-    def create_instance(self, data, from_db=True):
+    def load_object(self, data, from_db=True):
         if from_db:
             cols = self.polymorphic_columns
             data_mapped = {}

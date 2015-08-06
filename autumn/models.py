@@ -481,7 +481,7 @@ class Gateway(object):
                 result[name] = attr
         return {k: BoundRelation(self.model, v) for k, v in self.relations.items()}
 
-    def create_instance(self, data, from_db=True):
+    def load_object(self, data, from_db=True):
         if from_db:
             cols = self.columns
             data_mapped = {}
@@ -628,7 +628,7 @@ class Gateway(object):
             except ObjectDoesNotExist:
                 identity_map.add(key)
             else:
-                # obj added to identity_map by loader (self.create_instance())
+                # obj added to identity_map by loader (self.load_object())
                 return obj
 
         if kwargs:
@@ -757,7 +757,7 @@ class CompositeModel(object):
 
 
 def default_mapping(result, row, state):
-    return result._gateway.create_instance(row, from_db=True)
+    return result._gateway.load_object(row, from_db=True)
 
 
 class SelectRelatedMapping(object):
@@ -780,7 +780,7 @@ class SelectRelatedMapping(object):
             pk_values = tuple(model_row_dict[k] for k in pk_columns)
             key = (model, pk_values)
             if key not in state:
-                state[key] = model._gateway.create_instance(model_row, from_db=True)
+                state[key] = model._gateway.load_object(model_row, from_db=True)
             objs.append(state[key])
         return objs
 
