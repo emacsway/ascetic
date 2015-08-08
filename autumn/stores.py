@@ -18,14 +18,14 @@ class Store(object):
                     queue.extend(rel.rel_model)
         return reversed(queue)
 
-    def flush_at_once(self):
+    def bulk_flush(self):
         visited = []
         queries = []
         removed_queue = []
         saved_queue = []
         pk_queue = []
-        queries.append("""-- drop tmp table if exists""")
-        queries.append("""-- create tmp table for given session""")
+        queries.append("""DROP TABLE IF EXISTS autumn_pk_log""")
+        queries.append("""CREATE TEMPORARY TABLE IF NOT EXISTS autumn_pk_log (pk integer NOT NULL)""")
         for proposed_model in registry.values():
             if proposed_model in self._dirty or proposed_model in self._removed:
                 for model in self._resolve_dependencies(proposed_model):
@@ -46,10 +46,10 @@ class Store(object):
                                 if obj._new_record:
                                     auto_pk = not all(getattr(obj, k, False) for k in model_pk)
                                     if auto_pk:
-                                        queries.append("INSERT INTO tmp_table VALUES(lastval());")  # SELECT LAST_INSERT_ID()
+                                        queries.append("INSERT INTO autumn_pk_log VALUES(lastval())")  # SELECT LAST_INSERT_ID()
                                         pk_queue.append(obj)
 
-        queries.append("SELECT pk FROM tmp_table")
+        queries.append("SELECT pk FROM autumn_pk_log")
         # Bulk execute
 
         cursor = self._database.execute(*((';'.join(q), tuple(reduce(operator.add, p))) for q, p in zip(*queries)))
