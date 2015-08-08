@@ -50,7 +50,39 @@ class ModelRegistry(dict):
 registry = ModelRegistry()
 
 
+class WeakCache(object):
+
+    def __init__(self, size=1000):
+        self._order = []
+        self._size = size
+
+    def add(self, value):
+        self._order.append(value)
+        if len(self._order) > self._size:
+            self._order.pop(0)
+
+    def touch(self, value):
+        try:
+            self._order.remove(value)
+        except IndexError:
+            pass
+        self._order.append(value)
+
+    def remove(self, value):
+        try:
+            self._order.remove(value)
+        except IndexError:
+            pass
+
+    def clear(self):
+        del self._order[:]
+
+    def set_size(self, size):
+        self._size = size
+
+
 class IdentityMap(object):
+    # TODO: bind to connect or store
 
     READ_UNCOMMITTED = 0  # IdentityMap is disabled
     READ_COMMITTED = 1  # IdentityMap is disabled
@@ -60,16 +92,15 @@ class IdentityMap(object):
     INFLUENCING_LEVELS = (REPEATABLE_READ, SERIALIZABLE)
 
     _ctx = local()
-    _size = 1000
     _isolation_level = READ_UNCOMMITTED  # Disabled currently
 
     class Nonexistent(object):
         pass
 
-    def __new__(cls, *args, **kwargs):
-        if not hasattr(IdentityMap._ctx, 'singleton'):
-            self = IdentityMap._ctx.singleton = super(IdentityMap, cls).__new__(cls, *args, **kwargs)
-            self._cache = []
+    def __new__(cls, alias='default', *args, **kwargs):
+        if not hasattr(IdentityMap._ctx, alias):
+            self = IdentityMap._ctx.singleton = object.__new__(cls)
+            self._cache = WeakCache()
             self._alive = WeakValueDictionary()
         return IdentityMap._ctx.singleton
 
@@ -80,17 +111,14 @@ class IdentityMap(object):
             if self._isolation_level != self.SERIALIZABLE:
                 return
             value = self.Nonexistent()
-        self._cache.append(value)
-        if len(self._cache) > self._size:
-            self._cache.pop(0)
+        self._cache.add(value)
         self._alive[key] = value
 
     def get(self, key):
         if self._isolation_level not in self.INFLUENCING_LEVELS:
             raise KeyError
         value = self._alive[key]
-        self._cache.remove(value)
-        self._cache.append(value)
+        self._cache.touch(value)
         if value.__class__ == self.Nonexistent:
             if self._isolation_level != self.SERIALIZABLE:
                 raise KeyError
@@ -98,21 +126,21 @@ class IdentityMap(object):
         return value
 
     def remove(self, key):
-        value = self._alive[key]
-        self._cache.remove(value)
-        del self._alive[key]
+        try:
+            value = self._alive[key]
+            self._cache.remove(value)
+            del self._alive[key]
+        except KeyError:
+            pass
 
     def clear(self):
-        del self._cache[:]
+        self._cache.clear()
         self._alive.clear()
 
     def exists(self, key):
         if self._isolation_level not in self.INFLUENCING_LEVELS:
             return False
         return key in self._alive
-
-    def set_size(self, size):
-        self._size = size
 
     def set_isolation_level(self, level):
         self._isolation_level = level
@@ -492,7 +520,7 @@ class Gateway(object):
                     data_mapped[key] = value
         else:
             data_mapped = dict(data)
-        identity_map = IdentityMap()
+        identity_map = IdentityMap(self._using)
         key = (self.model, tuple(data_mapped[i] for i in to_tuple(self.pk)))
         if identity_map.exists(key):
             try:
@@ -614,12 +642,13 @@ class Gateway(object):
         cond = reduce(operator.and_, (smartsql.Field(self.fields[k].column, self.sql_table) == getattr(obj, k) for k in pk))
         self.base_query.where(cond).delete()
         self.send_signal(obj, signal='post_delete', using=self._using)
+        IdentityMap(self._using).remove((self.model, tuple(getattr(obj, k) for k in pk)))
         return True
 
     def get(self, _obj_pk=None, **kwargs):
         """Returns Q object"""
         if _obj_pk is not None:
-            identity_map = IdentityMap()
+            identity_map = IdentityMap(self._using)
             key = (self.model, tuple(to_tuple(_obj_pk)))
             if identity_map.exists(key):
                 return identity_map.get(key)
