@@ -24,8 +24,10 @@ class Store(object):
         removed_queue = []
         saved_queue = []
         pk_queue = []
-        queries.append("""DROP TABLE IF EXISTS autumn_pk_log""")
-        queries.append("""CREATE TEMPORARY TABLE IF NOT EXISTS autumn_pk_log (pk integer NOT NULL)""")
+        queries.append("""
+            DROP TABLE IF EXISTS autumn_pk_log;
+            CREATE TEMPORARY TABLE IF NOT EXISTS autumn_pk_log (pk integer NOT NULL)
+        """)
         for proposed_model in registry.values():
             if proposed_model in self._dirty or proposed_model in self._removed:
                 for model in self._resolve_dependencies(proposed_model):

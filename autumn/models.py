@@ -205,10 +205,7 @@ class Result(smartsql.Result):
         """Implementation of query execution"""
         return self.db.execute(self._query)
 
-    insert = update = delete = execute
-
-    def select(self):
-        return self
+    insert = update = delete = select = lambda self: self
 
     def count(self):
         """Returns length or list."""
@@ -605,20 +602,15 @@ class Gateway(object):
         return result
 
     def _insert(self, obj):
-        query = self.base_query
-        pk = to_tuple(self.pk)
-        auto_pk = not all(getattr(obj, k, False) for k in pk)
-        data = self.get_data(obj, exclude=(pk if auto_pk else ()), to_db=True)
-        cursor = query.insert(data)
+        auto_pk = not all(to_tuple(self.get_pk(obj)))
+        data = self.get_data(obj, exclude=(to_tuple(self.pk) if auto_pk else ()), to_db=True)
+        cursor = self.base_query.insert(data).execute()
         if auto_pk:
-            for k, v in zip(pk, to_tuple(query.result.db.last_insert_id(cursor))):
-                setattr(obj, k, v)
+            self.set_pk(obj, self.base_query.result.db.last_insert_id(cursor))
 
     def _update(self, obj):
-        pk = to_tuple(self.pk)
-        cond = reduce(operator.and_, (smartsql.Field(self.fields[k].column, self.sql_table) == getattr(obj, k) for k in pk))
         data = self.get_data(obj, fields=self.get_changed(obj), to_db=True)
-        self.base_query.where(cond).update(data)
+        self.base_query.where(self.sql_table.pk == self.get_pk(obj)).update(data).execute()
 
     def delete(self, obj, visited=None):
         """Deletes record from database"""
@@ -638,18 +630,16 @@ class Gateway(object):
                 child = getattr(obj, key)
                 rel.on_delete(obj, child, rel, self._using, visited)
 
-        pk = to_tuple(self.pk)
-        cond = reduce(operator.and_, (smartsql.Field(self.fields[k].column, self.sql_table) == getattr(obj, k) for k in pk))
-        self.base_query.where(cond).delete()
+        self.base_query.where(self.sql_table.pk == self.get_pk(obj)).delete().execute()
         self.send_signal(obj, signal='post_delete', using=self._using)
-        IdentityMap(self._using).remove((self.model, tuple(getattr(obj, k) for k in pk)))
+        IdentityMap(self._using).remove((self.model, to_tuple(self.get_pk(obj))))
         return True
 
     def get(self, _obj_pk=None, **kwargs):
         """Returns Q object"""
         if _obj_pk is not None:
             identity_map = IdentityMap(self._using)
-            key = (self.model, tuple(to_tuple(_obj_pk)))
+            key = (self.model, to_tuple(_obj_pk))
             if identity_map.exists(key):
                 return identity_map.get(key)
             try:
@@ -663,8 +653,19 @@ class Gateway(object):
         if kwargs:
             q = self.query
             for k, v in kwargs.items():
-                q = q.where(smartsql.Field(self.fields[k].column, self.sql_table) == v)
+                q = q.where(self.sql_table.__getattr__(k) == v)
             return q[0]
+
+    def get_pk(self, obj):
+        """Sets the current value of the primary key"""
+        if type(self.pk) == tuple:
+            return tuple(getattr(obj, k, None) for k in self.pk)
+        return getattr(obj, self.pk, None)
+
+    def set_pk(self, obj, value):
+        """Sets the primary key"""
+        for k, v in zip(to_tuple(self.pk), to_tuple(value)):
+            setattr(obj, k, v)
 
 
 class ModelBase(type):
@@ -725,16 +726,10 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         return hash(self._get_pk())
 
     def _get_pk(self):
-        """Sets the current value of the primary key"""
-        pk = self._gateway.pk
-        if type(pk) == tuple:
-            return tuple(getattr(self, k, None) for k in pk)
-        return getattr(self, pk, None)
+        return self._gateway.get_pk(self)
 
     def _set_pk(self, value):
-        """Sets the primary key"""
-        for k, v in zip(to_tuple(self._gateway.pk), to_tuple(value)):
-            setattr(self, k, v)
+        return self._gateway.set_pk(self, value)
 
     pk = property(_get_pk, _set_pk)
 
@@ -879,6 +874,7 @@ class Table(smartsql.Table):
 
         if type(field) == tuple:
             if len(parts) > 1:
+                # FIXME: "{}_{}".format(alias, field_name) ???
                 raise Exception("Can't set single alias for multiple fields of composite key {}.{}".format(self.model, name))
             return smartsql.CompositeExpr(*(self.__getattr__(k) for k in field))
 
