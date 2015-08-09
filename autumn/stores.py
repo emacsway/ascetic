@@ -18,30 +18,49 @@ class Store(object):
                     queue.extend(rel.rel_model)
         return reversed(queue)
 
+    def save(self, obj):
+        queue = self._dirty.setdefault(obj.__class__, [])
+        if obj not in queue:
+            queue.append(obj)
+        return self
+
+    def remove(self, obj):
+        queue = self._removed.setdefault(obj.__class__, [])
+        if obj not in queue:
+            queue.append(obj)
+        if obj.__class__ in self._dirty and obj in self._dirty[obj.__class__]:
+            self._dirty[obj.__class__].pop()
+        return self
+
     def bulk_flush(self):
         visited = []
         queries = []
+        removed = self._removed
+        self._removed = {}
+        dirty = self._dirty
+        self._dirty = {}
         removed_queue = []
         saved_queue = []
         pk_queue = []
+        # TODO: use compile for whole query
         queries.append("""
             DROP TABLE IF EXISTS autumn_pk_log;
             CREATE TEMPORARY TABLE IF NOT EXISTS autumn_pk_log (pk integer NOT NULL)
         """)
         for proposed_model in registry.values():
-            if proposed_model in self._dirty or proposed_model in self._removed:
+            if proposed_model in dirty or proposed_model in removed:
                 for model in self._resolve_dependencies(proposed_model):
                     if model not in visited:
                         visited.append(model)
-                        if model in self._removed:
-                            for obj in self._removed[model]:
+                        if model in removed:
+                            for obj in removed[model]:
                                 signals.send_signal(signal='pre_delete', sender=self.model, instance=obj, using=self._alias)
                                 queries.append(self._get_delete_query())
                                 removed_queue.append(obj)
-                        if model in self._dirty:
-                            self._dirty[model].sort(key=lambda x: x.pk)
+                        if model in dirty:
+                            dirty[model].sort(key=lambda x: x.pk)
                             model_pk = to_tuple(self.pk)
-                            for obj in self._dirty[model]:
+                            for obj in dirty[model]:
                                 signals.send_signal(signal='pre_save', sender=self.model, instance=obj, using=self._alias)
                                 queries.append(self._get_save_query(obj))
                                 saved_queue.append(obj)
@@ -66,6 +85,10 @@ class Store(object):
                 obj.pk = pk
 
             signals.send_signal(signal='post_delete', sender=self.model, instance=obj, using=self._alias, created=is_new)
+
+        if self._removed or self._dirty:
+            # Store was filled by signals
+            self.bulk_flush()
 
     def _get_save_query(self, obj):
         pass
