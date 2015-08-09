@@ -91,18 +91,17 @@ class IdentityMap(object):
 
     INFLUENCING_LEVELS = (REPEATABLE_READ, SERIALIZABLE)
 
-    _ctx = local()
     _isolation_level = READ_UNCOMMITTED  # Disabled currently
 
     class Nonexistent(object):
         pass
 
     def __new__(cls, alias='default', *args, **kwargs):
-        if not hasattr(IdentityMap._ctx, alias):
-            self = IdentityMap._ctx.singleton = object.__new__(cls)
+        if not hasattr(databases[alias], 'identity_map'):
+            self = databases[alias].identity_map = object.__new__(cls)
             self._cache = WeakCache()
             self._alive = WeakValueDictionary()
-        return IdentityMap._ctx.singleton
+        return databases[alias].identity_map
 
     def add(self, key, value=None):
         if self._isolation_level not in self.INFLUENCING_LEVELS:
@@ -588,6 +587,18 @@ class Gateway(object):
         if errors:
             raise ValidationError(errors)
 
+    def insert_query(self, obj):
+        auto_pk = not all(to_tuple(self.get_pk(obj)))
+        data = self.get_data(obj, exclude=(to_tuple(self.pk) if auto_pk else ()), to_db=True)
+        return self.base_query.insert(data)
+
+    def update_query(self, obj):
+        data = self.get_data(obj, fields=self.get_changed(obj), to_db=True)
+        return self.base_query.where(self.sql_table.pk == self.get_pk(obj)).update(data)
+
+    def delete_query(self, obj):
+        return self.base_query.where(self.sql_table.pk == self.get_pk(obj)).delete()
+
     def save(self, obj):
         """Sets defaults, validates and inserts into or updates database"""
         self.set_defaults(obj)
@@ -602,15 +613,13 @@ class Gateway(object):
         return result
 
     def _insert(self, obj):
-        auto_pk = not all(to_tuple(self.get_pk(obj)))
-        data = self.get_data(obj, exclude=(to_tuple(self.pk) if auto_pk else ()), to_db=True)
-        cursor = self.base_query.insert(data).execute()
-        if auto_pk:
+        cursor = self.insert_query(obj).execute()
+        if not all(to_tuple(self.get_pk(obj))):
             self.set_pk(obj, self.base_query.result.db.last_insert_id(cursor))
+        IdentityMap(self._using).add((self.model, to_tuple(self.get_pk(obj))))
 
     def _update(self, obj):
-        data = self.get_data(obj, fields=self.get_changed(obj), to_db=True)
-        self.base_query.where(self.sql_table.pk == self.get_pk(obj)).update(data).execute()
+        self.update_query(obj).execute()
 
     def delete(self, obj, visited=None):
         """Deletes record from database"""
@@ -630,7 +639,7 @@ class Gateway(object):
                 child = getattr(obj, key)
                 rel.on_delete(obj, child, rel, self._using, visited)
 
-        self.base_query.where(self.sql_table.pk == self.get_pk(obj)).delete().execute()
+        self.delete_query(obj).execute()
         self.send_signal(obj, signal='post_delete', using=self._using)
         IdentityMap(self._using).remove((self.model, to_tuple(self.get_pk(obj))))
         return True
