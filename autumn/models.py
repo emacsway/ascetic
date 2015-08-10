@@ -204,7 +204,10 @@ class Result(smartsql.Result):
         """Implementation of query execution"""
         return self.db.execute(self._query)
 
-    insert = update = delete = select = lambda self: self
+    insert = update = delete = execute
+
+    def select(self):
+        return self
 
     def count(self):
         """Returns length or list."""
@@ -590,14 +593,14 @@ class Gateway(object):
     def insert_query(self, obj):
         auto_pk = not all(to_tuple(self.get_pk(obj)))
         data = self.get_data(obj, exclude=(to_tuple(self.pk) if auto_pk else ()), to_db=True)
-        return self.base_query.insert(data)
+        return smartsql.Insert(table=self.sql_table, map=data)
 
     def update_query(self, obj):
         data = self.get_data(obj, fields=self.get_changed(obj), to_db=True)
-        return self.base_query.where(self.sql_table.pk == self.get_pk(obj)).update(data)
+        return smartsql.Update(table=self.sql_table, map=data, where=(self.sql_table.pk == self.get_pk(obj)))
 
     def delete_query(self, obj):
-        return self.base_query.where(self.sql_table.pk == self.get_pk(obj)).delete()
+        return smartsql.Delete(table=self.sql_table, where=(self.sql_table.pk == self.get_pk(obj)))
 
     def save(self, obj):
         """Sets defaults, validates and inserts into or updates database"""
@@ -613,13 +616,13 @@ class Gateway(object):
         return result
 
     def _insert(self, obj):
-        cursor = self.insert_query(obj).execute()
+        cursor = databases[self._using].execute(self.insert_query(obj))
         if not all(to_tuple(self.get_pk(obj))):
             self.set_pk(obj, self.base_query.result.db.last_insert_id(cursor))
         IdentityMap(self._using).add((self.model, to_tuple(self.get_pk(obj))))
 
     def _update(self, obj):
-        self.update_query(obj).execute()
+        databases[self._using].execute(self.update_query(obj))
 
     def delete(self, obj, visited=None):
         """Deletes record from database"""
@@ -639,7 +642,7 @@ class Gateway(object):
                 child = getattr(obj, key)
                 rel.on_delete(obj, child, rel, self._using, visited)
 
-        self.delete_query(obj).execute()
+        databases[self._using].execute(self.delete_query(obj))
         self.send_signal(obj, signal='post_delete', using=self._using)
         IdentityMap(self._using).remove((self.model, to_tuple(self.get_pk(obj))))
         return True
