@@ -1,5 +1,5 @@
 import collections
-from ..models import Model, ForeignKey, OneToMany, cascade, registry, to_tuple
+from ..models import Model, ForeignKey, OneToMany, cascade, registry, to_tuple, is_model_instance
 
 
 class GenericForeignKey(ForeignKey):
@@ -71,7 +71,7 @@ class GenericForeignKey(ForeignKey):
 
     def __set__(self, instance, value):
         owner = instance.__class__
-        if isinstance(value, Model):
+        if is_model_instance(value):
             setattr(instance, self.type_field(owner), value.__class__._gateway.name)
             self._set_cache(instance, self.name(owner), value)
             value = tuple(getattr(value, f) for f in self.rel_field(owner))
@@ -128,7 +128,7 @@ class GenericRelation(OneToMany):
         rel_type_field = self.rel_type_field(owner)
         val = tuple(getattr(instance, f) for f in self.field(owner))
         for cached_obj in object_list:
-            if isinstance(cached_obj, Model):
+            if is_model_instance(cached_obj):
                 if not isinstance(cached_obj, self.rel_model(owner)):
                     raise Exception(
                         'Value should be an instance of "{0}" or primary key of related instance.'.format(

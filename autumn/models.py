@@ -28,6 +28,14 @@ def to_tuple(val):
     return val if type(val) == tuple else (val,)
 
 
+def is_model_instance(obj):
+    return obj.__class__ in registry.values()
+
+
+def is_model(cls):
+    return cls in registry.values()
+
+
 class ModelNotRegistered(Exception):
     pass
 
@@ -974,7 +982,9 @@ class BoundRelation(object):
 class Relation(object):
 
     def __init__(self, rel_model, rel_field=None, field=None, on_delete=cascade, rel_name=None, query=None, rel_query=None):
-        self.rel_model_or_name = rel_model
+        if isinstance(rel_model, Gateway):
+            rel_model = rel_model._gateway
+        self._rel_model_or_name = rel_model
         self._rel_field = rel_field and to_tuple(rel_field)
         self._field = field and to_tuple(field)
         self.on_delete = on_delete
@@ -1019,12 +1029,12 @@ class Relation(object):
         return getattr(self.rel_model(owner), self.rel_name(owner))
 
     def rel_model(self, owner):
-        if isinstance(self.rel_model_or_name, string_types):
-            name = self.rel_model_or_name
+        if isinstance(self._rel_model_or_name, string_types):
+            name = self._rel_model_or_name
             if name == 'self':
                 name = self.model(owner)._gateway.name
             return registry[name]
-        return self.rel_model_or_name
+        return self._rel_model_or_name
 
     def query(self, owner):
         if isinstance(self._query, collections.Callable):
@@ -1101,7 +1111,7 @@ class ForeignKey(Relation):
 
     def __set__(self, instance, value):
         owner = instance.__class__
-        if isinstance(value, Model):
+        if is_model_instance(value):
             if not isinstance(value, self.rel_model(owner)):
                 raise Exception(
                     'Value should be an instance of "{0}" or primary key of related instance.'.format(
@@ -1178,7 +1188,7 @@ class OneToMany(Relation):
         rel_field = self.rel_field(owner)
         val = tuple(getattr(instance, f) for f in self.field(owner))
         for cached_obj in object_list:
-            if isinstance(cached_obj, Model):
+            if is_model_instance(cached_obj):
                 if not isinstance(cached_obj, self.rel_model(owner)):
                     raise Exception(
                         'Value should be an instance of "{0}" or primary key of related instance.'.format(
