@@ -182,9 +182,13 @@ See also:
 
 * `Storm <https://storm.canonical.com/>`_ (properties from class) - excellent and simple ORM!
 * `SQLAlchemy <http://www.sqlalchemy.org/>`_ (scheme from class or database, see "autoload" option)
+* `Openorm <http://code.google.com/p/openorm/source/browse/python/>`_ (lightweight datamapper), `miror <https://bitbucket.org/emacsway/openorm/src/default/python/>`__
 * `SQLObject <http://www.sqlobject.org/>`_ (scheme from class or database, see "fromDatabase" option)
 * `Peewee <http://peewee.readthedocs.org/>`_ (scheme from class)
+* `Bazaar ORM <http://www.nongnu.org/bazaar/>`_
 * `Twistar <http://findingscience.com/twistar/>`_ (scheme from database), provides asynchronous DB interaction
-* `Openorm <http://code.google.com/p/openorm/source/browse/python/>`_ (lightweight datamapper)
 * `Activemodel <http://code.google.com/p/activemodel/>`_ (scheme from database)
 * `ActiveRecord <http://code.activestate.com/recipes/496905-an-activerecord-like-orm-object-relation-mapper-un/>`_ like ORM under 200 lines (scheme from database)
+* `simpleql <https://bitbucket.org/robertodealmeida/simpleql/>`_ SQL table using nothing but Python to build the query
+* `Generator expressions <http://code.activestate.com/recipes/442447/>`__ for database requests (Python recipe)
+* `Object Relational Mappers (ORMs) <https://wiki.python.org/moin/HigherLevelDatabaseProgramming>`_
