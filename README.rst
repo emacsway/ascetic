@@ -79,7 +79,7 @@ We setup our objects like so:
 
     class Author(Model):
 
-        class Gateway(object):
+        class Mapper(object):
             defaults = {'bio': 'No bio available'}
             validations = {'first_name': (
                 lambda v: len(v) > 1 or "Too short first name",
@@ -89,7 +89,7 @@ We setup our objects like so:
     class Book(Model):
         author = ForeignKey(Author, related_name='books')
 
-        class Gateway(object):
+        class Mapper(object):
             db_table = 'books'
 
 Now we can create, retrieve, update and delete entries in our database.

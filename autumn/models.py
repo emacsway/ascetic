@@ -173,18 +173,18 @@ class Field(object):
 class Result(smartsql.Result):
     """Result adapted for table."""
 
-    _gateway = None
+    _mapper = None
     _raw = None
     _cache = None
     _using = 'default'
 
-    def __init__(self, gateway):
+    def __init__(self, mapper):
         self._prefetch = {}
         self._select_related = {}
         self.is_base(True)
         self._mapping = default_mapping
-        self._gateway = gateway
-        self._using = gateway._using
+        self._mapper = mapper
+        self._using = mapper._using
 
     def __len__(self):
         """Returns length or list."""
@@ -271,7 +271,7 @@ class Result(smartsql.Result):
 
     def prefetch(self, *a, **kw):
         """Prefetch relations"""
-        relations = self._gateway.bound_relations
+        relations = self._mapper.bound_relations
         if a and not a[0]:  # .prefetch(False)
             self._prefetch = {}
         else:
@@ -281,7 +281,7 @@ class Result(smartsql.Result):
         return self
 
     def populate_prefetch(self):
-        relations = self._gateway.bound_relations
+        relations = self._mapper.bound_relations
         for key, q in self._prefetch.items():
             rel = relations[key]
             # recursive handle prefetch
@@ -306,8 +306,8 @@ class Result(smartsql.Result):
                 setattr(obj, key, val)
 
 
-class Gateway(object):
-    """Gateway"""
+class Mapper(object):
+    """Mapper"""
 
     pk = 'id'
     default_using = 'default'
@@ -334,7 +334,7 @@ class Gateway(object):
         )
 
         self._prepare_model(model)
-        self._inherit(self, (base._gateway for base in self.model.__bases__ if hasattr(base, '_gateway')))  # recursive
+        self._inherit(self, (base._mapper for base in self.model.__bases__ if hasattr(base, '_mapper')))  # recursive
 
         if self.abstract:
             return
@@ -429,7 +429,7 @@ class Gateway(object):
 
     def add_field(self, name, field):
         field.name = name
-        field._gateway = self
+        field._mapper = self
         self.fields[name] = field
         self.columns[field.column] = field
 
@@ -454,7 +454,7 @@ class Gateway(object):
         pass
 
     def _prepare_model(self, model):
-        model._gateway = model._meta = self
+        model._mapper = model._meta = self
         for name in self.model.__dict__:
             field = getattr(model, name, None)
             if isinstance(field, Field):
@@ -471,7 +471,7 @@ class Gateway(object):
                     pass
 
         for rel_model in registry.values():
-            for key, rel in rel_model._gateway.relations.items():
+            for key, rel in rel_model._mapper.relations.items():
                 try:
                     if hasattr(rel, 'add_related') and rel.rel_model(rel_model) is model:
                         rel.add_related(rel_model)
@@ -690,7 +690,7 @@ class Gateway(object):
 
 class ModelBase(type):
     """Metaclass for Model"""
-    gateway_class = Gateway
+    mapper_class = Mapper
 
     def __new__(cls, name, bases, attrs):
 
@@ -699,22 +699,22 @@ class ModelBase(type):
         if name in ('Model', 'NewBase', ):
             return new_cls
 
-        if hasattr(new_cls, 'Gateway'):
-            if isinstance(new_cls.Gateway, new_cls.gateway_class):
-                NewGateway = new_cls.Gateway
+        if hasattr(new_cls, 'Mapper'):
+            if isinstance(new_cls.Mapper, new_cls.mapper_class):
+                NewMapper = new_cls.Mapper
             else:
-                class NewGateway(new_cls.Gateway, new_cls.gateway_class):
+                class NewMapper(new_cls.Mapper, new_cls.mapper_class):
                     pass
         elif hasattr(new_cls, 'Meta'):  # backward compatible
-            if isinstance(new_cls.Meta, new_cls.gateway_class):
-                NewGateway = new_cls.Meta
+            if isinstance(new_cls.Meta, new_cls.mapper_class):
+                NewMapper = new_cls.Meta
             else:
-                class NewGateway(new_cls.Meta, new_cls.gateway_class):
+                class NewMapper(new_cls.Meta, new_cls.mapper_class):
                     pass
         else:
-            NewGateway = new_cls.gateway_class
-        NewGateway(new_cls)
-        for k in to_tuple(new_cls._gateway.pk):
+            NewMapper = new_cls.mapper_class
+        NewMapper(new_cls)
+        for k in to_tuple(new_cls._mapper.pk):
             setattr(new_cls, k, None)
 
         return new_cls
@@ -728,13 +728,13 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def __init__(self, *args, **kwargs):
         """Allows setting of fields using kwargs"""
-        gateway = self._gateway
-        signals.send_signal(signal='pre_init', sender=self.__class__, instance=self, args=args, kwargs=kwargs, using=gateway._using)
+        mapper = self._mapper
+        signals.send_signal(signal='pre_init', sender=self.__class__, instance=self, args=args, kwargs=kwargs, using=mapper._using)
         if args:
-            self.__dict__.update(zip(gateway.fields.keys(), args))
+            self.__dict__.update(zip(mapper.fields.keys(), args))
         if kwargs:
             self.__dict__.update(kwargs)
-        signals.send_signal(signal='post_init', sender=self.__class__, instance=self, using=gateway._using)
+        signals.send_signal(signal='post_init', sender=self.__class__, instance=self, using=mapper._using)
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self._get_pk() == other._get_pk()
@@ -746,39 +746,39 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         return hash(self._get_pk())
 
     def _get_pk(self):
-        return self._gateway.get_pk(self)
+        return self._mapper.get_pk(self)
 
     def _set_pk(self, value):
-        return self._gateway.set_pk(self, value)
+        return self._mapper.set_pk(self, value)
 
     pk = property(_get_pk, _set_pk)
 
     def validate(self, fields=frozenset(), exclude=frozenset()):
-        return self._gateway.validate(self, fields=fields, exclude=exclude)
+        return self._mapper.validate(self, fields=fields, exclude=exclude)
 
     def save(self, using=None):
-        return self._gateway.using(using).save(self)
+        return self._mapper.using(using).save(self)
 
     def delete(self, using=None, visited=None):
-        return self._gateway.using(using).delete(self)
+        return self._mapper.using(using).delete(self)
 
     @classproperty
     def s(cls):
         # TODO: Use Model class descriptor without __set__().
-        return cls._gateway.sql_table
+        return cls._mapper.sql_table
 
     @classproperty
     def q(cls):
-        return cls._gateway.query
+        return cls._mapper.query
 
     @classproperty
     def qs(cls):
         smartsql.warn('Model.qs', 'Model.q')
-        return cls._gateway.query
+        return cls._mapper.query
 
     @classmethod
     def get(cls, _obj_pk=None, **kwargs):
-        return cls._gateway.get(_obj_pk, **kwargs)
+        return cls._mapper.get(_obj_pk, **kwargs)
 
     def __repr__(self):
         return "<{0}.{1}: {2}>".format(type(self).__module__, type(self).__name__, self.pk)
@@ -801,7 +801,7 @@ class CompositeModel(object):
 
 
 def default_mapping(result, row, state):
-    return result._gateway.load_object(row, from_db=True)
+    return result._mapper.load_object(row, from_db=True)
 
 
 class SelectRelatedMapping(object):
@@ -818,13 +818,13 @@ class SelectRelatedMapping(object):
     def get_objects(self, models, rows, state):
         objs = []
         for model, model_row in zip(models, rows):
-            pk = to_tuple(model._gateway.pk)
-            pk_columns = tuple(model._gateway.fields[k].columns for k in pk)
+            pk = to_tuple(model._mapper.pk)
+            pk_columns = tuple(model._mapper.fields[k].columns for k in pk)
             model_row_dict = dict(model_row)
             pk_values = tuple(model_row_dict[k] for k in pk_columns)
             key = (model, pk_values)
             if key not in state:
-                state[key] = model._gateway.load_object(model_row, from_db=True)
+                state[key] = model._mapper.load_object(model_row, from_db=True)
             objs.append(state[key])
         return objs
 
@@ -859,23 +859,23 @@ class SelectRelatedMapping(object):
 class Table(smartsql.Table):
     """Table class"""
 
-    def __init__(self, gateway, *args, **kwargs):
+    def __init__(self, mapper, *args, **kwargs):
         """Constructor"""
-        super(Table, self).__init__(gateway.db_table, *args, **kwargs)
-        self._gateway = gateway
+        super(Table, self).__init__(mapper.db_table, *args, **kwargs)
+        self._mapper = mapper
 
     @property
     def q(self):
-        return self._gateway.query
+        return self._mapper.query
 
     @property
     def qs(self):
         smartsql.warn('Table.qs', 'Table.q')
-        return self._gateway.query
+        return self._mapper.query
 
     def get_fields(self, prefix=None):
         """Returns field list."""
-        return self._gateway.get_sql_fields()
+        return self._mapper.get_sql_fields()
 
     def __getattr__(self, name):
         """Added some specific functional."""
@@ -888,9 +888,9 @@ class Table(smartsql.Table):
         # field = result['field']
 
         if field == 'pk':
-            field = self._gateway.pk
-        elif isinstance(self._gateway.relations.get(field, None), ForeignKey):
-            field = self._gateway.relations.get(field).field(self._gateway.model)
+            field = self._mapper.pk
+        elif isinstance(self._mapper.relations.get(field, None), ForeignKey):
+            field = self._mapper.relations.get(field).field(self._mapper.model)
 
         if type(field) == tuple:
             if len(parts) > 1:
@@ -898,19 +898,19 @@ class Table(smartsql.Table):
                 raise Exception("Can't set single alias for multiple fields of composite key {}.{}".format(self.model, name))
             return smartsql.CompositeExpr(*(self.__getattr__(k) for k in field))
 
-        if field in self._gateway.fields:
-            field = self._gateway.fields[field].column
+        if field in self._mapper.fields:
+            field = self._mapper.fields[field].column
         parts[0] = field
         return super(Table, self).__getattr__(smartsql.LOOKUP_SEP.join(parts))
 
 
 def cascade(parent, child, parent_rel, using, visited):
-    child._gateway.using(using).delete(child, visited=visited)
+    child._mapper.using(using).delete(child, visited=visited)
 
 
 def set_null(parent, child, parent_rel, using, visited):
     setattr(child, parent_rel.rel_field, None)
-    child._gateway.using(using).save(child)
+    child._mapper.using(using).save(child)
 
 
 def do_nothing(parent, child, parent_rel, using, visited):
@@ -982,8 +982,8 @@ class BoundRelation(object):
 class Relation(object):
 
     def __init__(self, rel_model, rel_field=None, field=None, on_delete=cascade, rel_name=None, query=None, rel_query=None):
-        if isinstance(rel_model, Gateway):
-            rel_model = rel_model._gateway
+        if isinstance(rel_model, Mapper):
+            rel_model = rel_model._mapper
         self._rel_model_or_name = rel_model
         self._rel_field = rel_field and to_tuple(rel_field)
         self._field = field and to_tuple(field)
@@ -1011,7 +1011,7 @@ class Relation(object):
         mro_reversed = list(reversed(owner.__mro__))
         mro_reversed = mro_reversed[mro_reversed.index(result_cls) + 1:]
         for cls in mro_reversed:
-            if cls._gateway.__dict__.get('polymorphic'):
+            if cls._mapper.__dict__.get('polymorphic'):
                 break
             result_cls = cls
         return result_cls
@@ -1032,7 +1032,7 @@ class Relation(object):
         if isinstance(self._rel_model_or_name, string_types):
             name = self._rel_model_or_name
             if name == 'self':
-                name = self.model(owner)._gateway.name
+                name = self.model(owner)._mapper.name
             return registry[name]
         return self._rel_model_or_name
 
@@ -1040,7 +1040,7 @@ class Relation(object):
         if isinstance(self._query, collections.Callable):
             return self._query(self, owner)
         else:
-            return self.rel_model(owner)._gateway.query
+            return self.rel_model(owner)._mapper.query
 
     def _get_cache(self, instance, key):
         try:
@@ -1062,7 +1062,7 @@ class ForeignKey(Relation):
         return self._field or ('{0}_id'.format(self.rel_model(owner).__name__.lower()),)
 
     def rel_field(self, owner):
-        return self._rel_field or to_tuple(self.rel_model(owner)._gateway.pk)
+        return self._rel_field or to_tuple(self.rel_model(owner)._mapper.pk)
 
     def rel_name(self, owner):
         if self._rel_name is None:
@@ -1078,7 +1078,7 @@ class ForeignKey(Relation):
         except ModelNotRegistered:
             return
 
-        if self.rel_name(owner) in rel_model._gateway.relations:
+        if self.rel_name(owner) in rel_model._mapper.relations:
             return
 
         setattr(rel_model, self.rel_name(owner), OneToMany(
@@ -1098,10 +1098,10 @@ class ForeignKey(Relation):
         rel_field = self.rel_field(owner)
         rel_model = self.rel_model(owner)
         if cached_obj is None or tuple(getattr(cached_obj, f, None) for f in rel_field) != val:
-            if self._query is None and rel_field == to_tuple(rel_model._gateway.pk):
+            if self._query is None and rel_field == to_tuple(rel_model._mapper.pk):
                 obj = rel_model.get(val)  # to use IdentityMap
             else:
-                t = rel_model._gateway.sql_table
+                t = rel_model._mapper.sql_table
                 q = self.query(owner)
                 for f, v in zip(rel_field, val):
                     q = q.where(t.__getattr__(f) == v)
@@ -1115,7 +1115,7 @@ class ForeignKey(Relation):
             if not isinstance(value, self.rel_model(owner)):
                 raise Exception(
                     'Value should be an instance of "{0}" or primary key of related instance.'.format(
-                        self.rel_model(owner)._gateway.name
+                        self.rel_model(owner)._mapper.name
                     )
                 )
             self._set_cache(instance, self.name(owner), value)
@@ -1139,7 +1139,7 @@ class OneToOne(ForeignKey):
         except ModelNotRegistered:
             return
 
-        if self.rel_name(owner) in rel_model._gateway.relations:
+        if self.rel_name(owner) in rel_model._mapper.relations:
             return
 
         setattr(rel_model, self.rel_name(owner), OneToOne(
@@ -1155,7 +1155,7 @@ class OneToMany(Relation):
     # TODO: is it need add_related() here to construct related FK?
 
     def field(self, owner):
-        return self._field or to_tuple(self.model(owner)._gateway.pk)
+        return self._field or to_tuple(self.model(owner)._mapper.pk)
 
     def rel_field(self, owner):
         return self._rel_field or ('{0}_id'.format(self.model(owner).__name__.lower()),)
@@ -1176,7 +1176,7 @@ class OneToMany(Relation):
                     cached_query = None
                     break
         if cached_query is None:
-            t = self.rel_model(owner)._gateway.sql_table
+            t = self.rel_model(owner)._mapper.sql_table
             q = self.query(owner)
             for f, v in zip(self.rel_field(owner), val):
                 q = q.where(t.__getattr__(f) == v)
@@ -1192,7 +1192,7 @@ class OneToMany(Relation):
                 if not isinstance(cached_obj, self.rel_model(owner)):
                     raise Exception(
                         'Value should be an instance of "{0}" or primary key of related instance.'.format(
-                            self.rel_model(owner)._gateway.name
+                            self.rel_model(owner)._mapper.name
                         )
                     )
                 if tuple(getattr(cached_obj, f, None) for f in rel_field) != val:

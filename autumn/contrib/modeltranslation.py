@@ -1,7 +1,7 @@
 import collections
 from .. import models
 
-# We can't use TranslationRegistry, because Gateway can be inherited, and we need to fix hierarchy???
+# We can't use TranslationRegistry, because Mapper can be inherited, and we need to fix hierarchy???
 
 
 class TranslationColumnDescriptor(object):
@@ -9,7 +9,7 @@ class TranslationColumnDescriptor(object):
     def __get__(self, instance, owner):
         if not instance:
             return self
-        return instance._gateway.translate_column(instance.original_column)
+        return instance._mapper.translate_column(instance.original_column)
 
     def __set__(self, instance, value):
         instance.original_column = value.rsplit('_', 1)[0]
@@ -19,12 +19,12 @@ class TranslationField(models.Field):
     column = TranslationColumnDescriptor()
 
 
-class TranslationGateway(object):
+class TranslationMapper(object):
 
     translated_fields = ()
 
     def create_translation_field(self, name, data, declared_fields=None):
-        field = super(TranslationGateway, self).create_field(name, data, declared_fields)
+        field = super(TranslationMapper, self).create_field(name, data, declared_fields)
         if name in self.translated_fields and not isinstance(field, TranslationField):
             class NewField(TranslationField, field.__class__):
                 pass
@@ -60,7 +60,7 @@ class TranslationGateway(object):
 
     def add_field(self, name, field):
         field.name = name
-        field._gateway = self
+        field._mapper = self
         self.fields[name] = field
         if isinstance(field, TranslationField):
             for lang in self.get_languages():
@@ -90,48 +90,48 @@ class TranslationRegistry(dict):
             TranslationRegistry._singleton = super(TranslationRegistry, cls).__new__(cls, *args, **kwargs)
         return TranslationRegistry._singleton
 
-    def __call__(self, gateway, translated_fields):
-        if gateway.name in self:
+    def __call__(self, mapper, translated_fields):
+        if mapper.name in self:
             raise Exception("Already registered {}".format(
-                gateway.name)
+                mapper.name)
             )
-        self[gateway.name] = translated_fields
-        gateway.fields = collections.OrderedDict()
+        self[mapper.name] = translated_fields
+        mapper.fields = collections.OrderedDict()
 
-        rmap = {field.column: name for name, field in gateway.declared_fields.items() if hasattr(field, 'column')}
+        rmap = {field.column: name for name, field in mapper.declared_fields.items() if hasattr(field, 'column')}
         original_columns = {}
         for name in translated_fields:
-            if name in gateway.declared_fields and hasattr(gateway.declared_fields[name], 'column'):
-                column = gateway.declared_fields[name].column
+            if name in mapper.declared_fields and hasattr(mapper.declared_fields[name], 'column'):
+                column = mapper.declared_fields[name].column
             else:
                 column = name
             for lang in self.get_languages():
                 original_columns[self.translate_column(column, lang)] = column
 
-        for column in gateway.columns:
+        for column in mapper.columns:
             original_column = original_columns[column]
             name = rmap.get(original_column, original_column)
-            if name in gateway.fields:
-                field = gateway.fields[name]
+            if name in mapper.fields:
+                field = mapper.fields[name]
             else:
-                field = gateway.columns[column]
+                field = mapper.columns[column]
                 if column in original_columns and not isinstance(field, TranslationField):
                     class NewTranslationField(TranslationField, field.__class__):
                         pass
 
-                    data = vars(gateway.declared_fields[name]) if name in gateway.declared_fields else {}
+                    data = vars(mapper.declared_fields[name]) if name in mapper.declared_fields else {}
                     data.update(vars(field))
                     field = NewTranslationField(**data)
-            self.add_field(gateway, column, name, field)
+            self.add_field(mapper, column, name, field)
 
-        gateway.pk = gateway._read_pk(gateway.db_table, gateway._using, gateway.columns)
-        gateway.sql_table = gateway._create_sql_table()
-        gateway.base_query = gateway._create_base_query()
-        gateway.query = gateway._create_query()
+        mapper.pk = mapper._read_pk(mapper.db_table, mapper._using, mapper.columns)
+        mapper.sql_table = mapper._create_sql_table()
+        mapper.base_query = mapper._create_base_query()
+        mapper.query = mapper._create_query()
 
-    def add_field(self, gateway, column, name, field):
+    def add_field(self, mapper, column, name, field):
         field.name = name
-        field._gateway = gateway
-        gateway.fields[name] = field
-        gateway.columns[column] = field
+        field._mapper = mapper
+        mapper.fields[name] = field
+        mapper.columns[column] = field
 """

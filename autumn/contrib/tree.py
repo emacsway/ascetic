@@ -6,7 +6,7 @@ from ..utils import cached_property
 # Under construction!!! Not testet yet!!!
 
 
-class MpGateway(object):
+class MpMapper(object):
     """The simplest Materialized Path realization.
 
     Strong KISS principle.
@@ -33,7 +33,7 @@ class MpGateway(object):
 
     @cached_property
     def mp_root(self):
-        return self.bound_relations['parent'].descriptor_class._gateway
+        return self.bound_relations['parent'].descriptor_class._mapper
 
     def save(self, obj):
         """Sets content_type and calls parent method."""
@@ -42,7 +42,7 @@ class MpGateway(object):
         except (AttributeError, KeyError):
             old_tree_path = None
 
-        super(MpGateway, self).save(obj)
+        super(MpMapper, self).save(obj)
 
         tree_path = self.KEY_SEPARATOR.join(self._mp_encode(i).zfill(self.PATH_DIGITS) for i in to_tuple(obj.pk))
         if obj.parent:
@@ -152,13 +152,13 @@ class MpGateway(object):
 class MpModel(object):
 
     def get_ancestors(self, root=False, me=False, reverse=True):
-        return self._gateway.get_ancestors(self, root, me, reverse)
+        return self._mapper.get_ancestors(self, root, me, reverse)
 
     def get_hierarchical_name(self, sep=', ', root=False, me=True, reverse=True, namegetter=unicode):
-        return self._gateway.get_hierarchical_name(self, sep, root, me, reverse, namegetter)
+        return self._mapper.get_hierarchical_name(self, sep, root, me, reverse, namegetter)
 
     def get_children(self):
-        return self._gateway.get_children(self)
+        return self._mapper.get_children(self)
 
     def get_descendants(self, me=False):
-        return self._gateway.get_descendants(self, me)
+        return self._mapper.get_descendants(self, me)

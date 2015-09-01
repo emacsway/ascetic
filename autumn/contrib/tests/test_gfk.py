@@ -80,7 +80,7 @@ class TestModelTranslation(unittest.TestCase):
         class Author(Model):
             books = GenericRelation('autumn.contrib.tests.test_gfk.Book', rel_name='author')
 
-            class Gateway(object):
+            class Mapper(object):
                 db_table = 'autumn_gfk_author'
                 defaults = {'bio': 'No bio available'}
                 validations = {'first_name': validators.Length(),
@@ -89,7 +89,7 @@ class TestModelTranslation(unittest.TestCase):
         class Book(Model):
             author = GenericForeignKey(rel_field=('id', 'lang'), field=('object_id', 'lang'))
 
-            class Gateway(object):
+            class Mapper(object):
                 name = 'autumn.contrib.tests.test_gfk.Book'
                 db_table = 'autumn_gfk_book'
 

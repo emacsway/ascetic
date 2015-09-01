@@ -107,7 +107,7 @@ class TestModels(unittest.TestCase):
         class Author(Model):
             # books = OneToMany('autumn.tests.models.Book')
 
-            class Gateway(object):
+            class Mapper(object):
                 db_table = 'autumn_tests_author'
                 defaults = {'bio': 'No bio available'}
                 validations = {'first_name': validators.Length(),
@@ -116,7 +116,7 @@ class TestModels(unittest.TestCase):
         class Book(Model):
             author = ForeignKey(Author, rel_name='books')
 
-            class Gateway(object):
+            class Mapper(object):
                 db_table = 'books'
 
         return locals()
@@ -351,7 +351,7 @@ class TestCompositeRelation(unittest.TestCase):
         class AuthorC(Model):
             # books = OneToMany('autumn.tests.models.Book')
 
-            class Gateway(object):
+            class Mapper(object):
                 db_table = 'autumn_composite_author'
                 defaults = {'bio': 'No bio available'}
                 validations = {'first_name': validators.Length(),
@@ -360,7 +360,7 @@ class TestCompositeRelation(unittest.TestCase):
         class BookC(Model):
             author = ForeignKey(AuthorC, rel_field=('id', 'lang'), field=('author_id', 'lang'), rel_name='books')
 
-            class Gateway(object):
+            class Mapper(object):
                 db_table = 'autumn_composite_book'
 
         return locals()

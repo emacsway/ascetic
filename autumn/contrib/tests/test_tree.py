@@ -1,7 +1,7 @@
 import unittest
 from autumn.databases import get_db
 from autumn.models import Model, IdentityMap
-from autumn.contrib.tree import MpGateway, MpModel
+from autumn.contrib.tree import MpMapper, MpModel
 
 Location = None
 
@@ -56,7 +56,7 @@ class TestMpTree(unittest.TestCase):
     def create_models(cls):
 
         class Location(MpModel, Model):
-            class Gateway(MpGateway):
+            class Mapper(MpMapper):
                 db_table = 'autumn_tree_location'
 
         return locals()

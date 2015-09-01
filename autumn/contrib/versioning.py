@@ -143,21 +143,21 @@ class DatabaseRepository(IRepository):
             setattr(object_version, field_name, None)
         revisions = self.revisions()
         if rev is not None:
-            revisions = revisions.where((self._model._gateway.sql_table.revision <= rev))
+            revisions = revisions.where((self._model._mapper.sql_table.revision <= rev))
         for revision in revisions:
             self._comparator.apply_delta(object_version, revision.delta)
         return object_version
 
     def versions(self, obj):
-        t = self._model._gateway.sql_table
-        return self._model._gateway.query.where(
+        t = self._model._mapper.sql_table
+        return self._model._mapper.query.where(
             (t.content_object == obj)
         ).order_by(
             t.revision
         )
 
     def version(self, obj, rev=None):
-        t = self._model._gateway.sql_table
+        t = self._model._mapper.sql_table
         q = self.versions()
         if rev is not None:
             q = q.where((t.revision == rev))

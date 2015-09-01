@@ -1,7 +1,7 @@
 import unittest
 from autumn import validators
 from autumn.databases import get_db
-from autumn.contrib.polymorphic import PolymorphicGateway
+from autumn.contrib.polymorphic import PolymorphicMapper
 from autumn.models import Model, ForeignKey, IdentityMap
 
 Author = Book = Nonfiction = Avia = None
@@ -130,7 +130,7 @@ class TestModelTranslation(unittest.TestCase):
 
         class Author(Model):
 
-            class Gateway(object):
+            class Mapper(object):
                 db_table = 'autumn_polymorphic_author'
                 defaults = {'bio': 'No bio available'}
                 validations = {'first_name': validators.Length(),
@@ -142,24 +142,24 @@ class TestModelTranslation(unittest.TestCase):
                 rel_field=('id', 'lang'),
                 field=('author_id', 'lang'),
                 rel_name='books',
-                rel_query=(lambda rel, owner: rel.rel_model(owner)._gateway.query)
+                rel_query=(lambda rel, owner: rel.rel_model(owner)._mapper.query)
             )
 
-            class Gateway(PolymorphicGateway):
+            class Mapper(PolymorphicMapper):
                 name = 'autumn.contrib.tests.test_polymorphic.Book'
                 db_table = 'autumn_polymorphic_book'
                 polymorphic = True
 
         class Nonfiction(Book):
 
-            class Gateway(PolymorphicGateway):
+            class Mapper(PolymorphicMapper):
                 name = 'autumn.contrib.tests.test_polymorphic.Nonfiction'
                 db_table = 'autumn_polymorphic_nonfiction'
                 polymorphic = True
 
         class Avia(Nonfiction):
 
-            class Gateway(PolymorphicGateway):
+            class Mapper(PolymorphicMapper):
                 name = 'autumn.contrib.tests.test_polymorphic.Avia'
                 db_table = 'autumn_polymorphic_avia'
                 polymorphic = True

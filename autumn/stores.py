@@ -13,7 +13,7 @@ class Store(object):
 
     def _resolve_dependencies(self, model):
         queue = [model]
-        for rel in model._gateway.bound_relations:
+        for rel in model._mapper.bound_relations:
             if isinstance(rel, (ForeignKey, OneToOne)):
                 if rel.rel_model not in queue:
                     queue.extend(rel.rel_model)
@@ -33,7 +33,7 @@ class Store(object):
         if obj.__class__ in self._dirty and obj in self._dirty[obj.__class__]:
             self._dirty[obj.__class__].pop()
 
-        for key, rel in obj.__class__._gateway.relations.items():
+        for key, rel in obj.__class__._mapper.relations.items():
             if isinstance(rel, OneToMany):
                 for child in getattr(obj, key).iterator():
                     rel.on_delete(obj, child, rel, self._alias)
@@ -66,7 +66,7 @@ class Store(object):
                             for obj in removed[model]:
                                 signals.send_signal(signal='pre_delete', sender=self.model, instance=obj, using=self._alias)
                                 removed_queue.append(obj)
-                                queries.append(self._database.compile(model._gateway.delete_query(obj)))
+                                queries.append(self._database.compile(model._mapper.delete_query(obj)))
                         if model in dirty:
                             dirty[model].sort(key=lambda x: x.pk)
                             model_pk = to_tuple(self.pk)
@@ -74,29 +74,29 @@ class Store(object):
                                 signals.send_signal(signal='pre_save', sender=self.model, instance=obj, using=self._alias)
                                 saved_queue.append(obj)
                                 if obj._new_record:
-                                    queries.append(self._database.compile(model._gateway.insert_query(obj)))
+                                    queries.append(self._database.compile(model._mapper.insert_query(obj)))
                                     auto_pk = not all(getattr(obj, k, False) for k in model_pk)
                                     if auto_pk:
                                         queries.append("INSERT INTO autumn_pk_log VALUES(lastval())")  # SELECT LAST_INSERT_ID()
                                         pk_queue.append(obj)
                                 else:
-                                    queries.append(self._database.compile(model._gateway.update_query(obj)))
+                                    queries.append(self._database.compile(model._mapper.update_query(obj)))
 
         queries.append("SELECT pk FROM autumn_pk_log")
         # Bulk execute
 
         cursor = self._database.execute(*((';'.join(q), tuple(reduce(operator.add, p))) for q, p in zip(*queries)))
         for obj, pk in zip(pk_queue, cursor.fetchall()):
-            obj.__class__._gateway.set_pk(pk)
+            obj.__class__._mapper.set_pk(pk)
 
         for obj in removed_queue:
             signals.send_signal(signal='post_delete', sender=self.model, instance=obj, using=self._alias)
-            IdentityMap(self._alias).remove((obj.__class__, to_tuple(obj.__class__._gateway.get_pk(obj))))
+            IdentityMap(self._alias).remove((obj.__class__, to_tuple(obj.__class__._mapper.get_pk(obj))))
 
         for obj in saved_queue:
             is_new = obj._new_record
             signals.send_signal(signal='post_delete', sender=self.model, instance=obj, using=self._alias, created=is_new)
-            IdentityMap(self._alias).add((obj.__class__, to_tuple(obj.__class__._gateway.get_pk(obj))), obj)
+            IdentityMap(self._alias).add((obj.__class__, to_tuple(obj.__class__._mapper.get_pk(obj))), obj)
 
         if self._removed or self._dirty:
             # Store was filled by signals
