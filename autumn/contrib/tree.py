@@ -38,7 +38,7 @@ class MpMapper(object):
     def save(self, obj):
         """Sets content_type and calls parent method."""
         try:
-            old_tree_path = obj._original_data['tree_path']
+            old_tree_path = self.get_original_data(obj)['tree_path']
         except (AttributeError, KeyError):
             old_tree_path = None
 
@@ -49,7 +49,8 @@ class MpMapper(object):
             tree_path = self.PATH_SEPARATOR.join((self.parent.tree_path, tree_path))
 
         if old_tree_path != tree_path:
-            obj.tree_path = obj._original_data['tree_path'] = tree_path
+            obj.tree_path = tree_path
+            self.update_original_data(obj, {'tree_path': tree_path})
             self.mp_root.base_query.where(
                 self.mp_root.sql_table.pk == obj.pk
             ).update({

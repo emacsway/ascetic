@@ -4,7 +4,6 @@ import copy
 import collections
 import operator
 from functools import reduce
-from threading import local
 from weakref import WeakValueDictionary
 
 from sqlbuilder import smartsql
@@ -29,14 +28,18 @@ def to_tuple(val):
 
 
 def is_model_instance(obj):
-    return obj.__class__ in registry.values()
+    return obj.__class__ in model_registry.values()
 
 
 def is_model(cls):
-    return cls in registry.values()
+    return cls in model_registry.values()
 
 
 class ModelNotRegistered(Exception):
+    pass
+
+
+class MapperNotRegistered(Exception):
     pass
 
 
@@ -46,16 +49,24 @@ class ObjectDoesNotExist(Exception):
 
 class ModelRegistry(dict):
 
-    def add(self, name, model):
-        self[name] = model
-
     def __getitem__(self, name):
         try:
-            return super(ModelRegistry, self).__getitem__(name)
+            return dict.__getitem__(self, name)
         except KeyError:
             raise ModelNotRegistered("""Model {} is not registered in {}""".format(name, self.keys()))
 
-registry = ModelRegistry()
+registry = model_registry = ModelRegistry()
+
+
+class MapperRegistry(dict):
+
+    def __getitem__(self, name):
+        try:
+            return dict.__getitem__(self, name)
+        except KeyError:
+            raise MapperNotRegistered("""Mapper {} is not registered in {}""".format(name, self.keys()))
+
+mapper_registry = MapperRegistry()
 
 
 class WeakCache(object):
@@ -324,7 +335,8 @@ class Mapper(object):
         if not hasattr(self, 'name'):
             self.name = self._create_default_name(model)
 
-        registry.add(self.name, model)
+        model_registry[self.name] = model
+        mapper_registry[model] = self
         self.declared_fields = self._create_declared_fields(
             model,
             getattr(self, 'map', {}),
@@ -334,7 +346,7 @@ class Mapper(object):
         )
 
         self._prepare_model(model)
-        self._inherit(self, (base._mapper for base in self.model.__bases__ if hasattr(base, '_mapper')))  # recursive
+        self._inherit(self, (mapper_registry[base] for base in self.model.__bases__ if base in mapper_registry))  # recursive
 
         if self.abstract:
             return
@@ -470,8 +482,8 @@ class Mapper(object):
                 except ModelNotRegistered:
                     pass
 
-        for rel_model in registry.values():
-            for key, rel in rel_model._mapper.relations.items():
+        for rel_model in model_registry.values():
+            for key, rel in mapper_registry[rel_model].relations.items():
                 try:
                     if hasattr(rel, 'add_related') and rel.rel_model(rel_model) is model:
                         rel.add_related(rel_model)
@@ -535,7 +547,7 @@ class Mapper(object):
             except ObjectDoesNotExist:
                 pass
         obj = self.model(**data_mapped)
-        obj._original_data = data_mapped
+        self.set_original_data(obj, data_mapped)
         obj._new_record = False
         identity_map.add(key, obj)
         return obj
@@ -549,10 +561,21 @@ class Mapper(object):
             data = {self.fields[name].column: value for name, value in data.items() if not getattr(self.fields[name], 'virtual', False)}
         return data
 
-    def get_changed(self, obj):
+    def set_original_data(self, obj, data):
+        obj._original_data = data
+
+    def update_original_data(self, obj, data):
+        self.get_original_data(obj).update(data)
+
+    def get_original_data(self, obj):
         if not hasattr(obj, '_original_data'):
+            obj._original_data = {}
+        return obj._original_data
+
+    def get_changed(self, obj):
+        if not self.get_original_data(obj):
             return set(self.fields)
-        return set(k for k, v in obj._original_data.items() if getattr(obj, k, None) != v)
+        return set(k for k, v in self.get_original_data(obj).items() if getattr(obj, k, None) != v)
 
     def send_signal(self, sender, *a, **kw):
         """Sends signal"""
@@ -617,9 +640,7 @@ class Mapper(object):
         self.send_signal(obj, signal='pre_save', using=self._using)
         result = self._insert(obj) if obj._new_record else self._update(obj)
         self.send_signal(obj, signal='post_save', created=obj._new_record, using=self._using)
-        if not hasattr(obj, '_original_data'):
-            obj._original_data = {}
-        obj._original_data.update(self.get_data(obj, to_db=False))
+        self.update_original_data(obj, self.get_data(obj, to_db=False))
         obj._new_record = False
         return result
 
@@ -714,7 +735,7 @@ class ModelBase(type):
         else:
             NewMapper = new_cls.mapper_class
         NewMapper(new_cls)
-        for k in to_tuple(new_cls._mapper.pk):
+        for k in to_tuple(mapper_registry[new_cls].pk):
             setattr(new_cls, k, None)
 
         return new_cls
@@ -728,7 +749,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def __init__(self, *args, **kwargs):
         """Allows setting of fields using kwargs"""
-        mapper = self._mapper
+        mapper = mapper_registry[self.__class__]
         signals.send_signal(signal='pre_init', sender=self.__class__, instance=self, args=args, kwargs=kwargs, using=mapper._using)
         if args:
             self.__dict__.update(zip(mapper.fields.keys(), args))
@@ -746,39 +767,39 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
         return hash(self._get_pk())
 
     def _get_pk(self):
-        return self._mapper.get_pk(self)
+        return mapper_registry[self.__class__].get_pk(self)
 
     def _set_pk(self, value):
-        return self._mapper.set_pk(self, value)
+        return mapper_registry[self.__class__].set_pk(self, value)
 
     pk = property(_get_pk, _set_pk)
 
     def validate(self, fields=frozenset(), exclude=frozenset()):
-        return self._mapper.validate(self, fields=fields, exclude=exclude)
+        return mapper_registry[self.__class__].validate(self, fields=fields, exclude=exclude)
 
     def save(self, using=None):
-        return self._mapper.using(using).save(self)
+        return mapper_registry[self.__class__].using(using).save(self)
 
     def delete(self, using=None, visited=None):
-        return self._mapper.using(using).delete(self)
+        return mapper_registry[self.__class__].using(using).delete(self)
 
     @classproperty
     def s(cls):
         # TODO: Use Model class descriptor without __set__().
-        return cls._mapper.sql_table
+        return mapper_registry[cls].sql_table
 
     @classproperty
     def q(cls):
-        return cls._mapper.query
+        return mapper_registry[cls].query
 
     @classproperty
     def qs(cls):
         smartsql.warn('Model.qs', 'Model.q')
-        return cls._mapper.query
+        return mapper_registry[cls].query
 
     @classmethod
     def get(cls, _obj_pk=None, **kwargs):
-        return cls._mapper.get(_obj_pk, **kwargs)
+        return mapper_registry[cls].get(_obj_pk, **kwargs)
 
     def __repr__(self):
         return "<{0}.{1}: {2}>".format(type(self).__module__, type(self).__name__, self.pk)
@@ -905,12 +926,12 @@ class Table(smartsql.Table):
 
 
 def cascade(parent, child, parent_rel, using, visited):
-    child._mapper.using(using).delete(child, visited=visited)
+    mapper_registry[child.__class__].using(using).delete(child, visited=visited)
 
 
 def set_null(parent, child, parent_rel, using, visited):
     setattr(child, parent_rel.rel_field, None)
-    child._mapper.using(using).save(child)
+    mapper_registry[child.__class__].using(using).save(child)
 
 
 def do_nothing(parent, child, parent_rel, using, visited):
@@ -982,8 +1003,6 @@ class BoundRelation(object):
 class Relation(object):
 
     def __init__(self, rel_model, rel_field=None, field=None, on_delete=cascade, rel_name=None, query=None, rel_query=None):
-        if isinstance(rel_model, Mapper):
-            rel_model = rel_model._mapper
         self._rel_model_or_name = rel_model
         self._rel_field = rel_field and to_tuple(rel_field)
         self._field = field and to_tuple(field)
@@ -1011,7 +1030,7 @@ class Relation(object):
         mro_reversed = list(reversed(owner.__mro__))
         mro_reversed = mro_reversed[mro_reversed.index(result_cls) + 1:]
         for cls in mro_reversed:
-            if cls._mapper.__dict__.get('polymorphic'):
+            if mapper_registry[cls].__dict__.get('polymorphic'):
                 break
             result_cls = cls
         return result_cls
@@ -1032,15 +1051,15 @@ class Relation(object):
         if isinstance(self._rel_model_or_name, string_types):
             name = self._rel_model_or_name
             if name == 'self':
-                name = self.model(owner)._mapper.name
-            return registry[name]
+                name = mapper_registry[self.model(owner)].name
+            return model_registry[name]
         return self._rel_model_or_name
 
     def query(self, owner):
         if isinstance(self._query, collections.Callable):
             return self._query(self, owner)
         else:
-            return self.rel_model(owner)._mapper.query
+            return mapper_registry[self.rel_model(owner)].query
 
     def _get_cache(self, instance, key):
         try:
@@ -1062,7 +1081,7 @@ class ForeignKey(Relation):
         return self._field or ('{0}_id'.format(self.rel_model(owner).__name__.lower()),)
 
     def rel_field(self, owner):
-        return self._rel_field or to_tuple(self.rel_model(owner)._mapper.pk)
+        return self._rel_field or to_tuple(mapper_registry[self.rel_model(owner)].pk)
 
     def rel_name(self, owner):
         if self._rel_name is None:
@@ -1078,7 +1097,7 @@ class ForeignKey(Relation):
         except ModelNotRegistered:
             return
 
-        if self.rel_name(owner) in rel_model._mapper.relations:
+        if self.rel_name(owner) in mapper_registry[rel_model].relations:
             return
 
         setattr(rel_model, self.rel_name(owner), OneToMany(
@@ -1098,10 +1117,10 @@ class ForeignKey(Relation):
         rel_field = self.rel_field(owner)
         rel_model = self.rel_model(owner)
         if cached_obj is None or tuple(getattr(cached_obj, f, None) for f in rel_field) != val:
-            if self._query is None and rel_field == to_tuple(rel_model._mapper.pk):
+            if self._query is None and rel_field == to_tuple(mapper_registry[rel_model].pk):
                 obj = rel_model.get(val)  # to use IdentityMap
             else:
-                t = rel_model._mapper.sql_table
+                t = mapper_registry[rel_model].sql_table
                 q = self.query(owner)
                 for f, v in zip(rel_field, val):
                     q = q.where(t.__getattr__(f) == v)
@@ -1115,7 +1134,7 @@ class ForeignKey(Relation):
             if not isinstance(value, self.rel_model(owner)):
                 raise Exception(
                     'Value should be an instance of "{0}" or primary key of related instance.'.format(
-                        self.rel_model(owner)._mapper.name
+                        mapper_registry[self.rel_model(owner)].name
                     )
                 )
             self._set_cache(instance, self.name(owner), value)
@@ -1139,7 +1158,7 @@ class OneToOne(ForeignKey):
         except ModelNotRegistered:
             return
 
-        if self.rel_name(owner) in rel_model._mapper.relations:
+        if self.rel_name(owner) in mapper_registry[rel_model].relations:
             return
 
         setattr(rel_model, self.rel_name(owner), OneToOne(
@@ -1155,7 +1174,7 @@ class OneToMany(Relation):
     # TODO: is it need add_related() here to construct related FK?
 
     def field(self, owner):
-        return self._field or to_tuple(self.model(owner)._mapper.pk)
+        return self._field or to_tuple(mapper_registry[self.model(owner)].pk)
 
     def rel_field(self, owner):
         return self._rel_field or ('{0}_id'.format(self.model(owner).__name__.lower()),)
@@ -1176,7 +1195,7 @@ class OneToMany(Relation):
                     cached_query = None
                     break
         if cached_query is None:
-            t = self.rel_model(owner)._mapper.sql_table
+            t = mapper_registry[self.rel_model(owner)].sql_table
             q = self.query(owner)
             for f, v in zip(self.rel_field(owner), val):
                 q = q.where(t.__getattr__(f) == v)
@@ -1192,7 +1211,7 @@ class OneToMany(Relation):
                 if not isinstance(cached_obj, self.rel_model(owner)):
                     raise Exception(
                         'Value should be an instance of "{0}" or primary key of related instance.'.format(
-                            self.rel_model(owner)._mapper.name
+                            mapper_registry[self.rel_model(owner)].name
                         )
                     )
                 if tuple(getattr(cached_obj, f, None) for f in rel_field) != val:
