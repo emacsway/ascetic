@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from collections import OrderedDict
 from .. import validators
-from ..models import OneToOne, Result, classproperty, registry, to_tuple
+from ..models import OneToOne, Result, classproperty, model_registry, mapper_registry, to_tuple
 from ..utils import cached_property
 from .gfk import GenericForeignKey
 
@@ -13,14 +13,14 @@ class PolymorphicMapper(object):
     @cached_property
     def polymorphic_parent(self):
         for parent in self.model.mro():
-            if parent is not self.model and hasattr(parent, '_mapper') and getattr(parent._mapper, 'polymorphic', False):
-                return parent._mapper
+            if parent is not self.model and parent in mapper_registry and getattr(mapper_registry[parent], 'polymorphic', False):
+                return mapper_registry[parent]
 
     @classproperty
     def polymorphic_root(self):
         for parent in self.model.mro().reverse():
-            if parent is not self.model and hasattr(parent, '_mapper') and getattr(parent._mapper, 'polymorphic', False):
-                return parent._mapper
+            if parent is not self.model and parent in mapper_registry and getattr(mapper_registry[parent], 'polymorphic', False):
+                return mapper_registry[parent]
 
     @cached_property
     def polymorphic_columns(self):
@@ -56,18 +56,18 @@ class PolymorphicMapper(object):
                 # self.pk = "{}_id".format(pk_rel_name)  # Useless, pk read from DB
                 setattr(model, pk_rel_name, OneToOne(
                     base,
-                    field=model._mapper.pk,
-                    rel_field=base._mapper.pk,
+                    field=mapper_registry[model].pk,
+                    rel_field=mapper_registry[base].pk,
                     rel_name=model.__name__.lower(),
-                    query=(lambda rel, owner: rel.rel_model(owner)._mapper.query.polymorphic(False)),
-                    rel_query=(lambda rel, owner: rel.rel_model(owner)._mapper.query.polymorphic(False))
+                    query=(lambda rel, owner: mapper_registry[rel.rel_model(owner)].query.polymorphic(False)),
+                    rel_query=(lambda rel, owner: mapper_registry[rel.rel_model(owner)].query.polymorphic(False))
                 ))
                 break
         else:
             if getattr(model._mapper, 'polymorphic', False):
                 setattr(model, "real_instance", GenericForeignKey(
                     type_field="polymorphic_type_id",
-                    field=model._mapper.pk
+                    field=mapper_registry[model].pk
                 ))
         super(PolymorphicMapper, self)._do_prepare_model(self.model)
 
@@ -105,7 +105,7 @@ class PolymorphicMapper(object):
 
     def save(self, obj):
         if not getattr(obj, 'polymorphic_type_id', None):
-            obj.polymorphic_type_id = obj.__class__._mapper.name
+            obj.polymorphic_type_id = mapper_registry[obj.__class__].name
         if self.polymorphic_parent:
             new_record = obj._new_record
             self.polymorphic_parent.save(obj)
@@ -149,14 +149,14 @@ class PolymorphicResult(Result):
 def populate_polymorphic(rows):
     if not rows:
         return
-    current_model = rows[0]
+    current_model = rows[0].__class__
     pks = {i.pk for i in rows}
     content_types = {i.polymorphic_type_id for i in rows}
-    content_types -= set((current_model._mapper.name,))
+    content_types -= set((mapper_registry[current_model].name,))
     typical_objects = {}
     for ct in content_types:
-        model = registry[ct]
-        typical_objects[ct] = {i.pk: i for i in model._mapper.query.where(model.s.pk.in_(pks))}
+        model = model_registry[ct]
+        typical_objects[ct] = {i.pk: i for i in mapper_registry[model].query.where(model.s.pk.in_(pks))}
     for i, obj in enumerate(rows):
         if obj.polymorphic_type_id in typical_objects:
             rows[i] = typical_objects[obj.polymorphic_type_id][obj.pk]

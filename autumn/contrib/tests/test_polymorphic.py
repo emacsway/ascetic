@@ -2,7 +2,7 @@ import unittest
 from autumn import validators
 from autumn.databases import get_db
 from autumn.contrib.polymorphic import PolymorphicMapper
-from autumn.models import Model, ForeignKey, IdentityMap
+from autumn.models import Model, ForeignKey, IdentityMap, mapper_registry
 
 Author = Book = Nonfiction = Avia = None
 
@@ -142,7 +142,7 @@ class TestModelTranslation(unittest.TestCase):
                 rel_field=('id', 'lang'),
                 field=('author_id', 'lang'),
                 rel_name='books',
-                rel_query=(lambda rel, owner: rel.rel_model(owner)._mapper.query)
+                rel_query=(lambda rel, owner: mapper_registry[rel.rel_model(owner)].query)
             )
 
             class Mapper(PolymorphicMapper):

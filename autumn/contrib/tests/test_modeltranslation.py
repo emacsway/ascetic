@@ -1,6 +1,6 @@
 import unittest
 from autumn.databases import get_db
-from autumn.models import Model, IdentityMap
+from autumn.models import Model, IdentityMap, mapper_registry
 from autumn.contrib.modeltranslation import TranslationMapper
 
 Author = None
@@ -84,7 +84,7 @@ class TestModelTranslation(unittest.TestCase):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 
     def test_meta(self):
-        mapper = Author._mapper
+        mapper = mapper_registry[Author]
         self.assertIn('id', mapper.fields)
         self.assertIn('bio', mapper.fields)
         self.assertIn('first_alias', mapper.fields)
