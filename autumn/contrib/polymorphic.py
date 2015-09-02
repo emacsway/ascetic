@@ -64,7 +64,7 @@ class PolymorphicMapper(object):
                 ))
                 break
         else:
-            if getattr(model._mapper, 'polymorphic', False):
+            if getattr(mapper_registry[model], 'polymorphic', False):
                 setattr(model, "real_instance", GenericForeignKey(
                     type_field="polymorphic_type_id",
                     field=mapper_registry[model].pk

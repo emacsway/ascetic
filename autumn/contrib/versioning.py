@@ -5,6 +5,7 @@ import base64
 # import json
 import hashlib
 from datetime import datetime
+from ..models import mapper_registry
 
 # Under construction!!! Not testet yet!!!
 
@@ -143,21 +144,21 @@ class DatabaseRepository(IRepository):
             setattr(object_version, field_name, None)
         revisions = self.revisions()
         if rev is not None:
-            revisions = revisions.where((self._model._mapper.sql_table.revision <= rev))
+            revisions = revisions.where((mapper_registry[self._model].sql_table.revision <= rev))
         for revision in revisions:
             self._comparator.apply_delta(object_version, revision.delta)
         return object_version
 
     def versions(self, obj):
-        t = self._model._mapper.sql_table
-        return self._model._mapper.query.where(
+        t = mapper_registry[self._model].sql_table
+        return mapper_registry[self._model].query.where(
             (t.content_object == obj)
         ).order_by(
             t.revision
         )
 
     def version(self, obj, rev=None):
-        t = self._model._mapper.sql_table
+        t = mapper_registry[self._model].sql_table
         q = self.versions()
         if rev is not None:
             q = q.where((t.revision == rev))

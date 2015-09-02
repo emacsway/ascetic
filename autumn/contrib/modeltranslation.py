@@ -1,5 +1,5 @@
 import collections
-from .. import models
+from ..models import Field, mapper_registry
 
 # We can't use TranslationRegistry, because Mapper can be inherited, and we need to fix hierarchy???
 
@@ -15,7 +15,7 @@ class TranslationColumnDescriptor(object):
         instance.original_column = value.rsplit('_', 1)[0]
 
 
-class TranslationField(models.Field):
+class TranslationField(Field):
     column = TranslationColumnDescriptor()
 
 

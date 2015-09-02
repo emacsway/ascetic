@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 from sqlbuilder import smartsql
-from ..models import ForeignKey, to_tuple
+from ..models import ForeignKey, to_tuple, mapper_registry
 from ..utils import cached_property
 
 # Under construction!!! Not testet yet!!!
@@ -33,7 +33,7 @@ class MpMapper(object):
 
     @cached_property
     def mp_root(self):
-        return self.bound_relations['parent'].descriptor_class._mapper
+        return mapper_registry[self.bound_relations['parent'].descriptor_class]
 
     def save(self, obj):
         """Sets content_type and calls parent method."""
@@ -153,13 +153,13 @@ class MpMapper(object):
 class MpModel(object):
 
     def get_ancestors(self, root=False, me=False, reverse=True):
-        return self._mapper.get_ancestors(self, root, me, reverse)
+        return mapper_registry[self.__class__].get_ancestors(self, root, me, reverse)
 
     def get_hierarchical_name(self, sep=', ', root=False, me=True, reverse=True, namegetter=unicode):
-        return self._mapper.get_hierarchical_name(self, sep, root, me, reverse, namegetter)
+        return mapper_registry[self.__class__].get_hierarchical_name(self, sep, root, me, reverse, namegetter)
 
     def get_children(self):
-        return self._mapper.get_children(self)
+        return mapper_registry[self.__class__].get_children(self)
 
     def get_descendants(self, me=False):
-        return self._mapper.get_descendants(self, me)
+        return mapper_registry[self.__class__].get_descendants(self, me)
