@@ -562,6 +562,7 @@ class Mapper(object):
         return data
 
     def set_original_data(self, obj, data):
+        # TODO: use WeakKeyDictionary?
         obj._original_data = data
 
     def update_original_data(self, obj, **data):
@@ -577,7 +578,12 @@ class Mapper(object):
             obj._new_record = status
 
     def is_new(self, obj, status=None):
-        return obj._new_record
+        # TODO: use WeakKeyDictionary?
+        try:
+            return obj._new_record
+        except AttributeError:
+            obj._new_record = True
+            return obj._new_record
 
     def get_changed(self, obj):
         if not self.get_original_data(obj):
@@ -728,20 +734,14 @@ class ModelBase(type):
         if name in ('Model', 'NewBase', ):
             return new_cls
 
-        if hasattr(new_cls, 'Mapper'):
-            if isinstance(new_cls.Mapper, new_cls.mapper_class):
-                NewMapper = new_cls.Mapper
+        mapper_class = getattr(new_cls, 'Mapper', None) or getattr(new_cls, 'Meta', None)
+        if mapper_class is not None:
+            if isinstance(mapper_class, new_cls.mapper_class):
+                NewMapper = type("{}Mapper".format(new_cls.__name__), (new_cls.Mapper,), {})
             else:
-                class NewMapper(new_cls.Mapper, new_cls.mapper_class):
-                    pass
-        elif hasattr(new_cls, 'Meta'):  # backward compatible
-            if isinstance(new_cls.Meta, new_cls.mapper_class):
-                NewMapper = new_cls.Meta
-            else:
-                class NewMapper(new_cls.Meta, new_cls.mapper_class):
-                    pass
+                NewMapper = type("{}Mapper".format(new_cls.__name__), (new_cls.Mapper, new_cls.mapper_class), {})
         else:
-            NewMapper = new_cls.mapper_class
+            NewMapper = type("{}Mapper".format(new_cls.__name__), (new_cls.mapper_class,), {})
         NewMapper(new_cls)
         for k in to_tuple(mapper_registry[new_cls].pk):
             setattr(new_cls, k, None)
