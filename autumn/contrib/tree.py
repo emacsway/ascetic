@@ -50,7 +50,7 @@ class MpMapper(object):
 
         if old_tree_path != tree_path:
             obj.tree_path = tree_path
-            self.update_original_data(obj, {'tree_path': tree_path})
+            self.update_original_data(obj, tree_path=tree_path)
             self.mp_root.base_query.where(
                 self.mp_root.sql_table.pk == obj.pk
             ).update({

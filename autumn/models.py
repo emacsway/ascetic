@@ -528,7 +528,7 @@ class Mapper(object):
                 result[name] = attr
         return {k: BoundRelation(self.model, v) for k, v in self.relations.items()}
 
-    def load_object(self, data, from_db=True):
+    def load(self, data, from_db=True):
         if from_db:
             cols = self.columns
             data_mapped = {}
@@ -548,11 +548,11 @@ class Mapper(object):
                 pass
         obj = self.model(**data_mapped)
         self.set_original_data(obj, data_mapped)
-        obj._new_record = False
+        self.mark_new(obj, False)
         identity_map.add(key, obj)
         return obj
 
-    def get_data(self, obj, fields=frozenset(), exclude=frozenset(), to_db=True):
+    def unload(self, obj, fields=frozenset(), exclude=frozenset(), to_db=True):
         data = {name: getattr(obj, name, None)
                 for name in self.fields
                 if not (name in exclude or (fields and name not in fields))}
@@ -564,13 +564,20 @@ class Mapper(object):
     def set_original_data(self, obj, data):
         obj._original_data = data
 
-    def update_original_data(self, obj, data):
+    def update_original_data(self, obj, **data):
         self.get_original_data(obj).update(data)
 
     def get_original_data(self, obj):
         if not hasattr(obj, '_original_data'):
             obj._original_data = {}
         return obj._original_data
+
+    def mark_new(self, obj, status=True):
+        if status is not None:
+            obj._new_record = status
+
+    def is_new(self, obj, status=None):
+        return obj._new_record
 
     def get_changed(self, obj):
         if not self.get_original_data(obj):
@@ -621,16 +628,16 @@ class Mapper(object):
         if errors:
             raise ValidationError(errors)
 
-    def insert_query(self, obj):
+    def _insert_query(self, obj):
         auto_pk = not all(to_tuple(self.get_pk(obj)))
-        data = self.get_data(obj, exclude=(to_tuple(self.pk) if auto_pk else ()), to_db=True)
+        data = self.unload(obj, exclude=(to_tuple(self.pk) if auto_pk else ()), to_db=True)
         return smartsql.Insert(table=self.sql_table, map=data)
 
-    def update_query(self, obj):
-        data = self.get_data(obj, fields=self.get_changed(obj), to_db=True)
+    def _update_query(self, obj):
+        data = self.unload(obj, fields=self.get_changed(obj), to_db=True)
         return smartsql.Update(table=self.sql_table, map=data, where=(self.sql_table.pk == self.get_pk(obj)))
 
-    def delete_query(self, obj):
+    def _delete_query(self, obj):
         return smartsql.Delete(table=self.sql_table, where=(self.sql_table.pk == self.get_pk(obj)))
 
     def save(self, obj):
@@ -638,20 +645,21 @@ class Mapper(object):
         self.set_defaults(obj)
         self.validate(obj, fields=self.get_changed(obj))
         self.send_signal(obj, signal='pre_save', using=self._using)
-        result = self._insert(obj) if obj._new_record else self._update(obj)
-        self.send_signal(obj, signal='post_save', created=obj._new_record, using=self._using)
-        self.update_original_data(obj, self.get_data(obj, to_db=False))
-        obj._new_record = False
+        is_new = self.is_new(obj)
+        result = self._insert(obj) if is_new else self._update(obj)
+        self.send_signal(obj, signal='post_save', created=is_new, using=self._using)
+        self.update_original_data(obj, **self.unload(obj, to_db=False))
+        self.mark_new(obj, False)
         return result
 
     def _insert(self, obj):
-        cursor = databases[self._using].execute(self.insert_query(obj))
+        cursor = databases[self._using].execute(self._insert_query(obj))
         if not all(to_tuple(self.get_pk(obj))):
             self.set_pk(obj, self.base_query.result.db.last_insert_id(cursor))
         IdentityMap(self._using).add((self.model, to_tuple(self.get_pk(obj))))
 
     def _update(self, obj):
-        databases[self._using].execute(self.update_query(obj))
+        databases[self._using].execute(self._update_query(obj))
 
     def delete(self, obj, visited=None):
         """Deletes record from database"""
@@ -671,7 +679,7 @@ class Mapper(object):
                 child = getattr(obj, key)
                 rel.on_delete(obj, child, rel, self._using, visited)
 
-        databases[self._using].execute(self.delete_query(obj))
+        databases[self._using].execute(self._delete_query(obj))
         self.send_signal(obj, signal='post_delete', using=self._using)
         IdentityMap(self._using).remove((self.model, to_tuple(self.get_pk(obj))))
         return True
@@ -688,7 +696,7 @@ class Mapper(object):
             except ObjectDoesNotExist:
                 identity_map.add(key)
             else:
-                # obj added to identity_map by loader (self.load_object())
+                # obj added to identity_map by loader (self.load())
                 return obj
 
         if kwargs:
@@ -822,7 +830,7 @@ class CompositeModel(object):
 
 
 def default_mapping(result, row, state):
-    return result._mapper.load_object(row, from_db=True)
+    return result._mapper.load(row, from_db=True)
 
 
 class SelectRelatedMapping(object):
@@ -845,7 +853,7 @@ class SelectRelatedMapping(object):
             pk_values = tuple(model_row_dict[k] for k in pk_columns)
             key = (model, pk_values)
             if key not in state:
-                state[key] = model._mapper.load_object(model_row, from_db=True)
+                state[key] = model._mapper.load(model_row, from_db=True)
             objs.append(state[key])
         return objs
 

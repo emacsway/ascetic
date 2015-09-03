@@ -71,7 +71,7 @@ class PolymorphicMapper(object):
                 ))
         super(PolymorphicMapper, self)._do_prepare_model(self.model)
 
-    def load_object(self, data, from_db=True):
+    def load(self, data, from_db=True):
         if from_db:
             cols = self.polymorphic_columns
             data_mapped = {}
@@ -84,7 +84,7 @@ class PolymorphicMapper(object):
             data_mapped = dict(data)
         obj = self.model(**data_mapped)
         self.set_original_data(obj, data_mapped)
-        obj._new_record = False
+        self.mark_new(obj, False)
         return obj
 
     def validate(self, obj, fields=frozenset(), exclude=frozenset()):
@@ -107,11 +107,11 @@ class PolymorphicMapper(object):
         if not getattr(obj, 'polymorphic_type_id', None):
             obj.polymorphic_type_id = mapper_registry[obj.__class__].name
         if self.polymorphic_parent:
-            new_record = obj._new_record
+            new_record = self.is_new(obj)
             self.polymorphic_parent.save(obj)
             for key, parent_key in zip(to_tuple(self.pk), to_tuple(self.polymorphic_parent.pk)):
                 setattr(obj, key, getattr(obj, parent_key))
-            obj._new_record = new_record
+            self.mark_new(obj, new_record)
         return super(PolymorphicMapper, self).save(obj)
 
 
