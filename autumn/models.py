@@ -35,38 +35,46 @@ def is_model(cls):
     return cls in model_registry.values()
 
 
-class ModelNotRegistered(Exception):
+class AutumnException(Exception):
     pass
 
 
-class MapperNotRegistered(Exception):
+class ModelNotRegistered(AutumnException):
     pass
 
 
-class ObjectDoesNotExist(Exception):
+class MapperNotRegistered(AutumnException):
     pass
 
 
-class ModelRegistry(dict):
+class ObjectDoesNotExist(AutumnException):
+    pass
 
-    def __getitem__(self, name):
+
+class BaseRegistry(dict):
+
+    exception_class = AutumnException
+
+    def __getitem__(self, key):
         try:
-            return dict.__getitem__(self, name)
+            return dict.__getitem__(self, key)
         except KeyError:
-            raise ModelNotRegistered("""Model {} is not registered in {}""".format(name, self.keys()))
+            raise ModelNotRegistered("""{} is not registered in {}""".format(key, self.keys()))
 
-registry = model_registry = ModelRegistry()
+    def __call__(self, key):
+        return self[key]
 
 
-class MapperRegistry(dict):
+class ModelRegistry(BaseRegistry):
+    exception_class = ModelNotRegistered
 
-    def __getitem__(self, name):
-        try:
-            return dict.__getitem__(self, name)
-        except KeyError:
-            raise MapperNotRegistered("""Mapper {} is not registered in {}""".format(name, self.keys()))
+model_registry = get_model = ModelRegistry()
 
-mapper_registry = MapperRegistry()
+
+class MapperRegistry(BaseRegistry):
+    exception_class = MapperNotRegistered
+
+mapper_registry = get_mapper = MapperRegistry()
 
 
 class WeakCache(object):
