@@ -114,8 +114,8 @@ Retrieval
     a.books      # Returns list of author's books
 
     # Returns a list, using LIMIT based on slice
-    a = Author.get()[:10]   # LIMIT 0, 10
-    a = Author.get()[20:30] # LIMIT 20, 10
+    a = Author.q[:10]   # LIMIT 0, 10
+    a = Author.q[20:30] # LIMIT 20, 10
 
 
 Updating
