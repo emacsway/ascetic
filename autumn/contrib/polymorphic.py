@@ -51,7 +51,7 @@ class PolymorphicMapper(object):
 
     def _do_prepare_model(self, model):
         for base in model.mro():
-            if base is not model and getattr(getattr(base, '_mapper', None), 'polymorphic', False):
+            if base is not model and getattr(mapper_registry.get(base), 'polymorphic', False):
                 pk_rel_name = "{}_ptr".format(base.__name__.lower())
                 # self.pk = "{}_id".format(pk_rel_name)  # Useless, pk read from DB
                 setattr(model, pk_rel_name, OneToOne(

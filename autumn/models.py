@@ -59,10 +59,16 @@ class BaseRegistry(dict):
         try:
             return dict.__getitem__(self, key)
         except KeyError:
-            raise ModelNotRegistered("""{} is not registered in {}""".format(key, self.keys()))
+            raise self.exception_class("""{} is not registered in {}""".format(key, self.keys()))
 
     def __call__(self, key):
         return self[key]
+
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except self.exception_class:
+            return default
 
 
 class ModelRegistry(BaseRegistry):
@@ -474,7 +480,6 @@ class Mapper(object):
         pass
 
     def _prepare_model(self, model):
-        model._mapper = model._meta = self
         for name in self.model.__dict__:
             field = getattr(model, name, None)
             if isinstance(field, Field):
@@ -743,13 +748,13 @@ class ModelBase(type):
             return new_cls
 
         mapper_class = getattr(new_cls, 'Mapper', None) or getattr(new_cls, 'Meta', None)
+        bases = []
         if mapper_class is not None:
-            if isinstance(mapper_class, new_cls.mapper_class):
-                NewMapper = type("{}Mapper".format(new_cls.__name__), (new_cls.Mapper,), {})
-            else:
-                NewMapper = type("{}Mapper".format(new_cls.__name__), (new_cls.Mapper, new_cls.mapper_class), {})
-        else:
-            NewMapper = type("{}Mapper".format(new_cls.__name__), (new_cls.mapper_class,), {})
+            bases.append(mapper_class)
+        if not isinstance(mapper_class, new_cls.mapper_class):
+            bases.append(new_cls.mapper_class)
+        
+        NewMapper = type("{}Mapper".format(new_cls.__name__), tuple(bases), {})
         NewMapper(new_cls)
         for k in to_tuple(mapper_registry[new_cls].pk):
             setattr(new_cls, k, None)
@@ -798,6 +803,10 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
 
     def delete(self, using=None, visited=None):
         return mapper_registry[self.__class__].using(using).delete(self)
+
+    @classproperty
+    def _mapper(cls):
+        return mapper_registry[cls]
 
     @classproperty
     def s(cls):
