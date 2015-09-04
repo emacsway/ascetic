@@ -1,41 +1,51 @@
-"""
-Extracted from https://github.com/coleifer/peewee
-"""
 from __future__ import absolute_import
+from weakref import WeakKeyDictionary, WeakValueDictionary
 
 
 class Signal(object):
     def __init__(self):
         self._flush()
 
-    def connect(self, receiver, name=None, sender=None):
-        name = name or receiver.__name__
-        if name not in self._receivers:
-            self._receivers[name] = (receiver, sender)
-            self._receiver_list.append(name)
-        else:
-            raise ValueError('receiver named {0} already connected'.format(name))
+    @staticmethod
+    def _make_id(target):
+        if hasattr(target, '__func__'):
+            return (id(target.__self__), id(target.__func__))
+        return id(target)
 
-    def disconnect(self, receiver=None, name=None):
-        if receiver:
-            name = receiver.__name__
-        if name:
-            del self._receivers[name]
-            self._receiver_list.remove(name)
+    def connect(self, receiver, sender=None, weak=True, receiver_id=None):
+        if not weak:
+            self._weak_cache.add(receiver)
+        if receiver_id is None:
+            receiver_id = self._make_id(receiver)
+        if sender not in self._receivers:
+            self._receivers[sender] = WeakValueDictionary()
+        self._receivers[sender][receiver_id] = receiver
+
+    def disconnect(self, receiver=None, sender=None, receiver_id=None):
+        if receiver_id is None:
+            receiver_id = self._make_id(receiver)
+        if receiver_id:
+            try:
+                del self._receivers[sender][receiver_id]
+            except KeyError:
+                pass
+            self._weak_cache.discard(receiver)
         else:
             raise ValueError('a receiver or a name must be provided')
 
     def send(self, sender, *args, **kwargs):
         responses = []
-        for name in self._receiver_list:
-            r, s = self._receivers[name]
-            if s is None or sender is s:
-                responses.append((r, r(sender, *args, **kwargs)))
+        if sender in self._receivers:
+            receivers = list(self._receivers[sender].values())
+            if sender is not None:
+                receivers += list(self._receivers[None].values())
+            for receiver in receivers:
+                responses.append((receiver, receiver(sender, *args, **kwargs)))
         return responses
 
     def _flush(self):
-        self._receivers = {}
-        self._receiver_list = []
+        self._receivers = WeakKeyDictionary()
+        self._weak_cache = set()
 
 
 def connect(signal, name=None, sender=None):
