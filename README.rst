@@ -1,16 +1,16 @@
 =================================
-Autumn, a lightweight Python ORM
+Ascetic, a lightweight Python ORM
 =================================
 
-Autumn exists as a super-lightweight Object-relational mapper (ORM) for Python.
-Autumn based on "`Data Mapper <http://martinfowler.com/eaaCatalog/dataMapper.html>`_" and "`Table Data Gateway <http://martinfowler.com/eaaCatalog/tableDataGateway.html>`_".
+Ascetic exists as a super-lightweight Object-relational mapper (ORM) for Python.
+Ascetic based on "`Data Mapper <http://martinfowler.com/eaaCatalog/dataMapper.html>`_" and "`Table Data Gateway <http://martinfowler.com/eaaCatalog/tableDataGateway.html>`_".
 It also supports "`Active Record <http://www.martinfowler.com/eaaCatalog/activeRecord.html>`_" wrapper, but it's just a wrapper, - model class is free from service logic.
-Autumn ORM follows the `KISS principle <http://en.wikipedia.org/wiki/KISS_principle>`_.
+Ascetic ORM follows the `KISS principle <http://en.wikipedia.org/wiki/KISS_principle>`_.
 Has automatic population of fields from database (see the example below), and minimal size.
 You do not have to specify the columns in the class. This follows the `DRY <http://en.wikipedia.org/wiki/DRY_code>`_ principle. 
-Autumn as small as possible.
+Ascetic as small as possible.
 
-In autumn.contrib (currently under development) you can found solutions for:
+In ascetic.contrib (currently under development) you can found solutions for:
 
 - multilingual
 - polymorphic relations
@@ -22,13 +22,13 @@ All solutions support composite primary/foreign keys.
 
 "`Identity Map <http://martinfowler.com/eaaCatalog/identityMap.html>`__" has SERIALIZABLE isolation level by default.
 
-What Autumn does not? Autumn does not make any data type conversions (use connection features like `this <http://initd.org/psycopg/docs/advanced.html#adapting-new-python-types-to-sql-syntax>`__), and does not has "`Unit of Work <http://martinfowler.com/eaaCatalog/unitOfWork.html>`__". I recommend using a `Storm ORM <https://storm.canonical.com/>`__, if you need it all.
+What Ascetic does not? Ascetic does not make any data type conversions (use connection features like `this <http://initd.org/psycopg/docs/advanced.html#adapting-new-python-types-to-sql-syntax>`__), and does not has "`Unit of Work <http://martinfowler.com/eaaCatalog/unitOfWork.html>`__". I recommend using a `Storm ORM <https://storm.canonical.com/>`__, if you need it all.
 
-Autumn is released under the MIT License (see LICENSE file for details).
+Ascetic is released under the MIT License (see LICENSE file for details).
 
 This project is currently under development, and not stable. If you are looking for stable KISS-style ORM, pay attention to `Storm ORM <https://storm.canonical.com/>`__.
 
-Home Page: https://bitbucket.org/emacsway/autumn
+Home Page: https://bitbucket.org/emacsway/ascetic
 
 
 PostgreSQL Example
@@ -38,7 +38,7 @@ Using these tables:
 
 ::
 
-    CREATE TABLE autumn_tests_models_author (
+    CREATE TABLE ascetic_tests_models_author (
         id serial NOT NULL PRIMARY KEY,
         first_name VARCHAR(40) NOT NULL,
         last_name VARCHAR(40) NOT NULL,
@@ -47,25 +47,25 @@ Using these tables:
     CREATE TABLE books (
         id serial NOT NULL PRIMARY KEY,
         title VARCHAR(255),
-        author_id integer REFERENCES autumn_tests_models_author(id) ON DELETE CASCADE
+        author_id integer REFERENCES ascetic_tests_models_author(id) ON DELETE CASCADE
     );
 
 You can configure in one the following ways:
 
-\1. Put in your PYTHONPATH file autumn_settings.py with your settings.
-See file autumn/settings.py for more details.
+\1. Put in your PYTHONPATH file ascetic_settings.py with your settings.
+See file ascetic/settings.py for more details.
 
-\2. Define settings module in evironment variable AUTUMN_SETTINGS.
+\2. Define settings module in evironment variable ASCETIC_SETTINGS.
 
-\3. Call autumn.settings.configure(), for example::
+\3. Call ascetic.settings.configure(), for example::
 
-    import autumn.settings.configure
-    autumn.settings.configure({
+    import ascetic.settings.configure
+    ascetic.settings.configure({
         'DATABASES': {
             'default': {
                 'engine': "postgresql",
                 'user': "devel",
-                'database': "devel_autumn",
+                'database': "devel_ascetic",
                 'password': "devel",
                 'debug': True,
                 'initial_sql': "SET NAMES 'UTF8';",
@@ -77,7 +77,7 @@ We setup our objects like so:
 
 ::
 
-    from autumn.model import Model, ForeignKey, OneToMany
+    from ascetic.model import Model, ForeignKey, OneToMany
 
     class Author(Model):
 
@@ -167,7 +167,7 @@ Signals support
 Web
 ====
 
-You can use Autumn ORM with lightweight web-frameworks, like `wheezy.web <https://bitbucket.org/akorn/wheezy.web>`_, `Bottle <http://bottlepy.org/>`_, `Tornado <http://www.tornadoweb.org/>`_, `pysi <https://bitbucket.org/imbolc/pysi>`_, etc.
+You can use Ascetic ORM with lightweight web-frameworks, like `wheezy.web <https://bitbucket.org/akorn/wheezy.web>`_, `Bottle <http://bottlepy.org/>`_, `Tornado <http://www.tornadoweb.org/>`_, `pysi <https://bitbucket.org/imbolc/pysi>`_, etc.
 
 
 Gratitude

@@ -4,7 +4,7 @@ import os.path
 from setuptools import setup, find_packages
 
 setup(
-    name='autumn2',
+    name='ascetic',
     version='0.7.2.14',
 
     packages = find_packages(),
@@ -14,7 +14,7 @@ setup(
     author_email="ivzak@yandex.ru",
     description="Lightweight python ORM (Object-relational mapper).",
     long_description=open(os.path.join(os.path.dirname(__file__), 'README.rst')).read(),
-    url="https://bitbucket.org/emacsway/autumn",
+    url="https://bitbucket.org/emacsway/ascetic",
     license="MIT License",
     keywords = "ORM Database SQL",
     install_requires=[

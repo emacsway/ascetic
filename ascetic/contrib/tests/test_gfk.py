@@ -1,8 +1,8 @@
 import unittest
-from autumn import validators
-from autumn.databases import get_db
-from autumn.contrib.gfk import GenericForeignKey, GenericRelation
-from autumn.models import Model, IdentityMap
+from ascetic import validators
+from ascetic.databases import get_db
+from ascetic.contrib.gfk import GenericForeignKey, GenericRelation
+from ascetic.models import Model, IdentityMap
 
 Author = Book = None
 
@@ -13,8 +13,8 @@ class TestModelTranslation(unittest.TestCase):
 
     create_sql = {
         'postgresql': """
-            DROP TABLE IF EXISTS autumn_gfk_author CASCADE;
-            CREATE TABLE autumn_gfk_author (
+            DROP TABLE IF EXISTS ascetic_gfk_author CASCADE;
+            CREATE TABLE ascetic_gfk_author (
                 id integer NOT NULL,
                 lang VARCHAR(6) NOT NULL,
                 first_name VARCHAR(40) NOT NULL,
@@ -22,8 +22,8 @@ class TestModelTranslation(unittest.TestCase):
                 bio TEXT,
                 PRIMARY KEY (id, lang)
             );
-            DROP TABLE IF EXISTS autumn_gfk_book CASCADE;
-            CREATE TABLE autumn_gfk_book (
+            DROP TABLE IF EXISTS ascetic_gfk_book CASCADE;
+            CREATE TABLE ascetic_gfk_book (
                 id integer NOT NULL,
                 lang VARCHAR(6) NOT NULL,
                 title VARCHAR(255),
@@ -33,8 +33,8 @@ class TestModelTranslation(unittest.TestCase):
             );
          """,
         'mysql': """
-            DROP TABLE IF EXISTS autumn_gfk_author CASCADE;
-            CREATE TABLE autumn_gfk_author (
+            DROP TABLE IF EXISTS ascetic_gfk_author CASCADE;
+            CREATE TABLE ascetic_gfk_author (
                 id INT(11) NOT NULL,
                 lang VARCHAR(6) NOT NULL,
                 first_name VARCHAR(40) NOT NULL,
@@ -42,8 +42,8 @@ class TestModelTranslation(unittest.TestCase):
                 bio TEXT,
                 PRIMARY KEY (id, lang)
             );
-            DROP TABLE IF EXISTS autumn_gfk_book CASCADE;
-            CREATE TABLE autumn_gfk_book (
+            DROP TABLE IF EXISTS ascetic_gfk_book CASCADE;
+            CREATE TABLE ascetic_gfk_book (
                 id INT(11) NOT NULL,
                 lang VARCHAR(6) NOT NULL,
                 title VARCHAR(255),
@@ -53,8 +53,8 @@ class TestModelTranslation(unittest.TestCase):
             );
          """,
         'sqlite3': """
-            DROP TABLE IF EXISTS autumn_gfk_author;
-            CREATE TABLE autumn_gfk_author (
+            DROP TABLE IF EXISTS ascetic_gfk_author;
+            CREATE TABLE ascetic_gfk_author (
                 id INTEGER NOT NULL,
                 lang VARCHAR(6) NOT NULL,
                 first_name VARCHAR(40) NOT NULL,
@@ -62,8 +62,8 @@ class TestModelTranslation(unittest.TestCase):
                 bio TEXT,
                 PRIMARY KEY (id, lang)
             );
-            DROP TABLE IF EXISTS autumn_gfk_book;
-            CREATE TABLE autumn_gfk_book (
+            DROP TABLE IF EXISTS ascetic_gfk_book;
+            CREATE TABLE ascetic_gfk_book (
                 id INTEGER NOT NULL,
                 lang VARCHAR(6) NOT NULL,
                 title VARCHAR(255),
@@ -78,10 +78,10 @@ class TestModelTranslation(unittest.TestCase):
     def create_models(cls):
 
         class Author(Model):
-            books = GenericRelation('autumn.contrib.tests.test_gfk.Book', rel_name='author')
+            books = GenericRelation('ascetic.contrib.tests.test_gfk.Book', rel_name='author')
 
             class Mapper(object):
-                db_table = 'autumn_gfk_author'
+                db_table = 'ascetic_gfk_author'
                 defaults = {'bio': 'No bio available'}
                 validations = {'first_name': validators.Length(),
                                'last_name': (validators.Length(), lambda x: x != 'BadGuy!' or 'Bad last name', )}
@@ -90,8 +90,8 @@ class TestModelTranslation(unittest.TestCase):
             author = GenericForeignKey(rel_field=('id', 'lang'), field=('object_id', 'lang'))
 
             class Mapper(object):
-                name = 'autumn.contrib.tests.test_gfk.Book'
-                db_table = 'autumn_gfk_book'
+                name = 'ascetic.contrib.tests.test_gfk.Book'
+                db_table = 'ascetic_gfk_book'
 
         return locals()
 
@@ -105,7 +105,7 @@ class TestModelTranslation(unittest.TestCase):
     def setUp(self):
         IdentityMap().disable()
         db = get_db()
-        for table in ('autumn_gfk_author', 'autumn_gfk_book',):
+        for table in ('ascetic_gfk_author', 'ascetic_gfk_book',):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 
     def test_model(self):

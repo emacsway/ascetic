@@ -1,7 +1,7 @@
 import unittest
-from autumn.databases import get_db
-from autumn.models import Model, IdentityMap
-from autumn.contrib.tree import MpMapper, MpModel
+from ascetic.databases import get_db
+from ascetic.models import Model, IdentityMap
+from ascetic.contrib.tree import MpMapper, MpModel
 
 Location = None
 
@@ -12,8 +12,8 @@ class TestMpTree(unittest.TestCase):
 
     create_sql = {
         'postgresql': """
-            DROP TABLE IF EXISTS autumn_tree_location CASCADE;
-            CREATE TABLE autumn_tree_location (
+            DROP TABLE IF EXISTS ascetic_tree_location CASCADE;
+            CREATE TABLE ascetic_tree_location (
                 id INTEGER NOT NULL,
                 lang VARCHAR(6) NOT NULL,
                 name VARCHAR(40),
@@ -21,12 +21,12 @@ class TestMpTree(unittest.TestCase):
                 parent_lang VARCHAR(6),
                 tree_path VARCHAR(256),
                 PRIMARY KEY (id, lang),
-                FOREIGN KEY (parent_id, parent_lang) REFERENCES autumn_tree_location (id, lang) ON DELETE CASCADE
+                FOREIGN KEY (parent_id, parent_lang) REFERENCES ascetic_tree_location (id, lang) ON DELETE CASCADE
             );
          """,
         'mysql': """
-            DROP TABLE IF EXISTS autumn_tree_location CASCADE;
-            CREATE TABLE autumn_tree_location (
+            DROP TABLE IF EXISTS ascetic_tree_location CASCADE;
+            CREATE TABLE ascetic_tree_location (
                 id INTEGER NOT NULL,
                 lang VARCHAR(6) NOT NULL,
                 name VARCHAR(40),
@@ -34,12 +34,12 @@ class TestMpTree(unittest.TestCase):
                 parent_lang VARCHAR(6),
                 tree_path VARCHAR(256),
                 PRIMARY KEY (id, lang),
-                FOREIGN KEY (parent_id, parent_lang) REFERENCES autumn_tree_location (id, lang) ON DELETE CASCADE
+                FOREIGN KEY (parent_id, parent_lang) REFERENCES ascetic_tree_location (id, lang) ON DELETE CASCADE
             );
          """,
         'sqlite3': """
-            DROP TABLE IF EXISTS autumn_tree_location CASCADE;
-            CREATE TABLE autumn_tree_location (
+            DROP TABLE IF EXISTS ascetic_tree_location CASCADE;
+            CREATE TABLE ascetic_tree_location (
                 id INTEGER NOT NULL,
                 lang VARCHAR(6) NOT NULL,
                 name VARCHAR(40),
@@ -47,7 +47,7 @@ class TestMpTree(unittest.TestCase):
                 parent_lang VARCHAR(6),
                 tree_path VARCHAR(256),
                 PRIMARY KEY (id, lang),
-                FOREIGN KEY (parent_id, parent_lang) REFERENCES autumn_tree_location (id, lang) ON DELETE CASCADE
+                FOREIGN KEY (parent_id, parent_lang) REFERENCES ascetic_tree_location (id, lang) ON DELETE CASCADE
             );
         """
     }
@@ -57,7 +57,7 @@ class TestMpTree(unittest.TestCase):
 
         class Location(MpModel, Model):
             class Mapper(MpMapper):
-                db_table = 'autumn_tree_location'
+                db_table = 'ascetic_tree_location'
 
         return locals()
 
@@ -71,7 +71,7 @@ class TestMpTree(unittest.TestCase):
     def setUp(self):
         IdentityMap().disable()
         db = get_db()
-        for table in ('autumn_tree_location',):
+        for table in ('ascetic_tree_location',):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 
     def test_model(self):

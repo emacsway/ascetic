@@ -1,8 +1,8 @@
 import unittest
-from autumn import validators
-from autumn.databases import get_db
-from autumn.contrib.polymorphic import PolymorphicMapper
-from autumn.models import Model, ForeignKey, IdentityMap, mapper_registry
+from ascetic import validators
+from ascetic.databases import get_db
+from ascetic.contrib.polymorphic import PolymorphicMapper
+from ascetic.models import Model, ForeignKey, IdentityMap, mapper_registry
 
 Author = Book = Nonfiction = Avia = None
 
@@ -13,8 +13,8 @@ class TestModelTranslation(unittest.TestCase):
 
     create_sql = {
         'postgresql': """
-            DROP TABLE IF EXISTS autumn_polymorphic_author CASCADE;
-            CREATE TABLE autumn_polymorphic_author (
+            DROP TABLE IF EXISTS ascetic_polymorphic_author CASCADE;
+            CREATE TABLE ascetic_polymorphic_author (
                 id integer NOT NULL,
                 lang VARCHAR(6) NOT NULL,
                 first_name VARCHAR(40) NOT NULL,
@@ -22,36 +22,36 @@ class TestModelTranslation(unittest.TestCase):
                 bio TEXT,
                 PRIMARY KEY (id, lang)
             );
-            DROP TABLE IF EXISTS autumn_polymorphic_book CASCADE;
-            CREATE TABLE autumn_polymorphic_book (
+            DROP TABLE IF EXISTS ascetic_polymorphic_book CASCADE;
+            CREATE TABLE ascetic_polymorphic_book (
                 id integer NOT NULL,
                 lang VARCHAR(6) NOT NULL,
                 title VARCHAR(255),
                 author_id integer,
                 polymorphic_type_id VARCHAR(255),
                 PRIMARY KEY (id, lang),
-                FOREIGN KEY (author_id, lang) REFERENCES autumn_polymorphic_author (id, lang) ON DELETE CASCADE
+                FOREIGN KEY (author_id, lang) REFERENCES ascetic_polymorphic_author (id, lang) ON DELETE CASCADE
             );
-            DROP TABLE IF EXISTS autumn_polymorphic_nonfiction CASCADE;
-            CREATE TABLE autumn_polymorphic_nonfiction (
+            DROP TABLE IF EXISTS ascetic_polymorphic_nonfiction CASCADE;
+            CREATE TABLE ascetic_polymorphic_nonfiction (
                 nonfiction_ptr_id integer NOT NULL,
                 nonfiction_ptr_lang VARCHAR(6) NOT NULL,
                 branch VARCHAR(255),
                 PRIMARY KEY (nonfiction_ptr_id, nonfiction_ptr_lang),
-                FOREIGN KEY (nonfiction_ptr_id, nonfiction_ptr_lang) REFERENCES autumn_polymorphic_book (id, lang) ON DELETE CASCADE
+                FOREIGN KEY (nonfiction_ptr_id, nonfiction_ptr_lang) REFERENCES ascetic_polymorphic_book (id, lang) ON DELETE CASCADE
             );
-            DROP TABLE IF EXISTS autumn_polymorphic_avia CASCADE;
-            CREATE TABLE autumn_polymorphic_avia (
+            DROP TABLE IF EXISTS ascetic_polymorphic_avia CASCADE;
+            CREATE TABLE ascetic_polymorphic_avia (
                 avia_ptr_id integer NOT NULL,
                 avia_ptr_lang VARCHAR(6) NOT NULL,
                 model VARCHAR(255),
                 PRIMARY KEY (avia_ptr_id, avia_ptr_lang),
-                FOREIGN KEY (avia_ptr_id, avia_ptr_lang) REFERENCES autumn_polymorphic_nonfiction (nonfiction_ptr_id, nonfiction_ptr_lang) ON DELETE CASCADE
+                FOREIGN KEY (avia_ptr_id, avia_ptr_lang) REFERENCES ascetic_polymorphic_nonfiction (nonfiction_ptr_id, nonfiction_ptr_lang) ON DELETE CASCADE
             );
          """,
         'mysql': """
-            DROP TABLE IF EXISTS autumn_polymorphic_author CASCADE;
-            CREATE TABLE autumn_polymorphic_author (
+            DROP TABLE IF EXISTS ascetic_polymorphic_author CASCADE;
+            CREATE TABLE ascetic_polymorphic_author (
                 id INT(11) NOT NULL,
                 lang VARCHAR(6) NOT NULL,
                 first_name VARCHAR(40) NOT NULL,
@@ -59,36 +59,36 @@ class TestModelTranslation(unittest.TestCase):
                 bio TEXT,
                 PRIMARY KEY (id, lang)
             );
-            DROP TABLE IF EXISTS autumn_polymorphic_book CASCADE;
-            CREATE TABLE autumn_polymorphic_book (
+            DROP TABLE IF EXISTS ascetic_polymorphic_book CASCADE;
+            CREATE TABLE ascetic_polymorphic_book (
                 id INT(11) NOT NULL,
                 lang VARCHAR(6) NOT NULL,
                 title VARCHAR(255),
                 author_id INT(11),
                 polymorphic_type_id VARCHAR(255),
                 PRIMARY KEY (id, lang),
-                FOREIGN KEY (author_id, lang) REFERENCES autumn_polymorphic_author (id, lang)
+                FOREIGN KEY (author_id, lang) REFERENCES ascetic_polymorphic_author (id, lang)
             );
-            DROP TABLE IF EXISTS autumn_polymorphic_nonfiction CASCADE;
-            CREATE TABLE autumn_polymorphic_nonfiction (
+            DROP TABLE IF EXISTS ascetic_polymorphic_nonfiction CASCADE;
+            CREATE TABLE ascetic_polymorphic_nonfiction (
                 nonfiction_ptr_id INT(11) NOT NULL,
                 nonfiction_ptr_lang VARCHAR(6) NOT NULL,
                 branch VARCHAR(255),
                 PRIMARY KEY (nonfiction_ptr_id, nonfiction_ptr_lang),
-                FOREIGN KEY (nonfiction_ptr_id, nonfiction_ptr_lang) REFERENCES autumn_polymorphic_book (id, lang) ON DELETE CASCADE
+                FOREIGN KEY (nonfiction_ptr_id, nonfiction_ptr_lang) REFERENCES ascetic_polymorphic_book (id, lang) ON DELETE CASCADE
             );
-            DROP TABLE IF EXISTS autumn_polymorphic_avia CASCADE;
-            CREATE TABLE autumn_polymorphic_avia (
+            DROP TABLE IF EXISTS ascetic_polymorphic_avia CASCADE;
+            CREATE TABLE ascetic_polymorphic_avia (
                 avia_ptr_id INT(11) NOT NULL,
                 avia_ptr_lang VARCHAR(6) NOT NULL,
                 model VARCHAR(255),
                 PRIMARY KEY (avia_ptr_id, avia_ptr_lang),
-                FOREIGN KEY (avia_ptr_id, avia_ptr_lang) REFERENCES autumn_polymorphic_nonfiction (nonfiction_ptr_id, nonfiction_ptr_lang) ON DELETE CASCADE
+                FOREIGN KEY (avia_ptr_id, avia_ptr_lang) REFERENCES ascetic_polymorphic_nonfiction (nonfiction_ptr_id, nonfiction_ptr_lang) ON DELETE CASCADE
             );
          """,
         'sqlite3': """
-            DROP TABLE IF EXISTS autumn_polymorphic_author;
-            CREATE TABLE autumn_polymorphic_author (
+            DROP TABLE IF EXISTS ascetic_polymorphic_author;
+            CREATE TABLE ascetic_polymorphic_author (
                 id INTEGER NOT NULL,
                 lang VARCHAR(6) NOT NULL,
                 first_name VARCHAR(40) NOT NULL,
@@ -96,31 +96,31 @@ class TestModelTranslation(unittest.TestCase):
                 bio TEXT,
                 PRIMARY KEY (id, lang)
             );
-            DROP TABLE IF EXISTS autumn_polymorphic_book;
-            CREATE TABLE autumn_polymorphic_book (
+            DROP TABLE IF EXISTS ascetic_polymorphic_book;
+            CREATE TABLE ascetic_polymorphic_book (
                 id INTEGER NOT NULL,
                 lang VARCHAR(6) NOT NULL,
                 title VARCHAR(255),
                 author_id INT(11),
                 polymorphic_type_id VARCHAR(255),
                 PRIMARY KEY (id, lang),
-                FOREIGN KEY (author_id, lang) REFERENCES autumn_polymorphic_author (id, lang)
+                FOREIGN KEY (author_id, lang) REFERENCES ascetic_polymorphic_author (id, lang)
             );
-            DROP TABLE IF EXISTS autumn_polymorphic_nonfiction CASCADE;
-            CREATE TABLE autumn_polymorphic_nonfiction (
+            DROP TABLE IF EXISTS ascetic_polymorphic_nonfiction CASCADE;
+            CREATE TABLE ascetic_polymorphic_nonfiction (
                 nonfiction_ptr_id INTEGER NOT NULL,
                 nonfiction_ptr_lang VARCHAR(6) NOT NULL,
                 branch VARCHAR(255),
                 PRIMARY KEY (nonfiction_ptr_id, nonfiction_ptr_lang),
-                FOREIGN KEY (nonfiction_ptr_id, nonfiction_ptr_lang) REFERENCES autumn_polymorphic_book (id, lang) ON DELETE CASCADE
+                FOREIGN KEY (nonfiction_ptr_id, nonfiction_ptr_lang) REFERENCES ascetic_polymorphic_book (id, lang) ON DELETE CASCADE
             );
-            DROP TABLE IF EXISTS autumn_polymorphic_avia CASCADE;
-            CREATE TABLE autumn_polymorphic_avia (
+            DROP TABLE IF EXISTS ascetic_polymorphic_avia CASCADE;
+            CREATE TABLE ascetic_polymorphic_avia (
                 avia_ptr_id INTEGER NOT NULL,
                 avia_ptr_lang VARCHAR(6) NOT NULL,
                 model VARCHAR(255),
                 PRIMARY KEY (avia_ptr_id, avia_ptr_lang),
-                FOREIGN KEY (avia_ptr_id, avia_ptr_lang) REFERENCES autumn_polymorphic_nonfiction (nonfiction_ptr_id, nonfiction_ptr_lang) ON DELETE CASCADE
+                FOREIGN KEY (avia_ptr_id, avia_ptr_lang) REFERENCES ascetic_polymorphic_nonfiction (nonfiction_ptr_id, nonfiction_ptr_lang) ON DELETE CASCADE
             );
         """
     }
@@ -131,7 +131,7 @@ class TestModelTranslation(unittest.TestCase):
         class Author(Model):
 
             class Mapper(object):
-                db_table = 'autumn_polymorphic_author'
+                db_table = 'ascetic_polymorphic_author'
                 defaults = {'bio': 'No bio available'}
                 validations = {'first_name': validators.Length(),
                                'last_name': (validators.Length(), lambda x: x != 'BadGuy!' or 'Bad last name', )}
@@ -146,22 +146,22 @@ class TestModelTranslation(unittest.TestCase):
             )
 
             class Mapper(PolymorphicMapper):
-                name = 'autumn.contrib.tests.test_polymorphic.Book'
-                db_table = 'autumn_polymorphic_book'
+                name = 'ascetic.contrib.tests.test_polymorphic.Book'
+                db_table = 'ascetic_polymorphic_book'
                 polymorphic = True
 
         class Nonfiction(Book):
 
             class Mapper(PolymorphicMapper):
-                name = 'autumn.contrib.tests.test_polymorphic.Nonfiction'
-                db_table = 'autumn_polymorphic_nonfiction'
+                name = 'ascetic.contrib.tests.test_polymorphic.Nonfiction'
+                db_table = 'ascetic_polymorphic_nonfiction'
                 polymorphic = True
 
         class Avia(Nonfiction):
 
             class Mapper(PolymorphicMapper):
-                name = 'autumn.contrib.tests.test_polymorphic.Avia'
-                db_table = 'autumn_polymorphic_avia'
+                name = 'ascetic.contrib.tests.test_polymorphic.Avia'
+                db_table = 'ascetic_polymorphic_avia'
                 polymorphic = True
 
         return locals()
@@ -176,7 +176,7 @@ class TestModelTranslation(unittest.TestCase):
     def setUp(self):
         IdentityMap().disable()
         db = get_db()
-        for table in ('autumn_polymorphic_author', 'autumn_polymorphic_book',):
+        for table in ('ascetic_polymorphic_author', 'ascetic_polymorphic_book',):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 
     def test_book(self):

@@ -1,6 +1,6 @@
 build/
 dist/
-autumn2.egg-info/
+ascetic.egg-info/
 .comments
 .gis
 sqlbuilder

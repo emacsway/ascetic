@@ -7,8 +7,8 @@ from threading import local
 from uuid import uuid4
 from sqlbuilder import smartsql
 from sqlbuilder.smartsql.compilers import mysql, sqlite
-from autumn import settings
-from autumn.utils import resolve
+from ascetic import settings
+from ascetic.utils import resolve
 
 try:
     str = unicode  # Python 2.* compatible
@@ -164,7 +164,7 @@ class Database(object):
         self._begin_level = max(0, self._begin_level - 1)
         if self._begin_level == 0:
             self.connection.commit()
-            from autumn.models import IdentityMap
+            from ascetic.models import IdentityMap
             IdentityMap().clear()
         else:
             self.savepoint_commit()
@@ -173,7 +173,7 @@ class Database(object):
         self._begin_level = max(0, self._begin_level - 1)
         if self._begin_level == 0:
             self.connection.rollback()
-            from autumn.models import IdentityMap
+            from ascetic.models import IdentityMap
             IdentityMap().clear()
         else:
             self.savepoint_rollback()

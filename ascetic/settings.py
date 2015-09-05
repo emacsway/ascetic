@@ -4,7 +4,7 @@ DATABASES_MYSQL = {
     'default': {
         'engine': "mysql",
         'user': "devel",
-        'db': "devel_autumn",
+        'db': "devel_ascetic",
         'passwd': "devel",
         'debug': True,
         'initial_sql': "SET NAMES 'UTF8';",
@@ -15,7 +15,7 @@ DATABASES_POSTGRESQL = {
     'default': {
         'engine': "postgresql",
         'user': "devel",
-        'database': "devel_autumn",
+        'database': "devel_ascetic",
         'password': "devel",
         'debug': True,
         'initial_sql': "SET NAMES 'UTF8';",
@@ -26,9 +26,9 @@ DATABASES = DATABASES_POSTGRESQL
 
 DEBUG = True
 
-SIGNAL_SENDER = 'autumn.signals.send_signal'
+SIGNAL_SENDER = 'ascetic.signals.send_signal'
 
-LOGGER_INIT = 'autumn.settings.init_logger'
+LOGGER_INIT = 'ascetic.settings.init_logger'
 
 
 def init_logger(settings):
@@ -37,7 +37,7 @@ def init_logger(settings):
         import warnings
         warnings.simplefilter('default')
 
-        logger = logging.getLogger('autumn')
+        logger = logging.getLogger('ascetic')
         logger.setLevel(logging.DEBUG)
         ch = logging.StreamHandler()
         ch.setLevel(logging.DEBUG)
@@ -46,7 +46,7 @@ def init_logger(settings):
         logger.addHandler(ch)
 
 try:
-    m = __import__(os.getenv('AUTUMN_SETTINGS', 'autumn_settings'))
+    m = __import__(os.getenv('ASCETIC_SETTINGS', 'ascetic_settings'))
 except ImportError:
     pass
 else:

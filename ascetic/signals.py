@@ -78,5 +78,5 @@ def send_signal(signal, *a, **kw):
 
 from . import settings
 from .utils import resolve
-if settings.SIGNAL_SENDER != 'autumn.signals.send_signal':
+if settings.SIGNAL_SENDER != 'ascetic.signals.send_signal':
     send_signal = resolve(settings.SIGNAL_SENDER)

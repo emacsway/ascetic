@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 import unittest
-from autumn import validators
-from autumn import utils
-from autumn.databases import get_db
-from autumn.models import Model, ForeignKey, IdentityMap
+from ascetic import validators
+from ascetic import utils
+from ascetic.databases import get_db
+from ascetic.models import Model, ForeignKey, IdentityMap
 from sqlbuilder import smartsql
 from sqlbuilder.smartsql.tests import TestSmartSQL
 
@@ -42,8 +42,8 @@ class TestUtils(unittest.TestCase):
     maxDiff = None
 
     def test_resolve(self):
-        from autumn.databases import Database
-        self.assertTrue(utils.resolve('autumn.databases.Database') is Database)
+        from ascetic.databases import Database
+        self.assertTrue(utils.resolve('ascetic.databases.Database') is Database)
 
 
 class TestModels(unittest.TestCase):
@@ -52,8 +52,8 @@ class TestModels(unittest.TestCase):
 
     create_sql = {
         'postgresql': """
-            DROP TABLE IF EXISTS autumn_tests_author CASCADE;
-            CREATE TABLE autumn_tests_author (
+            DROP TABLE IF EXISTS ascetic_tests_author CASCADE;
+            CREATE TABLE ascetic_tests_author (
                 id serial NOT NULL PRIMARY KEY,
                 first_name VARCHAR(40) NOT NULL,
                 last_name VARCHAR(40) NOT NULL,
@@ -63,12 +63,12 @@ class TestModels(unittest.TestCase):
             CREATE TABLE books (
                 id serial NOT NULL PRIMARY KEY,
                 title VARCHAR(255),
-                author_id integer REFERENCES autumn_tests_author(id) ON DELETE CASCADE
+                author_id integer REFERENCES ascetic_tests_author(id) ON DELETE CASCADE
             );
          """,
         'mysql': """
-            DROP TABLE IF EXISTS autumn_tests_author CASCADE;
-            CREATE TABLE autumn_tests_author (
+            DROP TABLE IF EXISTS ascetic_tests_author CASCADE;
+            CREATE TABLE ascetic_tests_author (
                 id INT(11) NOT NULL auto_increment,
                 first_name VARCHAR(40) NOT NULL,
                 last_name VARCHAR(40) NOT NULL,
@@ -80,13 +80,13 @@ class TestModels(unittest.TestCase):
                 id INT(11) NOT NULL auto_increment,
                 title VARCHAR(255),
                 author_id INT(11),
-                FOREIGN KEY (author_id) REFERENCES autumn_tests_author(id),
+                FOREIGN KEY (author_id) REFERENCES ascetic_tests_author(id),
                 PRIMARY KEY (id)
             );
          """,
         'sqlite3': """
-            DROP TABLE IF EXISTS autumn_tests_author;
-            CREATE TABLE autumn_tests_author (
+            DROP TABLE IF EXISTS ascetic_tests_author;
+            CREATE TABLE ascetic_tests_author (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               first_name VARCHAR(40) NOT NULL,
               last_name VARCHAR(40) NOT NULL,
@@ -97,7 +97,7 @@ class TestModels(unittest.TestCase):
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               title VARCHAR(255),
               author_id INT(11),
-              FOREIGN KEY (author_id) REFERENCES autumn_tests_author(id)
+              FOREIGN KEY (author_id) REFERENCES ascetic_tests_author(id)
             );
         """
     }
@@ -105,10 +105,10 @@ class TestModels(unittest.TestCase):
     @classmethod
     def create_models(cls):
         class Author(Model):
-            # books = OneToMany('autumn.tests.models.Book')
+            # books = OneToMany('ascetic.tests.models.Book')
 
             class Mapper(object):
-                db_table = 'autumn_tests_author'
+                db_table = 'ascetic_tests_author'
                 defaults = {'bio': 'No bio available'}
                 validations = {'first_name': validators.Length(),
                                'last_name': (validators.Length(), lambda x: x != 'BadGuy!' or 'Bad last name', )}
@@ -131,7 +131,7 @@ class TestModels(unittest.TestCase):
     def setUp(self):
         IdentityMap().disable()
         db = get_db()
-        for table in ('autumn_tests_author', 'books'):
+        for table in ('ascetic_tests_author', 'books'):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 
     def test_model(self):
@@ -228,18 +228,18 @@ class TestModels(unittest.TestCase):
         if get_db().engine == 'postgresql':
             self.assertListEqual(
                 fields,
-                ['"autumn_tests_author"."id"',
-                 '"autumn_tests_author"."first_name"',
-                 '"autumn_tests_author"."last_name"',
-                 '"autumn_tests_author"."bio"', ]
+                ['"ascetic_tests_author"."id"',
+                 '"ascetic_tests_author"."first_name"',
+                 '"ascetic_tests_author"."last_name"',
+                 '"ascetic_tests_author"."bio"', ]
             )
         else:
             self.assertListEqual(
                 fields,
-                ['`autumn_tests_author`.`id`',
-                 '`autumn_tests_author`.`first_name`',
-                 '`autumn_tests_author`.`last_name`',
-                 '`autumn_tests_author`.`bio`', ]
+                ['`ascetic_tests_author`.`id`',
+                 '`ascetic_tests_author`.`first_name`',
+                 '`ascetic_tests_author`.`last_name`',
+                 '`ascetic_tests_author`.`bio`', ]
             )
 
         if get_db().engine == 'postgresql':
@@ -249,18 +249,18 @@ class TestModels(unittest.TestCase):
 
         q = t.q
         if get_db().engine == 'postgresql':
-            self.assertEqual(q.result.db.compile(q)[0], '''SELECT "autumn_tests_author"."id", "autumn_tests_author"."first_name", "autumn_tests_author"."last_name", "autumn_tests_author"."bio" FROM "autumn_tests_author"''')
+            self.assertEqual(q.result.db.compile(q)[0], '''SELECT "ascetic_tests_author"."id", "ascetic_tests_author"."first_name", "ascetic_tests_author"."last_name", "ascetic_tests_author"."bio" FROM "ascetic_tests_author"''')
         else:
-            self.assertEqual(q.result.db.compile(q)[0], """SELECT `autumn_tests_author`.`id`, `autumn_tests_author`.`first_name`, `autumn_tests_author`.`last_name`, `autumn_tests_author`.`bio` FROM `autumn_tests_author`""")
+            self.assertEqual(q.result.db.compile(q)[0], """SELECT `ascetic_tests_author`.`id`, `ascetic_tests_author`.`first_name`, `ascetic_tests_author`.`last_name`, `ascetic_tests_author`.`bio` FROM `ascetic_tests_author`""")
         self.assertEqual(len(q), 3)
         for obj in q:
             self.assertTrue(isinstance(obj, Author))
 
         q = q.where(t.id == b.author_id)
         if get_db().engine == 'postgresql':
-            self.assertEqual(q.result.db.compile(q)[0], """SELECT "autumn_tests_author"."id", "autumn_tests_author"."first_name", "autumn_tests_author"."last_name", "autumn_tests_author"."bio" FROM "autumn_tests_author" WHERE "autumn_tests_author"."id" = %s""")
+            self.assertEqual(q.result.db.compile(q)[0], """SELECT "ascetic_tests_author"."id", "ascetic_tests_author"."first_name", "ascetic_tests_author"."last_name", "ascetic_tests_author"."bio" FROM "ascetic_tests_author" WHERE "ascetic_tests_author"."id" = %s""")
         else:
-            self.assertEqual(q.result.db.compile(q)[0], """SELECT `autumn_tests_author`.`id`, `autumn_tests_author`.`first_name`, `autumn_tests_author`.`last_name`, `autumn_tests_author`.`bio` FROM `autumn_tests_author` WHERE `autumn_tests_author`.`id` = %s""")
+            self.assertEqual(q.result.db.compile(q)[0], """SELECT `ascetic_tests_author`.`id`, `ascetic_tests_author`.`first_name`, `ascetic_tests_author`.`last_name`, `ascetic_tests_author`.`bio` FROM `ascetic_tests_author` WHERE `ascetic_tests_author`.`id` = %s""")
         self.assertEqual(len(q), 1)
         self.assertTrue(isinstance(q[0], Author))
 
@@ -284,8 +284,8 @@ class TestCompositeRelation(unittest.TestCase):
 
     create_sql = {
         'postgresql': """
-            DROP TABLE IF EXISTS autumn_composite_author CASCADE;
-            CREATE TABLE autumn_composite_author (
+            DROP TABLE IF EXISTS ascetic_composite_author CASCADE;
+            CREATE TABLE ascetic_composite_author (
                 id integer NOT NULL,
                 lang VARCHAR(6) NOT NULL,
                 first_name VARCHAR(40) NOT NULL,
@@ -293,19 +293,19 @@ class TestCompositeRelation(unittest.TestCase):
                 bio TEXT,
                 PRIMARY KEY (id, lang)
             );
-            DROP TABLE IF EXISTS autumn_composite_book CASCADE;
-            CREATE TABLE autumn_composite_book (
+            DROP TABLE IF EXISTS ascetic_composite_book CASCADE;
+            CREATE TABLE ascetic_composite_book (
                 id integer NOT NULL,
                 lang VARCHAR(6) NOT NULL,
                 title VARCHAR(255),
                 author_id integer,
                 PRIMARY KEY (id, lang),
-                FOREIGN KEY (author_id, lang) REFERENCES autumn_composite_author (id, lang) ON DELETE CASCADE
+                FOREIGN KEY (author_id, lang) REFERENCES ascetic_composite_author (id, lang) ON DELETE CASCADE
             );
          """,
         'mysql': """
-            DROP TABLE IF EXISTS autumn_composite_author CASCADE;
-            CREATE TABLE autumn_composite_author (
+            DROP TABLE IF EXISTS ascetic_composite_author CASCADE;
+            CREATE TABLE ascetic_composite_author (
                 id INT(11) NOT NULL,
                 lang VARCHAR(6) NOT NULL,
                 first_name VARCHAR(40) NOT NULL,
@@ -313,19 +313,19 @@ class TestCompositeRelation(unittest.TestCase):
                 bio TEXT,
                 PRIMARY KEY (id, lang)
             );
-            DROP TABLE IF EXISTS autumn_composite_book CASCADE;
-            CREATE TABLE autumn_composite_book (
+            DROP TABLE IF EXISTS ascetic_composite_book CASCADE;
+            CREATE TABLE ascetic_composite_book (
                 id INT(11) NOT NULL,
                 lang VARCHAR(6) NOT NULL,
                 title VARCHAR(255),
                 author_id INT(11),
                 PRIMARY KEY (id, lang),
-                FOREIGN KEY (author_id, lang) REFERENCES autumn_composite_author (id, lang)
+                FOREIGN KEY (author_id, lang) REFERENCES ascetic_composite_author (id, lang)
             );
          """,
         'sqlite3': """
-            DROP TABLE IF EXISTS autumn_composite_author;
-            CREATE TABLE autumn_composite_author (
+            DROP TABLE IF EXISTS ascetic_composite_author;
+            CREATE TABLE ascetic_composite_author (
                 id INTEGER NOT NULL,
                 lang VARCHAR(6) NOT NULL,
                 first_name VARCHAR(40) NOT NULL,
@@ -333,14 +333,14 @@ class TestCompositeRelation(unittest.TestCase):
                 bio TEXT,
                 PRIMARY KEY (id, lang)
             );
-            DROP TABLE IF EXISTS autumn_composite_book;
-            CREATE TABLE autumn_composite_book (
+            DROP TABLE IF EXISTS ascetic_composite_book;
+            CREATE TABLE ascetic_composite_book (
                 id INTEGER NOT NULL,
                 lang VARCHAR(6) NOT NULL,
                 title VARCHAR(255),
                 author_id INT(11),
                 PRIMARY KEY (id, lang),
-                FOREIGN KEY (author_id, lang) REFERENCES autumn_composite_author (id, lang)
+                FOREIGN KEY (author_id, lang) REFERENCES ascetic_composite_author (id, lang)
             );
         """
     }
@@ -348,10 +348,10 @@ class TestCompositeRelation(unittest.TestCase):
     @classmethod
     def create_models(cls):
         class AuthorC(Model):
-            # books = OneToMany('autumn.tests.models.Book')
+            # books = OneToMany('ascetic.tests.models.Book')
 
             class Mapper(object):
-                db_table = 'autumn_composite_author'
+                db_table = 'ascetic_composite_author'
                 defaults = {'bio': 'No bio available'}
                 validations = {'first_name': validators.Length(),
                                'last_name': (validators.Length(), lambda x: x != 'BadGuy!' or 'Bad last name', )}
@@ -360,7 +360,7 @@ class TestCompositeRelation(unittest.TestCase):
             author = ForeignKey(AuthorC, rel_field=('id', 'lang'), field=('author_id', 'lang'), rel_name='books')
 
             class Mapper(object):
-                db_table = 'autumn_composite_book'
+                db_table = 'ascetic_composite_book'
 
         return locals()
 
@@ -374,7 +374,7 @@ class TestCompositeRelation(unittest.TestCase):
     def setUp(self):
         IdentityMap().disable()
         db = get_db()
-        for table in ('autumn_composite_author', 'autumn_composite_book'):
+        for table in ('ascetic_composite_author', 'ascetic_composite_book'):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 
     def test_model(self):

@@ -1,7 +1,7 @@
 import unittest
-from autumn.databases import get_db
-from autumn.models import Model, IdentityMap, mapper_registry
-from autumn.contrib.modeltranslation import TranslationMapper
+from ascetic.databases import get_db
+from ascetic.models import Model, IdentityMap, mapper_registry
+from ascetic.contrib.modeltranslation import TranslationMapper
 
 Author = None
 
@@ -23,8 +23,8 @@ class TestModelTranslation(unittest.TestCase):
 
     create_sql = {
         'postgresql': """
-            DROP TABLE IF EXISTS autumn_modeltranslation_author CASCADE;
-            CREATE TABLE autumn_modeltranslation_author (
+            DROP TABLE IF EXISTS ascetic_modeltranslation_author CASCADE;
+            CREATE TABLE ascetic_modeltranslation_author (
                 id serial NOT NULL PRIMARY KEY,
                 first_name_en VARCHAR(40),
                 first_name_ru VARCHAR(40),
@@ -34,8 +34,8 @@ class TestModelTranslation(unittest.TestCase):
             );
          """,
         'mysql': """
-            DROP TABLE IF EXISTS autumn_modeltranslation_author CASCADE;
-            CREATE TABLE autumn_modeltranslation_author (
+            DROP TABLE IF EXISTS ascetic_modeltranslation_author CASCADE;
+            CREATE TABLE ascetic_modeltranslation_author (
                 id INT(11) NOT NULL auto_increment,
                 first_name_en VARCHAR(40),
                 first_name_ru VARCHAR(40),
@@ -46,8 +46,8 @@ class TestModelTranslation(unittest.TestCase):
             );
          """,
         'sqlite3': """
-            DROP TABLE IF EXISTS autumn_modeltranslation_author;
-            CREATE TABLE autumn_modeltranslation_author (
+            DROP TABLE IF EXISTS ascetic_modeltranslation_author;
+            CREATE TABLE ascetic_modeltranslation_author (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 first_name VARCHAR(40),
                 first_name VARCHAR(40),
@@ -63,7 +63,7 @@ class TestModelTranslation(unittest.TestCase):
 
         class Author(Model):
             class Mapper(TranslationMapper):
-                db_table = 'autumn_modeltranslation_author'
+                db_table = 'ascetic_modeltranslation_author'
                 map = {'first_alias': 'first_name'}
                 defaults = {'bio': 'No bio available'}
                 translated_fields = ('first_alias', 'last_name')
@@ -80,7 +80,7 @@ class TestModelTranslation(unittest.TestCase):
     def setUp(self):
         IdentityMap().disable()
         db = get_db()
-        for table in ('autumn_modeltranslation_author',):
+        for table in ('ascetic_modeltranslation_author',):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 
     def test_meta(self):
