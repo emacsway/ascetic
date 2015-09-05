@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='autumn2',
-    version='0.7.2.13',
+    version='0.7.2.14',
 
     packages = find_packages(),
     include_package_data=True,
