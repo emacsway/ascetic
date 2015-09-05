@@ -8,3 +8,4 @@ sqlbuilder
 *.pyc
 MANIFEST
 TODO
+docs/_build

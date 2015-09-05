@@ -1,6 +1,16 @@
-=================================
+.. ascetic documentation master file, created by
+   sphinx-quickstart on Sun Sep  6 00:17:03 2015.
+   You can adapt this file completely to your liking, but it should at least
+   contain the root `toctree` directive.
+
+
 Ascetic, a lightweight Python ORM
 =================================
+
+Contents:
+
+.. toctree::
+   :maxdepth: 2
 
 Ascetic exists as a super-lightweight Object-relational mapper (ORM) for Python.
 Ascetic based on "`Data Mapper <http://martinfowler.com/eaaCatalog/dataMapper.html>`_" and "`Table Data Gateway <http://martinfowler.com/eaaCatalog/tableDataGateway.html>`_".
@@ -195,3 +205,12 @@ See also:
 * `simpleql <https://bitbucket.org/robertodealmeida/simpleql/>`_ SQL table using nothing but Python to build the query
 * `Generator expressions <http://code.activestate.com/recipes/442447/>`__ for database requests (Python recipe)
 * `Object Relational Mappers (ORMs) <https://wiki.python.org/moin/HigherLevelDatabaseProgramming>`_
+
+
+Indices and tables
+==================
+
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`
+
