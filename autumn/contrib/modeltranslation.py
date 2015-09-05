@@ -68,6 +68,9 @@ class TranslationMapper(object):
         else:
             self.columns[field.column] = field
 
+    def _make_identity_key(self, model, pk):
+        return super(TranslationMapper, self)._make_identity_key(model, pk) + (self.get_language(),)
+
     def translate_column(self, name, lang=None):
         return '{}_{}'.format(name, lang or self.get_language())
 

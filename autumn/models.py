@@ -4,7 +4,7 @@ import copy
 import collections
 import operator
 from functools import reduce
-from weakref import WeakValueDictionary
+from weakref import WeakValueDictionary, WeakKeyDictionary
 
 from sqlbuilder import smartsql
 from . import signals
@@ -124,7 +124,8 @@ class IdentityMap(object):
 
     INFLUENCING_LEVELS = (REPEATABLE_READ, SERIALIZABLE)
 
-    _isolation_level = READ_UNCOMMITTED  # Disabled currently
+    # _isolation_level = READ_UNCOMMITTED  # Disabled currently
+    _isolation_level = SERIALIZABLE
 
     class Nonexistent(object):
         pass
@@ -485,10 +486,16 @@ class Mapper(object):
             if isinstance(field, Field):
                 delattr(model, name)
 
+        if getattr(self, 'relationships', None):  # TODO: Give me better name (relationships, references, set_relations, ...)
+            for key, rel in self.set_relations.items():
+                setattr(model, key, rel)
+
         # TODO: use dir() instead __dict__ to handle relations in abstract classes,
         # add templates support for related_name,
         # support copy.
-        for key, rel in model.__dict__.items():
+        # for key, rel in model.__dict__.items():
+        for key in dir(model):
+            rel = getattr(model, key, None)
             if isinstance(rel, Relation) and hasattr(rel, 'add_related'):
                 try:
                     rel.add_related(model)
@@ -553,12 +560,13 @@ class Mapper(object):
         else:
             data_mapped = dict(data)
         identity_map = IdentityMap(self._using)
-        key = (self.model, tuple(data_mapped[i] for i in to_tuple(self.pk)))
+        key = self._make_identity_key(self.model, tuple(data_mapped[i] for i in to_tuple(self.pk)))
         if identity_map.exists(key):
             try:
                 return identity_map.get(key)
             except ObjectDoesNotExist:
                 pass
+        # TODO: obj = self._do_load(data_mapped)
         obj = self.model(**data_mapped)
         self.set_original_data(obj, data_mapped)
         self.mark_new(obj, False)
@@ -573,6 +581,9 @@ class Mapper(object):
             # check field is not virtual like annotation and subquery.
             data = {self.fields[name].column: value for name, value in data.items() if not getattr(self.fields[name], 'virtual', False)}
         return data
+
+    def _make_identity_key(self, model, pk):
+        return (model, to_tuple(pk))
 
     def set_original_data(self, obj, data):
         # TODO: use WeakKeyDictionary?
@@ -675,7 +686,7 @@ class Mapper(object):
         cursor = databases[self._using].execute(self._insert_query(obj))
         if not all(to_tuple(self.get_pk(obj))):
             self.set_pk(obj, self.base_query.result.db.last_insert_id(cursor))
-        IdentityMap(self._using).add((self.model, to_tuple(self.get_pk(obj))))
+        IdentityMap(self._using).add(self._make_identity_key(self.model, self.get_pk(obj)))
 
     def _update(self, obj):
         databases[self._using].execute(self._update_query(obj))
@@ -700,14 +711,14 @@ class Mapper(object):
 
         databases[self._using].execute(self._delete_query(obj))
         self.send_signal(obj, signal='post_delete', using=self._using)
-        IdentityMap(self._using).remove((self.model, to_tuple(self.get_pk(obj))))
+        IdentityMap(self._using).remove(self._make_identity_key(self.model, self.get_pk(obj)))
         return True
 
     def get(self, _obj_pk=None, **kwargs):
         """Returns Q object"""
         if _obj_pk is not None:
             identity_map = IdentityMap(self._using)
-            key = (self.model, to_tuple(_obj_pk))
+            key = self._make_identity_key(self.model, _obj_pk)
             if identity_map.exists(key):
                 return identity_map.get(key)
             try:
@@ -784,8 +795,7 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    def __hash__(self):
-        return hash(self._get_pk())
+    # Use basic __hash__() based on id(self) to be used in WeakKeyDictionary()
 
     def _get_pk(self):
         return mapper_registry[self.__class__].get_pk(self)
@@ -1028,6 +1038,8 @@ class BoundRelation(object):
 class Relation(object):
 
     def __init__(self, rel_model, rel_field=None, field=None, on_delete=cascade, rel_name=None, query=None, rel_query=None):
+        if isinstance(rel_model, Mapper):
+            rel_model = rel_model.model
         self._rel_model_or_name = rel_model
         self._rel_field = rel_field and to_tuple(rel_field)
         self._field = field and to_tuple(field)

@@ -163,7 +163,6 @@ class TestModels(unittest.TestCase):
 
         self.assertTrue(kurt == Author.get(kurt.id))
         self.assertTrue(kurt != tom)
-        self.assertEqual(hash(kurt), kurt.pk)
 
         # Test ForeignKey
         self.assertEqual(slww.author.first_name, 'Tom')
