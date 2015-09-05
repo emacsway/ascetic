@@ -35,25 +35,25 @@ def is_model(cls):
     return cls in model_registry.values()
 
 
-class AutumnException(Exception):
+class OrmException(Exception):
     pass
 
 
-class ModelNotRegistered(AutumnException):
+class ModelNotRegistered(OrmException):
     pass
 
 
-class MapperNotRegistered(AutumnException):
+class MapperNotRegistered(OrmException):
     pass
 
 
-class ObjectDoesNotExist(AutumnException):
+class ObjectDoesNotExist(OrmException):
     pass
 
 
 class BaseRegistry(dict):
 
-    exception_class = AutumnException
+    exception_class = OrmException
 
     def __getitem__(self, key):
         try:
