@@ -26,8 +26,6 @@ DATABASES = DATABASES_POSTGRESQL
 
 DEBUG = True
 
-SIGNAL_SENDER = 'ascetic.signals.send_signal'
-
 LOGGER_INIT = 'ascetic.settings.init_logger'
 
 

@@ -7,8 +7,8 @@ from functools import reduce
 from weakref import WeakValueDictionary, WeakKeyDictionary
 
 from sqlbuilder import smartsql
-from . import signals
 from .databases import databases
+from .signals import pre_save, post_save, pre_delete, post_delete, pre_init, post_init, class_prepared
 from .utils import classproperty, cached_property
 from .validators import ValidationError
 
@@ -510,7 +510,7 @@ class Mapper(object):
                 except ModelNotRegistered:
                     pass
         self._do_prepare_model(model)
-        signals.send_signal(signal='class_prepared', sender=model, using=self._using)
+        class_prepared.send(sender=model, using=self._using)
 
     def _inherit(self, successor, parents):
         for base in parents:  # recursive
@@ -614,11 +614,6 @@ class Mapper(object):
             return set(self.fields)
         return set(k for k, v in self.get_original_data(obj).items() if getattr(obj, k, None) != v)
 
-    def send_signal(self, sender, *a, **kw):
-        """Sends signal"""
-        kw.update({'sender': self.model, 'instance': sender})
-        return signals.send_signal(*a, **kw)
-
     def set_defaults(self, obj):
         """Sets attribute defaults."""
         for name, field in self.fields.items():
@@ -674,10 +669,10 @@ class Mapper(object):
         """Sets defaults, validates and inserts into or updates database"""
         self.set_defaults(obj)
         self.validate(obj, fields=self.get_changed(obj))
-        self.send_signal(obj, signal='pre_save', using=self._using)
+        pre_save.send(sender=self.model, instance=obj, using=self._using)
         is_new = self.is_new(obj)
         result = self._insert(obj) if is_new else self._update(obj)
-        self.send_signal(obj, signal='post_save', created=is_new, using=self._using)
+        post_save.send(sender=self.model, instance=obj, created=is_new, using=self._using)
         self.update_original_data(obj, **self.unload(obj, to_db=False))
         self.mark_new(obj, False)
         return result
@@ -700,7 +695,7 @@ class Mapper(object):
             return False
         visited.add(self)
 
-        self.send_signal(obj, signal='pre_delete', using=self._using)
+        pre_delete.send(sender=self.model, instance=obj, using=self._using)
         for key, rel in self.relations.items():
             if isinstance(rel, OneToMany):
                 for child in getattr(obj, key).iterator():
@@ -710,7 +705,7 @@ class Mapper(object):
                 rel.on_delete(obj, child, rel, self._using, visited)
 
         databases[self._using].execute(self._delete_query(obj))
-        self.send_signal(obj, signal='post_delete', using=self._using)
+        post_delete.send(sender=self.model, instance=obj, using=self._using)
         IdentityMap(self._using).remove(self._make_identity_key(self.model, self.get_pk(obj)))
         return True
 
@@ -782,12 +777,12 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
     def __init__(self, *args, **kwargs):
         """Allows setting of fields using kwargs"""
         mapper = mapper_registry[self.__class__]
-        signals.send_signal(signal='pre_init', sender=self.__class__, instance=self, args=args, kwargs=kwargs, using=mapper._using)
+        pre_init.send(sender=self.__class__, instance=self, args=args, kwargs=kwargs, using=mapper._using)
         if args:
             self.__dict__.update(zip(mapper.fields.keys(), args))
         if kwargs:
             self.__dict__.update(kwargs)
-        signals.send_signal(signal='post_init', sender=self.__class__, instance=self, using=mapper._using)
+        post_init.send(sender=self.__class__, instance=self, using=mapper._using)
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self._get_pk() == other._get_pk()
@@ -940,7 +935,7 @@ class Table(smartsql.Table):
         parts = name.split(smartsql.LOOKUP_SEP, 1)
         field = parts[0]
         # result = {'field': field, }
-        # signals.send_signal(signal='field_conversion', sender=self, result=result, field=field, model=self.model)
+        # field_conversion.send(sender=self, result=result, field=field, model=self.model)
         # field = result['field']
 
         if field == 'pk':

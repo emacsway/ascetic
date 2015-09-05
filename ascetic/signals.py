@@ -1,6 +1,9 @@
 from __future__ import absolute_import
 from weakref import WeakKeyDictionary, WeakValueDictionary
 
+__all__ = ('Signal', 'pre_save', 'post_save', 'pre_delete', 'post_delete',
+           'pre_init', 'post_init', 'class_prepared', 'field_conversion')
+
 
 class Signal(object):
     def __init__(self):
@@ -48,35 +51,17 @@ class Signal(object):
         self._weak_cache = set()
 
 
-def connect(signal, name=None, sender=None):
+def connect(signal, sender=None, weak=True, receiver_id=None):
     def decorator(fn):
-        signal.connect(fn, name, sender)
+        signal.connect(fn, sender, weak, receiver_id)
         return fn
     return decorator
 
-signals = {}
-for name in ['pre_save', 'post_save', 'pre_delete', 'post_delete',
-             'pre_init', 'post_init', 'class_prepared', 'field_conversion']:
-    signals[name] = Signal()
-
-globals().update(signals)
-
-
-def send_signal(signal, *a, **kw):
-    """Send signal abstract handler.
-
-    You can to override it by settings.SIGNAL_SEND_HANDLER
-    For example, you can use one from next event systems:
-    https://github.com/jesusabdullah/pyee
-    https://bitbucket.org/jek/blinker
-    https://launchpad.net/pydispatcher
-    https://github.com/theojulienne/PySignals
-    https://github.com/olivierverdier/dispatch
-    and others.
-    """
-    return signals[signal].send(*a, **kw)
-
-from . import settings
-from .utils import resolve
-if settings.SIGNAL_SENDER != 'ascetic.signals.send_signal':
-    send_signal = resolve(settings.SIGNAL_SENDER)
+pre_save = Signal()
+post_save = Signal()
+pre_delete = Signal()
+post_delete = Signal()
+pre_init = Signal()
+post_init = Signal()
+class_prepared = Signal()
+field_conversion = Signal()
