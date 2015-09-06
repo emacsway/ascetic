@@ -29,12 +29,12 @@ class Signal(object):
             receiver_id = self._make_id(receiver)
         if receiver_id:
             try:
+                self._weak_cache.discard(receiver or self._receivers[sender][receiver_id])
                 del self._receivers[sender][receiver_id]
             except KeyError:
                 pass
-            self._weak_cache.discard(receiver)
         else:
-            raise ValueError('a receiver or a name must be provided')
+            raise ValueError('a receiver or a receiver_id must be provided')
 
     def send(self, sender, *args, **kwargs):
         responses = []
