@@ -4,15 +4,15 @@
    contain the root `toctree` directive.
 
 
-Ascetic, a lightweight Python ORM
-=================================
+Ascetic, a lightweight Python datamapper ORM
+============================================
 
 Contents:
 
 .. toctree::
    :maxdepth: 2
 
-Ascetic exists as a super-lightweight Object-relational mapper (ORM) for Python.
+Ascetic exists as a super-lightweight datamapper ORM (Object-Relational Mapper) for Python.
 Ascetic based on "`Data Mapper <http://martinfowler.com/eaaCatalog/dataMapper.html>`_" and "`Table Data Gateway <http://martinfowler.com/eaaCatalog/tableDataGateway.html>`_".
 It also supports "`Active Record <http://www.martinfowler.com/eaaCatalog/activeRecord.html>`_" wrapper, but it's just a wrapper, - model class is free from service logic.
 Ascetic ORM follows the `KISS principle <http://en.wikipedia.org/wiki/KISS_principle>`_.
@@ -88,7 +88,7 @@ We setup our objects like so:
 
 ::
 
-    from ascetic.model import Model, ForeignKey, OneToMany
+    from ascetic.model import Model, ForeignKey, OneToMany, get_mapper
 
     class Author(Model):
 
@@ -111,10 +111,10 @@ Creation
 ::
 
     james = Author(first_name='James', last_name='Joyce')
-    james.save()
+    get_mapper(Author).save(james)  # Datamapper way
 
     u = Book(title='Ulysses', author_id=james.id)
-    u.save()
+    u.save()  # Use ActiveRecord wrapper
 
 
 Retrieval
