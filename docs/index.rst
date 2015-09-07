@@ -12,6 +12,8 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
+.. contents:: Table of Contents
+
 Ascetic exists as a super-lightweight datamapper ORM (Object-Relational Mapper) for Python.
 Ascetic based on "`Data Mapper <http://martinfowler.com/eaaCatalog/dataMapper.html>`_" and "`Table Data Gateway <http://martinfowler.com/eaaCatalog/tableDataGateway.html>`_".
 It also supports "`Active Record <http://www.martinfowler.com/eaaCatalog/activeRecord.html>`_" wrapper, but it's just a wrapper, - model class is free from service logic.
