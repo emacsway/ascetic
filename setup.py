@@ -18,7 +18,7 @@ setup(
     license="MIT License",
     keywords = "ORM Database SQL",
     install_requires=[
-        'sqlbuilder >= 0.7.9.8'
+        'sqlbuilder >= 0.7.9.9'
     ],
     classifiers = [
         'Development Status :: 1 - Planning',

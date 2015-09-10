@@ -759,7 +759,7 @@ class ModelBase(type):
             bases.append(mapper_class)
         if not isinstance(mapper_class, new_cls.mapper_class):
             bases.append(new_cls.mapper_class)
-        
+
         NewMapper = type("{}Mapper".format(new_cls.__name__), tuple(bases), {})
         NewMapper(new_cls)
         for k in to_tuple(mapper_registry[new_cls].pk):
@@ -953,6 +953,14 @@ class Table(smartsql.Table):
             field = self._mapper.fields[field].column
         parts[0] = field
         return super(Table, self).__getattr__(smartsql.LOOKUP_SEP.join(parts))
+
+
+@cr
+class TableAlias(smartsql.TableAlias, Table):
+    """Table alias class"""
+    @property
+    def _mapper(self):
+        return getattr(self._table, '_mapper', None)  # Can be subquery
 
 
 def cascade(parent, child, parent_rel, using, visited):
