@@ -2,8 +2,8 @@
 import unittest
 from ascetic import validators
 from ascetic import utils
-from ascetic.databases import get_db
-from ascetic.models import Model, ForeignKey, IdentityMap
+from ascetic.databases import databases
+from ascetic.models import Model, ForeignKey, IdentityMap, mapper_registry
 from sqlbuilder import smartsql
 from sqlbuilder.smartsql.tests import TestSmartSQL
 
@@ -123,14 +123,14 @@ class TestModels(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        db = get_db()
+        db = databases['default']
         db.cursor().execute(cls.create_sql[db.engine])
         for model_name, model in cls.create_models().items():
             globals()[model_name] = model
 
     def setUp(self):
         IdentityMap().disable()
-        db = get_db()
+        db = databases['default']
         for table in ('ascetic_tests_author', 'books'):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 
@@ -223,9 +223,9 @@ class TestModels(unittest.TestCase):
         self.assertRaises(validators.ValidationError, a.validate)
 
         print '### Testing for smartsql integration'
-        t = Author.s
-        fields = [t.q.result.db.compile(i)[0] for i in t.get_fields()]
-        if get_db().engine == 'postgresql':
+        author_mapper = mapper_registry[Author]
+        fields = [author_mapper.query.db.compile(i)[0] for i in author_mapper.get_sql_fields()]
+        if author_mapper.query.db.engine == 'postgresql':
             self.assertListEqual(
                 fields,
                 ['"ascetic_tests_author"."id"',
@@ -242,25 +242,25 @@ class TestModels(unittest.TestCase):
                  '`ascetic_tests_author`.`bio`', ]
             )
 
-        if get_db().engine == 'postgresql':
+        if author_mapper.query.db.engine == 'postgresql':
             self.assertEqual(Book.s.author, '"book"."author_id"')
         else:
             self.assertEqual(Book.s.author, '`book`.`author_id`')
 
-        q = t.q
-        if get_db().engine == 'postgresql':
-            self.assertEqual(q.result.db.compile(q)[0], '''SELECT "ascetic_tests_author"."id", "ascetic_tests_author"."first_name", "ascetic_tests_author"."last_name", "ascetic_tests_author"."bio" FROM "ascetic_tests_author"''')
+        q = author_mapper.query
+        if q.db.engine == 'postgresql':
+            self.assertEqual(q.db.compile(q)[0], '''SELECT "ascetic_tests_author"."id", "ascetic_tests_author"."first_name", "ascetic_tests_author"."last_name", "ascetic_tests_author"."bio" FROM "ascetic_tests_author"''')
         else:
-            self.assertEqual(q.result.db.compile(q)[0], """SELECT `ascetic_tests_author`.`id`, `ascetic_tests_author`.`first_name`, `ascetic_tests_author`.`last_name`, `ascetic_tests_author`.`bio` FROM `ascetic_tests_author`""")
+            self.assertEqual(q.db.compile(q)[0], """SELECT `ascetic_tests_author`.`id`, `ascetic_tests_author`.`first_name`, `ascetic_tests_author`.`last_name`, `ascetic_tests_author`.`bio` FROM `ascetic_tests_author`""")
         self.assertEqual(len(q), 3)
         for obj in q:
             self.assertTrue(isinstance(obj, Author))
 
-        q = q.where(t.id == b.author_id)
-        if get_db().engine == 'postgresql':
-            self.assertEqual(q.result.db.compile(q)[0], """SELECT "ascetic_tests_author"."id", "ascetic_tests_author"."first_name", "ascetic_tests_author"."last_name", "ascetic_tests_author"."bio" FROM "ascetic_tests_author" WHERE "ascetic_tests_author"."id" = %s""")
+        q = q.where(author_mapper.sql_table.id == b.author_id)
+        if q.db.engine == 'postgresql':
+            self.assertEqual(q.db.compile(q)[0], """SELECT "ascetic_tests_author"."id", "ascetic_tests_author"."first_name", "ascetic_tests_author"."last_name", "ascetic_tests_author"."bio" FROM "ascetic_tests_author" WHERE "ascetic_tests_author"."id" = %s""")
         else:
-            self.assertEqual(q.result.db.compile(q)[0], """SELECT `ascetic_tests_author`.`id`, `ascetic_tests_author`.`first_name`, `ascetic_tests_author`.`last_name`, `ascetic_tests_author`.`bio` FROM `ascetic_tests_author` WHERE `ascetic_tests_author`.`id` = %s""")
+            self.assertEqual(q.db.compile(q)[0], """SELECT `ascetic_tests_author`.`id`, `ascetic_tests_author`.`first_name`, `ascetic_tests_author`.`last_name`, `ascetic_tests_author`.`bio` FROM `ascetic_tests_author` WHERE `ascetic_tests_author`.`id` = %s""")
         self.assertEqual(len(q), 1)
         self.assertTrue(isinstance(q[0], Author))
 
@@ -366,14 +366,14 @@ class TestCompositeRelation(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        db = get_db()
+        db = databases['default']
         db.cursor().execute(cls.create_sql[db.engine])
         for model_name, model in cls.create_models().items():
             globals()[model_name] = model
 
     def setUp(self):
         IdentityMap().disable()
-        db = get_db()
+        db = databases['default']
         for table in ('ascetic_composite_author', 'ascetic_composite_book'):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 

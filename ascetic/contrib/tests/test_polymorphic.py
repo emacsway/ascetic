@@ -1,6 +1,6 @@
 import unittest
 from ascetic import validators
-from ascetic.databases import get_db
+from ascetic.databases import databases
 from ascetic.contrib.polymorphic import PolymorphicMapper
 from ascetic.models import Model, ForeignKey, IdentityMap, mapper_registry
 
@@ -168,14 +168,14 @@ class TestModelTranslation(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        db = get_db()
+        db = databases['default']
         db.cursor().execute(cls.create_sql[db.engine])
         for model_name, model in cls.create_models().items():
             globals()[model_name] = model
 
     def setUp(self):
         IdentityMap().disable()
-        db = get_db()
+        db = databases['default']
         for table in ('ascetic_polymorphic_author', 'ascetic_polymorphic_book',):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 

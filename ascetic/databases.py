@@ -379,12 +379,12 @@ class Databases(object):
             # copied into the new process, along with the thread local variables.
             # return getattr(self._databases, alias)
             db = getattr(self._databases, alias)
-            if db._thread_id != self.get_thread_id():
+            if db._thread_id != _thread.get_ident():
                 raise ValueError
             return db
         except (AttributeError, ValueError):
             db = self.create_database(alias)
-            db._thread_id = self.get_thread_id()
+            db._thread_id = _thread.get_ident()
             setattr(self._databases, alias, db)
             return db
 
