@@ -1,6 +1,7 @@
 from __future__ import absolute_import
-import collections
+import os
 import logging
+import collections
 from time import time
 from functools import wraps
 from threading import local
@@ -9,6 +10,11 @@ from sqlbuilder import smartsql
 from sqlbuilder.smartsql.compilers import mysql, sqlite
 from ascetic import settings
 from ascetic.utils import resolve
+
+try:
+    import _thread
+except ImportError:
+    import thread as _thread  # Python < 3.*
 
 try:
     str = unicode  # Python 2.* compatible
@@ -351,16 +357,36 @@ class Databases(object):
     def create_database(self, alias):
         return Database.factory(alias=alias, **self._settings[alias])
 
+    @staticmethod
+    def get_thread_id():
+        """Returs id for current thread."""
+        return (os.getpid(), _thread.get_ident())
+
     def close(self):
         for alias in self:
             del self[alias]
 
     def __getitem__(self, alias):
         try:
-            return getattr(self._databases, alias)
-        except AttributeError:
-            setattr(self._databases, alias, self.create_database(alias))
-            return getattr(self._databases, alias)
+            # Prevent situation like this:
+            # http://stackoverflow.com/a/7285933
+            # http://stackoverflow.com/questions/7285541/pythons-multiprocessing-does-not-play-nicely-with-threading-local
+            # A fork() completely duplicates the process object, along with its
+            # memory, loaded code, open file descriptors and threads.
+            # Moreover, the new process usually shares the very same process
+            # object within the kernel until the first memory write operation.
+            # This basically means that the local data structures are also being
+            # copied into the new process, along with the thread local variables.
+            # return getattr(self._databases, alias)
+            db = getattr(self._databases, alias)
+            if db._thread_id != self.get_thread_id():
+                raise ValueError
+            return db
+        except (AttributeError, ValueError):
+            db = self.create_database(alias)
+            db._thread_id = self.get_thread_id()
+            setattr(self._databases, alias, db)
+            return db
 
     def __delitem__(self, alias):
         if hasattr(self._databases, alias):
