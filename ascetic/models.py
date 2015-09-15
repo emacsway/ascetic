@@ -1318,7 +1318,7 @@ class OneToMany(Relation):
 
 class ManyToMany(BaseRelation):
 
-    def __init__(self, rel_model, rel_relation, relation):
+    def __init__(self, rel_model, rel_relation, relation):  # associated_model, associated_relation???
         if isinstance(rel_model, Mapper):
             rel_model = rel_model.model
         self._rel_model_or_name = rel_model
