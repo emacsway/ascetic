@@ -1095,6 +1095,12 @@ class Relation(BaseRelation):
         for f, v in zip(rel_field, to_tuple(value)):
             setattr(rel_obj, f, v)
 
+    def validate_rel_obj(self, rel_obj):
+        if not isinstance(rel_obj, self.rel_model):
+            raise Exception('Object should be an instance of "{0!r}", not "{1!r}".'.format(
+                mapper_registry[self.rel_model], type(rel_obj)
+            ))
+
     def _get_cache(self, instance, key):
         try:
             return instance._cache[key]
@@ -1161,10 +1167,7 @@ class ForeignKey(Relation):
 
     def set(self, instance, value):
         if is_model_instance(value):
-            if not isinstance(value, self.rel_model):
-                raise Exception('Value should be an instance of "{0}" or primary key of related instance.'.format(
-                    mapper_registry[self.rel_model].name
-                ))
+            self.validate_rel_obj(value)
             self._set_cache(instance, self.name, value)
             value = self.get_rel_value(value)
         self.set_value(instance, value)
@@ -1227,10 +1230,7 @@ class OneToMany(Relation):
         val = self.get_value(instance)
         for cached_obj in object_list:
             if is_model_instance(cached_obj):
-                if not isinstance(cached_obj, self.rel_model):
-                    raise Exception('Value should be an instance of "{0}" or primary key of related instance.'.format(
-                        mapper_registry[self.rel_model].name
-                    ))
+                self.validate_rel_obj(cached_obj)
                 if self.get_rel_value(cached_obj) != val:
                     return
         self.get(instance)._cache = object_list

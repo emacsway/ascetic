@@ -39,8 +39,6 @@ class GenericForeignKey(ForeignKey):
         return model_registry[getattr(instance, self.type_field)]
 
     def rel_query(self, instance):
-        if isinstance(instance, type):
-            raise TypeError('"instance" argument should be instance of model, not class.')
         if isinstance(self._rel_query, collections.Callable):
             return self._rel_query(self, instance)
         else:
@@ -122,10 +120,7 @@ class GenericRelation(OneToMany):
         val = self.get_value(instance)
         for cached_obj in object_list:
             if is_model_instance(cached_obj):
-                if not isinstance(cached_obj, self.rel_model):
-                    raise Exception('Value should be an instance of "{0}" or primary key of related instance.'.format(
-                        mapper_registry[self.rel_model].name
-                    ))
+                self.validate_rel_obj(cached_obj)
                 if (self.get_rel_value(cached_obj) != val or
                         getattr(cached_obj, rel_type_field) != mapper_registry[instance.__class__].name):
                     return
