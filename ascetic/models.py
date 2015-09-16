@@ -311,19 +311,17 @@ class Result(smartsql.Result):
         for key, q in self._prefetch.items():
             rel = relations[key]
             # recursive handle prefetch
-            field = rel.field
-            rel_field = rel.rel_field
 
             cond = reduce(operator.or_, (rel.get_rel_where(obj) for obj in self._cache))
             q = q.where(cond)
             rows = list(q)
             for obj in self._cache:
                 val = [i for i in rows if rel.get_rel_value(i) == rel.get_value(obj)]
-                if isinstance(rel.relation, (ForeignKey, OneToOne)):
+                if isinstance(rel, (ForeignKey, OneToOne)):
                     val = val[0] if val else None
-                    if val and isinstance(rel.relation, OneToOne):
+                    if val and isinstance(rel, OneToOne):
                         setattr(val, rel.rel_name, obj)
-                elif isinstance(rel.relation, OneToMany):
+                elif isinstance(rel, OneToMany):
                     for i in val:
                         setattr(i, rel.rel_name, obj)
                 setattr(obj, key, val)
@@ -484,7 +482,7 @@ class Mapper(object):
                 delattr(model, name)
 
         if getattr(self, 'relationships', None):  # TODO: Give me better name (relationships, references, set_relations, ...)
-            for key, rel in self.set_relations.items():
+            for key, rel in self.relationships.items():
                 setattr(model, key, rel)
 
         # TODO: use dir() instead __dict__ to handle relations in abstract classes,
@@ -495,15 +493,16 @@ class Mapper(object):
             rel = getattr(model, key, None)
             if isinstance(rel, Relation) and hasattr(rel, 'setup_related'):
                 try:
-                    rel.setup_related(model)
+                    rel.bind(model).setup_related()
                 except ModelNotRegistered:
                     pass
 
         for rel_model in model_registry.values():
             for key, rel in mapper_registry[rel_model].relations.items():
+                rel = rel.bind(rel_model)
                 try:
-                    if hasattr(rel, 'setup_related') and rel.rel_model(rel_model) is model:
-                        rel.setup_related(rel_model)
+                    if hasattr(rel, 'setup_related') and rel.rel_model is model:
+                        rel.setup_related()
                 except ModelNotRegistered:
                     pass
         self._do_prepare_model(model)
@@ -538,12 +537,7 @@ class Mapper(object):
 
     @property
     def bound_relations(self):  # local_relations() ???
-        result = {}
-        for name in dir(self.model):
-            attr = getattr(self.model, name, None)
-            if isinstance(attr, Relation):
-                result[name] = attr
-        return {k: BoundRelation(self.model, v) for k, v in self.relations.items()}
+        return {k: rel.bind(self.model) for k, rel in self.relations.items()}
 
     def load(self, data, from_db=True):
         if from_db:
@@ -693,7 +687,7 @@ class Mapper(object):
         visited.add(self)
 
         pre_delete.send(sender=self.model, instance=obj, using=self._using)
-        for key, rel in self.relations.items():
+        for key, rel in self.bound_relations.items():
             if isinstance(rel, OneToMany):
                 for child in getattr(obj, key).iterator():
                     rel.on_delete(obj, child, rel, self._using, visited)
@@ -881,12 +875,12 @@ class SelectRelatedMapping(object):
             obj, rel_obj = objs[i], objs[i + 1]
             name = rel.name
             rel_name = rel.rel_name
-            if isinstance(rel.relation, (ForeignKey, OneToOne)):
+            if isinstance(rel, (ForeignKey, OneToOne)):
                 setattr(obj, name, rel_obj)
                 if not hasattr(rel_obj, rel_name):
                     setattr(rel_obj, rel_name, [])
                 getattr(rel_obj, rel_name).append[obj]
-            elif isinstance(rel.relation, OneToMany):
+            elif isinstance(rel, OneToMany):
                 if not hasattr(obj, name):
                     setattr(obj, name, [])
                 getattr(obj, name).append[rel_obj]
@@ -938,7 +932,7 @@ class Table(smartsql.Table):
         if field == 'pk':
             field = self._mapper.pk
         elif isinstance(self._mapper.relations.get(field, None), Relation):
-            field = self._mapper.relations.get(field).field(self._mapper.model)
+            field = self._mapper.bound_relations.get(field).field
 
         if type(field) == tuple:
             if len(parts) > 1:
@@ -975,110 +969,28 @@ def do_nothing(parent, child, parent_rel, using, visited):
 # TODO: descriptor for FileField? Or custom postgresql data type? See http://www.postgresql.org/docs/8.4/static/sql-createtype.html
 
 
-class BoundRelation(object):
-
-    def __init__(self, owner, relation):
-        self._owner = owner
-        self._relation = relation
-
-    @cached_property
-    def relation(self):
-        return self._relation
+class BaseRelation(object):
 
     @cached_property
     def descriptor_class(self):
-        return self._relation.descriptor_class(self._owner)
+        for cls in self.owner.__mro__:
+            for name, attr in cls.__dict__.items():
+                if attr is self.descriptor:
+                    return cls
+        raise Exception("Can't find descriptor class for {} in {}.".format(self.owner, self.owner.__mro__))
 
     @cached_property
     def descriptor_object(self):
-        return self._relation.descriptor_object(self._owner)
-
-    @cached_property
-    def model(self):
-        return self._relation.model(self._owner)
-
-    @cached_property
-    def query(self):
-        return self._relation.query(self._owner)
-
-    @cached_property
-    def rel_query(self):
-        return self._relation.rel_query(self._owner)
-
-    @cached_property
-    def name(self):
-        return self._relation.name(self._owner)
-
-    @cached_property
-    def field(self):
-        return self._relation.field(self._owner)
-
-    @cached_property
-    def rel(self):
-        return self._relation.rel(self._owner)
-
-    @cached_property
-    def rel_name(self):
-        return self._relation.rel_name(self._owner)
-
-    @cached_property
-    def rel_model(self):
-        return self._relation.rel_model(self._owner)
-
-    @cached_property
-    def rel_field(self):
-        return self._relation.rel_field(self._owner)
-
-    def get_where(self, rel_obj):
-        return self._relation.get_where(self._owner, rel_obj)
-
-    def get_rel_where(self, obj):
-        return self._relation.get_rel_where(self._owner, obj)
-
-    def get_join_where(self):
-        return self._relation.get_join_where(self._owner)
-
-    def get_value(self, obj):
-        return self._relation.get_value(self._owner, obj)
-
-    def get_rel_value(self, rel_obj):
-        return self._relation.get_rel_value(self._owner, rel_obj)
-
-    def set_value(self, obj, value):
-        return self._relation.set_value(self._owner, obj, value)
-
-    def set_rel_value(self, rel_obj, value):
-        return self._relation.set_rel_value(self._owner, rel_obj, value)
-
-    def __get__(self, instance, owner):
-        return self._relation.__get__(instance, self._owner)
-
-    def __set__(self, instance, value):
-        return self._relation.__get__(instance, value)
-
-    def __delete__(self, instance):
-        return self._relation.__delete__(instance)
-
-
-class BaseRelation(object):
-
-    def descriptor_class(self, owner):
-        for cls in owner.__mro__:
+        for cls in self.owner.__mro__:
             for name, attr in cls.__dict__.items():
-                if attr is self:
-                    return cls
-        raise Exception("Can't find descriptor class for {} in {}.".format(owner, owner.__mro__))
-
-    def descriptor_object(self, owner):
-        for cls in owner.__mro__:
-            for name, attr in cls.__dict__.items():
-                if attr is self:
+                if attr is self.descriptor:
                     return getattr(cls, name)
         raise Exception("Can't find descriptor object")
 
-    def polymorphic_class(self, owner):
-        result_cls = self.descriptor_class(owner)
-        mro_reversed = list(reversed(owner.__mro__))
+    @cached_property
+    def polymorphic_class(self):
+        result_cls = self.descriptor_class
+        mro_reversed = list(reversed(self.owner.__mro__))
         mro_reversed = mro_reversed[mro_reversed.index(result_cls) + 1:]
         for cls in mro_reversed:
             if mapper_registry[cls].__dict__.get('polymorphic'):
@@ -1086,22 +998,42 @@ class BaseRelation(object):
             result_cls = cls
         return result_cls
 
-    def name(self, owner):
-        self_id = id(self)
-        for name in dir(owner):
-            if id(getattr(owner, name, None)) == self_id:
+    @cached_property
+    def name(self):
+        self_id = id(self.descriptor)
+        for name in dir(self.owner):
+            if id(getattr(self.owner, name, None)) == self_id:
                 return name
 
-    def model(self, owner):
-        return self.polymorphic_class(owner)
+    @cached_property
+    def model(self):
+        return self.polymorphic_class
 
-    def rel_model(self, owner):
+    @cached_property
+    def rel_model(self):
         if isinstance(self._rel_model_or_name, string_types):
             name = self._rel_model_or_name
             if name == 'self':
-                name = mapper_registry[self.model(owner)].name
+                name = mapper_registry[self.model].name
             return model_registry[name]
         return self._rel_model_or_name
+
+    def bind(self, owner):
+        c = copy.copy(self)
+        c.owner = owner
+        c.descriptor = getattr(self, 'descriptor', self)
+        return c
+
+    def __get__(self, instance, owner):
+        if not instance:
+            return self
+        return self.bind(owner).get(instance)
+
+    def __set__(self, instance, value):
+        self.bind(instance.__class__).set(instance, value)
+
+    def __delete__(self, instance):
+        self.bind(instance.__class__).delete(instance)
 
 
 class Relation(BaseRelation):
@@ -1117,58 +1049,61 @@ class Relation(BaseRelation):
         self._query = query
         self._rel_query = rel_query
 
-    def rel(self, owner):
-        return getattr(self.rel_model(owner), self.rel_name(owner))
+    @cached_property
+    def rel(self):
+        return getattr(self.rel_model, self.rel_name)
 
-    def query(self, owner):
+    @cached_property
+    def query(self):
         if isinstance(self._query, collections.Callable):
-            return self._query(self, owner)
+            return self._query(self, self.owner)
         else:
-            return mapper_registry[self.model(owner)].query
+            return mapper_registry[self.model].query
 
-    def rel_query(self, owner):
+    @cached_property
+    def rel_query(self):
         if isinstance(self._rel_query, collections.Callable):
-            return self._rel_query(self, owner)
+            return self._rel_query(self, self.owner)
         else:
-            return mapper_registry[self.rel_model(owner)].query
+            return mapper_registry[self.rel_model].query
 
-    def get_where(self, owner, rel_obj):
-        t = mapper_registry[self.model(owner)].sql_table
-        return t.__getattr__(self.name(owner)) == self.get_rel_value(owner, rel_obj)  # Use CompositeExpr
+    def get_where(self, rel_obj):
+        t = mapper_registry[self.model].sql_table
+        return t.__getattr__(self.name) == self.get_rel_value(rel_obj)  # Use CompositeExpr
         return reduce(operator.and_,
                       ((t.__getattr__(f) == getattr(rel_obj, rf, None))
-                       for f, rf in zip(self.field(owner), self.rel_field(owner))))
+                       for f, rf in zip(self.field, self.rel_field)))
 
-    def get_rel_where(self, owner, obj):
-        t = mapper_registry[self.rel_model(owner)].sql_table
-        return t.__getattr__(self.rel_name(owner)) == self.get_value(owner, obj)  # Use CompositeExpr
+    def get_rel_where(self, obj):
+        t = mapper_registry[self.rel_model].sql_table
+        return t.__getattr__(self.rel_name) == self.get_value(obj)  # Use CompositeExpr
         return reduce(operator.and_,
                       ((t.__getattr__(rf) == getattr(obj, f, None))
-                       for f, rf in zip(self.field(owner), self.rel_field(owner))))
+                       for f, rf in zip(self.field, self.rel_field)))
 
-    def get_join_where(self, owner):
-        t = mapper_registry[self.model(owner)].sql_table
-        rt = mapper_registry[self.rel_model(owner)].sql_table
-        return t.__getattr__(self.name(owner)) == rt.__getattr__(self.rel_name(owner))  # Use CompositeExpr
+    def get_join_where(self):
+        t = mapper_registry[self.model].sql_table
+        rt = mapper_registry[self.rel_model].sql_table
+        return t.__getattr__(self.name) == rt.__getattr__(self.rel_name)  # Use CompositeExpr
         return reduce(operator.and_,
                       ((t.__getattr__(f) == rt.__getattr__(rf))
-                       for f, rf in zip(self.field(owner), self.rel_field(owner))))
+                       for f, rf in zip(self.field, self.rel_field)))
 
-    def get_value(self, owner, obj):
-        return tuple(getattr(obj, f, None) for f in self.field(owner))
+    def get_value(self, obj):
+        return tuple(getattr(obj, f, None) for f in self.field)
 
-    def get_rel_value(self, owner, rel_obj):
-        return tuple(getattr(rel_obj, f, None) for f in self.rel_field(owner))
+    def get_rel_value(self, rel_obj):
+        return tuple(getattr(rel_obj, f, None) for f in self.rel_field)
 
-    def set_value(self, owner, obj, value):
-        field = self.field(owner)
+    def set_value(self, obj, value):
+        field = self.field
         if value is None:
             value = (None,) * len(field)
         for f, v in zip(field, to_tuple(value)):
             setattr(obj, f, v)
 
-    def set_rel_value(self, owner, rel_obj, value):
-        rel_field = self.rel_field(owner)
+    def set_rel_value(self, rel_obj, value):
+        rel_field = self.rel_field
         if value is None:
             value = (None,) * len(rel_field)
         for f, v in zip(rel_field, to_tuple(value)):
@@ -1190,84 +1125,83 @@ class Relation(BaseRelation):
 
 class ForeignKey(Relation):
 
-    def field(self, owner):
-        return self._field or ('{0}_id'.format(self.rel_model(owner).__name__.lower()),)
+    @cached_property
+    def field(self):
+        return self._field or ('{0}_id'.format(self.rel_model.__name__.lower()),)
 
-    def rel_field(self, owner):
-        return self._rel_field or to_tuple(mapper_registry[self.rel_model(owner)].pk)
+    @cached_property
+    def rel_field(self):
+        return self._rel_field or to_tuple(mapper_registry[self.rel_model].pk)
 
-    def rel_name(self, owner):
+    @cached_property
+    def rel_name(self):
         if self._rel_name is None:
-            return '{0}_set'.format(self.model(owner).__name__.lower())
+            return '{0}_set'.format(self.model.__name__.lower())
         elif isinstance(self._rel_name, collections.Callable):
-            return self._rel_name(self, owner)
+            return self._rel_name(self, self.owner)
         else:
             return self._rel_name
 
-    def setup_related(self, owner):
+    def setup_related(self):
         try:
-            rel_model = self.rel_model(owner)
+            rel_model = self.rel_model
         except ModelNotRegistered:
             return
 
-        if self.rel_name(owner) in mapper_registry[rel_model].relations:
+        if self.rel_name in mapper_registry[rel_model].relations:
             return
 
-        setattr(rel_model, self.rel_name(owner), OneToMany(
-            owner, self.field(owner), self.rel_field(owner),
-            on_delete=self.on_delete, rel_name=self.name(owner),
+        setattr(rel_model, self.rel_name, OneToMany(
+            self.owner, self.field, self.rel_field,
+            on_delete=self.on_delete, rel_name=self.name,
             rel_query=self._query
         ))
 
-    def __get__(self, instance, owner):
-        if not instance:
-            return self
-        val = self.get_value(owner, instance)
+    def get(self, instance):
+        val = self.get_value(instance)
         if not all(val):
             return None
 
-        cached_obj = self._get_cache(instance, self.name(owner))
-        rel_field = self.rel_field(owner)
-        rel_model = self.rel_model(owner)
-        if cached_obj is None or self.get_rel_value(owner, cached_obj) != val:
+        cached_obj = self._get_cache(instance, self.name)
+        rel_field = self.rel_field
+        rel_model = self.rel_model
+        if cached_obj is None or self.get_rel_value(cached_obj) != val:
             if self._rel_query is None and rel_field == to_tuple(mapper_registry[rel_model].pk):
                 obj = rel_model.get(val)  # to use IdentityMap
             else:
-                obj = self.rel_query(owner).where(self.get_rel_where(owner, instance))[0]
-            self._set_cache(instance, self.name(owner), obj)
-        return self._get_cache(instance, self.name(owner))
+                obj = self.rel_query.where(self.get_rel_where(instance))[0]
+            self._set_cache(instance, self.name, obj)
+        return self._get_cache(instance, self.name)
 
-    def __set__(self, instance, value):
-        owner = instance.__class__
+    def set(self, instance, value):
         if is_model_instance(value):
-            if not isinstance(value, self.rel_model(owner)):
+            if not isinstance(value, self.rel_model):
                 raise Exception('Value should be an instance of "{0}" or primary key of related instance.'.format(
-                    mapper_registry[self.rel_model(owner)].name
+                    mapper_registry[self.rel_model].name
                 ))
-            self._set_cache(instance, self.name(owner), value)
-            value = self.get_rel_value(owner, value)
-        self.set_value(owner, instance, value)
+            self._set_cache(instance, self.name, value)
+            value = self.get_rel_value(value)
+        self.set_value(instance, value)
 
-    def __delete__(self, instance):
-        owner = instance.__class__
-        self._set_cache(instance, self.name(owner), None)
-        self.set_value(owner, instance, None)
+    def delete(self, instance):
+        self._set_cache(instance, self.name, None)
+        self.set_value(instance, None)
 
 
 class OneToOne(ForeignKey):
 
-    def setup_related(self, owner):
+    def setup_related(self):
         try:
-            rel_model = self.rel_model(owner)
+            rel_model = self.rel_model
         except ModelNotRegistered:
             return
 
-        if self.rel_name(owner) in mapper_registry[rel_model].relations:
+        if self.rel_name in mapper_registry[rel_model].relations:
             return
 
-        setattr(rel_model, self.rel_name(owner), OneToOne(
-            owner, self.field(owner), self.rel_field(owner),
-            on_delete=self.on_delete, rel_name=self.name(owner),
+        setattr(rel_model, self.rel_name, OneToOne(
+            self.owner, self.field, self.rel_field,
+            on_delete=self.on_delete, rel_name=self.name,
             rel_query=self._query
         ))
         # self.on_delete = do_nothing
@@ -1277,43 +1211,43 @@ class OneToMany(Relation):
 
     # TODO: is it need setup_related() here to construct related FK?
 
-    def field(self, owner):
-        return self._field or to_tuple(mapper_registry[self.model(owner)].pk)
+    @cached_property
+    def field(self):
+        return self._field or to_tuple(mapper_registry[self.model].pk)
 
-    def rel_field(self, owner):
-        return self._rel_field or ('{0}_id'.format(self.model(owner).__name__.lower()),)
+    @cached_property
+    def rel_field(self):
+        return self._rel_field or ('{0}_id'.format(self.model.__name__.lower()),)
 
-    def rel_name(self, owner):
-        return self._rel_name or self.model(owner).__name__.lower()
+    @cached_property
+    def rel_name(self):
+        return self._rel_name or self.model.__name__.lower()
 
-    def __get__(self, instance, owner):
-        if not instance:
-            return self
-        val = self.get_value(owner, instance)
-        cached_query = self._get_cache(instance, self.name(owner))
+    def get(self, instance):
+        val = self.get_value(instance)
+        cached_query = self._get_cache(instance, self.name)
         # Be sure that value of related fields equals to value of field
         if cached_query is not None and cached_query._cache is not None:
             for cached_obj in cached_query._cache:
-                if self.get_rel_value(owner, cached_obj) != val:
+                if self.get_rel_value(cached_obj) != val:
                     cached_query = None
                     break
         if cached_query is None:
-            q = self.rel_query(owner).where(self.get_rel_where(owner, instance))
-            self._set_cache(instance, self.name(owner), q)
-        return self._get_cache(instance, self.name(owner))
+            q = self.rel_query.where(self.get_rel_where(instance))
+            self._set_cache(instance, self.name, q)
+        return self._get_cache(instance, self.name)
 
-    def __set__(self, instance, object_list):
-        owner = instance.__class__
-        val = self.get_value(owner, instance)
+    def set(self, instance, object_list):
+        val = self.get_value(instance)
         for cached_obj in object_list:
             if is_model_instance(cached_obj):
-                if not isinstance(cached_obj, self.rel_model(owner)):
+                if not isinstance(cached_obj, self.rel_model):
                     raise Exception('Value should be an instance of "{0}" or primary key of related instance.'.format(
-                        mapper_registry[self.rel_model(owner)].name
+                        mapper_registry[self.rel_model].name
                     ))
-                if self.get_rel_value(owner, cached_obj) != val:
+                if self.get_rel_value(cached_obj) != val:
                     return
-        self.__get__(instance, owner)._cache = object_list
+        self.get(instance)._cache = object_list
 
 
 class ManyToMany(BaseRelation):
@@ -1324,12 +1258,3 @@ class ManyToMany(BaseRelation):
         self._rel_model_or_name = rel_model
         self._rel_relation = rel_relation
         self._relation = relation
-
-    def __get__(self, instance, owner):
-        raise NotImplementedError
-
-    def __set__(self, instance, value):
-        raise NotImplementedError
-
-    def __delete__(self, instance):
-        raise NotImplementedError
