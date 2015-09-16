@@ -89,15 +89,15 @@ class GenericRelation(OneToMany):
 
     @cached_property
     def field(self):
-        return getattr(self.rel_model, self.rel_name).rel_field
+        return self.rel.rel_field
 
     @cached_property
     def rel_field(self):
-        return getattr(self.rel_model, self.rel_name).field
+        return self.rel.field
 
     @cached_property
     def rel_type_field(self):
-        return getattr(self.rel_model, self.rel_name).type_field
+        return self.rel.type_field
 
     def get(self, instance):
         rel_type_field = self.rel_type_field

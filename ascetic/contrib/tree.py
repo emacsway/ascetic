@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 from sqlbuilder import smartsql
-from ..models import ForeignKey, to_tuple, mapper_registry
+from ..models import ForeignKey, RelationDescriptor, to_tuple, mapper_registry
 from ..utils import cached_property
 
 # Under construction!!! Not testet yet!!!
@@ -19,11 +19,11 @@ class MpMapper(object):
     PATH_DIGITS = 10
 
     def _do_prepare_model(self, model):
-        setattr(model, 'parent', ForeignKey(
+        setattr(model, 'parent', RelationDescriptor(ForeignKey(
             'self',
             field=tuple('parent_{}'.format(k) for k in to_tuple(self.pk)),
             rel_name="children"
-        ))
+        )))
 
     def _mp_encode(self, value):
         return str(value).replace('&', '&a').replace(self.KEY_SEPARATOR, '&k').replace(self.PATH_SEPARATOR, '&p')
@@ -33,7 +33,7 @@ class MpMapper(object):
 
     @cached_property
     def mp_root(self):
-        return mapper_registry[self.bound_relations['parent'].descriptor_class]
+        return mapper_registry[self.relations['parent'].descriptor_class]
 
     def save(self, obj):
         """Sets content_type and calls parent method."""

@@ -1,10 +1,10 @@
 from __future__ import absolute_import
 import re
 import copy
-import collections
+import weakref
 import operator
+import collections
 from functools import reduce
-from weakref import WeakValueDictionary, WeakKeyDictionary
 
 from sqlbuilder import smartsql
 from .databases import databases
@@ -134,7 +134,7 @@ class IdentityMap(object):
         if not hasattr(databases[alias], 'identity_map'):
             self = databases[alias].identity_map = object.__new__(cls)
             self._cache = WeakCache()
-            self._alive = WeakValueDictionary()
+            self._alive = weakref.WeakValueDictionary()
         return databases[alias].identity_map
 
     def add(self, key, value=None):
@@ -297,7 +297,7 @@ class Result(smartsql.Result):
 
     def prefetch(self, *a, **kw):
         """Prefetch relations"""
-        relations = self._mapper.bound_relations
+        relations = self._mapper.relations
         if a and not a[0]:  # .prefetch(False)
             self._prefetch = {}
         else:
@@ -307,7 +307,7 @@ class Result(smartsql.Result):
         return self
 
     def populate_prefetch(self):
-        relations = self._mapper.bound_relations
+        relations = self._mapper.relations
         for key, q in self._prefetch.items():
             rel = relations[key]
             # recursive handle prefetch
@@ -491,15 +491,17 @@ class Mapper(object):
         # for key, rel in model.__dict__.items():
         for key in dir(model):
             rel = getattr(model, key, None)
-            if isinstance(rel, Relation) and hasattr(rel, 'setup_related'):
+            if isinstance(rel, BaseRelation):
+                rel = RelationDescriptor(rel)
+                setattr(model, key, rel)
+            if isinstance(rel, RelationDescriptor) and hasattr(rel.relation, 'setup_related'):
                 try:
-                    rel.bind(model).setup_related()
+                    rel.get_bound_relation(model).setup_related()
                 except ModelNotRegistered:
                     pass
 
         for rel_model in model_registry.values():
             for key, rel in mapper_registry[rel_model].relations.items():
-                rel = rel.bind(rel_model)
                 try:
                     if hasattr(rel, 'setup_related') and rel.rel_model is model:
                         rel.setup_related()
@@ -527,17 +529,13 @@ class Mapper(object):
         return c
 
     @property
-    def relations(self):
+    def relations(self):  # bound_relations(), local_relations() ???
         result = {}
         for name in dir(self.model):
             attr = getattr(self.model, name, None)
-            if isinstance(attr, Relation):
-                result[name] = attr
+            if isinstance(attr, RelationDescriptor):
+                result[name] = attr.get_bound_relation(self.model)
         return result
-
-    @property
-    def bound_relations(self):  # local_relations() ???
-        return {k: rel.bind(self.model) for k, rel in self.relations.items()}
 
     def load(self, data, from_db=True):
         if from_db:
@@ -687,7 +685,7 @@ class Mapper(object):
         visited.add(self)
 
         pre_delete.send(sender=self.model, instance=obj, using=self._using)
-        for key, rel in self.bound_relations.items():
+        for key, rel in self.relations.items():
             if isinstance(rel, OneToMany):
                 for child in getattr(obj, key).iterator():
                     rel.on_delete(obj, child, rel, self._using, visited)
@@ -932,7 +930,7 @@ class Table(smartsql.Table):
         if field == 'pk':
             field = self._mapper.pk
         elif isinstance(self._mapper.relations.get(field, None), Relation):
-            field = self._mapper.bound_relations.get(field).field
+            field = self._mapper.relations.get(field).field
 
         if type(field) == tuple:
             if len(parts) > 1:
@@ -975,7 +973,7 @@ class BaseRelation(object):
     def descriptor_class(self):
         for cls in self.owner.__mro__:
             for name, attr in cls.__dict__.items():
-                if attr is self.descriptor:
+                if attr is self.descriptor():
                     return cls
         raise Exception("Can't find descriptor class for {} in {}.".format(self.owner, self.owner.__mro__))
 
@@ -983,7 +981,7 @@ class BaseRelation(object):
     def descriptor_object(self):
         for cls in self.owner.__mro__:
             for name, attr in cls.__dict__.items():
-                if attr is self.descriptor:
+                if attr is self.descriptor():
                     return getattr(cls, name)
         raise Exception("Can't find descriptor object")
 
@@ -1000,7 +998,7 @@ class BaseRelation(object):
 
     @cached_property
     def name(self):
-        self_id = id(self.descriptor)
+        self_id = id(self.descriptor())
         for name in dir(self.owner):
             if id(getattr(self.owner, name, None)) == self_id:
                 return name
@@ -1021,19 +1019,7 @@ class BaseRelation(object):
     def bind(self, owner):
         c = copy.copy(self)
         c.owner = owner
-        c.descriptor = getattr(self, 'descriptor', self)
         return c
-
-    def __get__(self, instance, owner):
-        if not instance:
-            return self
-        return self.bind(owner).get(instance)
-
-    def __set__(self, instance, value):
-        self.bind(instance.__class__).set(instance, value)
-
-    def __delete__(self, instance):
-        self.bind(instance.__class__).delete(instance)
 
 
 class Relation(BaseRelation):
@@ -1051,7 +1037,7 @@ class Relation(BaseRelation):
 
     @cached_property
     def rel(self):
-        return getattr(self.rel_model, self.rel_name)
+        return getattr(self.rel_model, self.rel_name).relation
 
     @cached_property
     def query(self):
@@ -1151,11 +1137,11 @@ class ForeignKey(Relation):
         if self.rel_name in mapper_registry[rel_model].relations:
             return
 
-        setattr(rel_model, self.rel_name, OneToMany(
+        setattr(rel_model, self.rel_name, RelationDescriptor(OneToMany(
             self.owner, self.field, self.rel_field,
             on_delete=self.on_delete, rel_name=self.name,
             rel_query=self._query
-        ))
+        )))
 
     def get(self, instance):
         val = self.get_value(instance)
@@ -1199,11 +1185,11 @@ class OneToOne(ForeignKey):
         if self.rel_name in mapper_registry[rel_model].relations:
             return
 
-        setattr(rel_model, self.rel_name, OneToOne(
+        setattr(rel_model, self.rel_name, RelationDescriptor(OneToOne(
             self.owner, self.field, self.rel_field,
             on_delete=self.on_delete, rel_name=self.name,
             rel_query=self._query
-        ))
+        )))
         # self.on_delete = do_nothing
 
 
@@ -1258,3 +1244,29 @@ class ManyToMany(BaseRelation):
         self._rel_model_or_name = rel_model
         self._rel_relation = rel_relation
         self._relation = relation
+
+
+class RelationDescriptor(object):
+
+    def __init__(self, relation):
+        relation.descriptor = weakref.ref(self)
+        self.relation = relation
+        self._bound_caches = {}
+
+    def get_bound_relation(self, owner):
+        try:
+            return self._bound_caches[owner]
+        except KeyError:
+            self._bound_caches[owner] = self.relation.bind(owner)
+            return self.get_bound_relation(owner)
+
+    def __get__(self, instance, owner):
+        if not instance:
+            return self
+        return self.get_bound_relation(owner).get(instance)
+
+    def __set__(self, instance, value):
+        self.get_bound_relation(instance.__class__).set(instance, value)
+
+    def __delete__(self, instance):
+        self.get_bound_relation(instance.__class__).delete(instance)
