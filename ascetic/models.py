@@ -1056,14 +1056,14 @@ class Relation(BaseRelation):
     @cached_property
     def query(self):
         if isinstance(self._query, collections.Callable):
-            return self._query(self, self.owner)
+            return self._query(self)
         else:
             return mapper_registry[self.model].query
 
     @cached_property
     def rel_query(self):
         if isinstance(self._rel_query, collections.Callable):
-            return self._rel_query(self, self.owner)
+            return self._rel_query(self)
         else:
             return mapper_registry[self.rel_model].query
 
@@ -1138,7 +1138,7 @@ class ForeignKey(Relation):
         if self._rel_name is None:
             return '{0}_set'.format(self.model.__name__.lower())
         elif isinstance(self._rel_name, collections.Callable):
-            return self._rel_name(self, self.owner)
+            return self._rel_name(self)
         else:
             return self._rel_name
 

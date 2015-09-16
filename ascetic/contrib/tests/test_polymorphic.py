@@ -142,7 +142,7 @@ class TestModelTranslation(unittest.TestCase):
                 rel_field=('id', 'lang'),
                 field=('author_id', 'lang'),
                 rel_name='books',
-                rel_query=(lambda rel, owner: mapper_registry[rel.rel_model].query)
+                rel_query=(lambda rel: mapper_registry[rel.rel_model].query)
             )
 
             class Mapper(PolymorphicMapper):
