@@ -779,6 +779,9 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    def __dir__(self):
+        return dir(super(Model, self)) + list(mapper_registry[self.__class__].fields)
+
     # Use basic __hash__() based on id(self) to be used in WeakKeyDictionary()
 
     def _get_pk(self):
@@ -1159,7 +1162,7 @@ class ForeignKey(Relation):
         rel_model = self.rel_model
         if cached_obj is None or self.get_rel_value(cached_obj) != val:
             if self._rel_query is None and rel_field == to_tuple(mapper_registry[rel_model].pk):
-                obj = rel_model.get(val)  # to use IdentityMap
+                obj = mapper_registry[rel_model].get(val)  # to use IdentityMap
             else:
                 obj = self.rel_query.where(self.get_rel_where(instance))[0]
             self._set_cache(instance, self.name, obj)

@@ -64,7 +64,7 @@ class GenericForeignKey(ForeignKey):
         rel_model = self.rel_model(instance)
         if not isinstance(cached_obj, rel_model) or self.get_rel_value(cached_obj) != val:
             if self._rel_query is None and rel_field == to_tuple(mapper_registry[rel_model].pk):
-                obj = rel_model.get(val)  # to use IdentityMap
+                obj = mapper_registry[rel_model].get(val)  # to use IdentityMap
             else:
                 obj = self.rel_query(instance).where(self.get_rel_where(instance))
             self._set_cache(instance, self.name, obj)
