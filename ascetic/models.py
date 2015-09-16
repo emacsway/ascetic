@@ -266,8 +266,7 @@ class Result(smartsql.Result):
     def iterator(self):
         """iterator"""
         cursor = self.execute()
-        descr = cursor.description
-        fields = tuple(f[0] for f in descr)
+        fields = tuple(f[0] for f in cursor.description)
         state = {}
         for row in cursor.fetchall():
             yield self._mapping(self, zip(fields, row), state)
