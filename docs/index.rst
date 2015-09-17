@@ -16,9 +16,9 @@ Contents:
 
 Ascetic exists as a super-lightweight datamapper ORM (Object-Relational Mapper) for Python.
 
-| Home Page: https://bitbucket.org/emacsway/ascetic
-| Docs: http://ascetic.readthedocs.org/
-| Pypi: https://pypi.python.org/pypi/ascetic
+* Home Page: https://bitbucket.org/emacsway/ascetic
+* Docs: http://ascetic.readthedocs.org/
+* Pypi: https://pypi.python.org/pypi/ascetic
 
 
 About
