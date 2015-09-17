@@ -15,6 +15,15 @@ Contents:
 .. contents:: Table of Contents
 
 Ascetic exists as a super-lightweight datamapper ORM (Object-Relational Mapper) for Python.
+
+| Home Page: https://bitbucket.org/emacsway/ascetic
+| Docs: http://ascetic.readthedocs.org/
+| Pypi: https://pypi.python.org/pypi/ascetic
+
+
+About
+=====
+
 Ascetic based on "`Data Mapper <http://martinfowler.com/eaaCatalog/dataMapper.html>`_" and "`Table Data Gateway <http://martinfowler.com/eaaCatalog/tableDataGateway.html>`_".
 It also supports "`Active Record <http://www.martinfowler.com/eaaCatalog/activeRecord.html>`_" wrapper, but it's just a wrapper, - model class is free from service logic.
 Ascetic ORM follows the `KISS principle <http://en.wikipedia.org/wiki/KISS_principle>`_.
@@ -40,9 +49,6 @@ Ascetic is released under the MIT License (see LICENSE file for details).
 
 This project is currently under development, and not stable. If you are looking for stable KISS-style ORM, pay attention to `Storm ORM <https://storm.canonical.com/>`__.
 
-| Home Page: https://bitbucket.org/emacsway/ascetic
-| Docs: http://ascetic.readthedocs.org/
-
 
 PostgreSQL Example
 ===================
@@ -62,6 +68,10 @@ Using these tables:
         title VARCHAR(255),
         author_id integer REFERENCES ascetic_tests_models_author(id) ON DELETE CASCADE
     );
+
+
+Configuring
+===========
 
 You can configure in one the following ways:
 
@@ -85,8 +95,59 @@ See file ascetic/settings.py for more details.
             }
         }
     })
-    
-We setup our objects like so:
+
+
+Model declaration
+=================
+
+There is two way to declare models as DataMapper or ActiveRecord.
+
+
+Datamapper way
+--------------
+
+::
+
+    class Author(object):
+
+        def __init__(self, id=None, first_name=None, last_name=None, bio=None):
+            self.id = id
+            self.first_name = first_name
+            self.last_name = last_name
+            self.bio = bio
+
+
+    class AuthorMapper(Mapper):
+            defaults = {'bio': 'No bio available'}
+            validations = {'first_name': (
+                lambda v: len(v) > 1 or "Too short first name",
+                lambda self, key, value: value != self.last_name or "Please, enter another first name",
+            )}
+
+    AuthorMapper(Author)
+
+
+    class Book(object):
+
+        def __init__(self, id=None, title=None, author_id=None):
+            self.id = id
+            self.title = title
+            self.author_id = author_id
+
+
+    class BookMapper(Mapper):
+        db_table = 'books'
+        relationships = {
+            'author': ForeignKey(Author, rel_name='books')
+        }
+
+    BookMapper(Book)
+
+
+ActiveRecord way
+----------------
+
+Indeed, it's not an ActiveRecord, - it's just a wrapper over DataMapper.
 
 ::
 

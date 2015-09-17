@@ -3,6 +3,11 @@ Ascetic, a lightweight Python datamapper ORM
 ============================================
 
 Ascetic exists as a super-lightweight datamapper ORM (Object-Relational Mapper) for Python.
+
+| Home Page: https://bitbucket.org/emacsway/ascetic
+| Docs: http://ascetic.readthedocs.org/
+| Pypi: https://pypi.python.org/pypi/ascetic
+
 Ascetic based on "`Data Mapper <http://martinfowler.com/eaaCatalog/dataMapper.html>`_" and "`Table Data Gateway <http://martinfowler.com/eaaCatalog/tableDataGateway.html>`_".
 It also supports "`Active Record <http://www.martinfowler.com/eaaCatalog/activeRecord.html>`_" wrapper, but it's just a wrapper, - model class is free from service logic.
 Ascetic ORM follows the `KISS principle <http://en.wikipedia.org/wiki/KISS_principle>`_.
@@ -27,9 +32,6 @@ What Ascetic does not? Ascetic does not make any data type conversions (use conn
 Ascetic is released under the MIT License (see LICENSE file for details).
 
 This project is currently under development, and not stable. If you are looking for stable KISS-style ORM, pay attention to `Storm ORM <https://storm.canonical.com/>`__.
-
-| Home Page: https://bitbucket.org/emacsway/ascetic
-| Docs: http://ascetic.readthedocs.org/
 
 
 PostgreSQL Example
@@ -163,6 +165,12 @@ Signals support
 * pre_delete
 * post_delete
 * class_prepared
+
+
+More info
+=========
+
+See more info in docs: http://ascetic.readthedocs.org/
 
 
 Web
