@@ -122,7 +122,6 @@ class TestModels(unittest.TestCase):
         AuthorMapper(Author)
 
         class Book(object):
-            author = ForeignKey(Author, rel_name='books')
 
             def __init__(self, id=None, title=None, author_id=None):
                 self.id = id
@@ -131,6 +130,9 @@ class TestModels(unittest.TestCase):
 
         class BookMapper(Mapper):
             db_table = 'books'
+            relationships = {
+                'author': ForeignKey(Author, rel_name='books')
+            }
 
         BookMapper(Book)
 
