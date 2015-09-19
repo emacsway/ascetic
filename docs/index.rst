@@ -7,13 +7,6 @@
 Ascetic, a lightweight Python datamapper ORM
 ============================================
 
-Contents:
-
-.. toctree::
-   :maxdepth: 2
-
-.. contents:: Table of Contents
-
 Ascetic exists as a super-lightweight datamapper ORM (Object-Relational Mapper) for Python.
 
 * Home Page: https://bitbucket.org/emacsway/ascetic
@@ -51,6 +44,13 @@ What Ascetic does not? Ascetic does not make any data type conversions (use conn
 Ascetic is released under the MIT License (see LICENSE file for details).
 
 This project is currently under development, and not stable. If you are looking for stable KISS-style ORM, pay attention to `Storm ORM <https://storm.canonical.com/>`__.
+
+Contents:
+
+.. toctree::
+   :maxdepth: 2
+
+.. contents:: Table of Contents
 
 
 PostgreSQL Example
