@@ -388,6 +388,8 @@ class Mapper(object):
         ])
 
     def _create_declared_fields(self, model, map, defaults, validations, declared_fields):
+        # We don't need depend on the state of instance, to be able to customise, or even reproduce some steps of initialisation.
+        # So, we accept all data as arguments.
         result = {}
 
         for name in model.__dict__:
