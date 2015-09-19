@@ -207,7 +207,7 @@ class Result(smartsql.Result):
     def __init__(self, mapper):
         self._prefetch = {}
         self._select_related = {}
-        self.is_base(True)
+        self._is_base = True
         self._mapping = default_mapping
         self._mapper = mapper
         self._using = mapper._using
@@ -261,7 +261,6 @@ class Result(smartsql.Result):
         if self._cache is None:
             self._cache = list(self.iterator())
             self.populate_prefetch()
-        return self
 
     def iterator(self):
         """iterator"""
@@ -276,13 +275,13 @@ class Result(smartsql.Result):
             return self._using
         if alias is not False:
             self._using = alias
-        return self
+        return self._query
 
     def is_base(self, value=None):
         if value is None:
             return self._is_base
         self._is_base = value
-        return self
+        return self._query
 
     @property
     def db(self):
@@ -292,7 +291,7 @@ class Result(smartsql.Result):
         """Sets mapping."""
         c = self
         c._mapping = mapping
-        return c
+        return c._query
 
     def prefetch(self, *a, **kw):
         """Prefetch relations"""
@@ -303,7 +302,7 @@ class Result(smartsql.Result):
             self._prefetch = copy.copy(self._prefetch)
             self._prefetch.update(kw)
             self._prefetch.update({i: relations[i].rel_query for i in a})
-        return self
+        return self._query
 
     def populate_prefetch(self):
         relations = self._mapper.relations

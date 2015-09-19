@@ -281,7 +281,8 @@ class TestModels(unittest.TestCase):
         self.assertTrue(isinstance(q[0], Author))
 
         # prefetch
-        for obj in book_mapper.query.prefetch('author').order_by(book_mapper.sql_table.id):
+        q = book_mapper.query.prefetch('author').order_by(book_mapper.sql_table.id)
+        for obj in q:
             self.assertTrue(hasattr(obj, '_cache'))
             self.assertTrue('author' in obj._cache)
             self.assertEqual(obj._cache['author'], obj.author)
