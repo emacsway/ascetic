@@ -213,17 +213,14 @@ class Result(smartsql.Result):
         self._using = mapper._using
 
     def __len__(self):
-        """Returns length or list."""
         self.fill_cache()
         return len(self._cache)
 
     def __iter__(self):
-        """Returns iterator."""
         self.fill_cache()
         return iter(self._cache)
 
     def __getitem__(self, key):
-        """Returns sliced self or item."""
         if self._cache:
             return self._cache[key]
         if isinstance(key, integer_types):
@@ -244,7 +241,6 @@ class Result(smartsql.Result):
         return self
 
     def count(self):
-        """Returns length or list."""
         if self._cache is not None:
             return len(self._cache)
         return self.execute().fetchone()[0]
@@ -263,7 +259,7 @@ class Result(smartsql.Result):
             self.populate_prefetch()
 
     def iterator(self):
-        """iterator"""
+        """Iterator"""
         cursor = self.execute()
         fields = tuple(f[0] for f in cursor.description)
         state = {}
@@ -326,7 +322,6 @@ class Result(smartsql.Result):
 
 
 class Mapper(object):
-    """Mapper"""
 
     pk = 'id'
     default_using = 'default'
@@ -336,7 +331,6 @@ class Mapper(object):
     result_factory = Result
 
     def __init__(self, model=None):
-        """Instance constructor"""
         if model:
             self.model = model
 
@@ -604,7 +598,6 @@ class Mapper(object):
         return set(k for k, v in self.get_original_data(obj).items() if getattr(obj, k, None) != v)
 
     def set_defaults(self, obj):
-        """Sets attribute defaults."""
         for name, field in self.fields.items():
             if not hasattr(field, 'default'):
                 continue
@@ -619,7 +612,6 @@ class Mapper(object):
         return obj
 
     def validate(self, obj, fields=frozenset(), exclude=frozenset()):
-        """Tests all ``validations``"""
         self.set_defaults(obj)
         errors = {}
         for name, field in self.fields.items():
@@ -676,8 +668,6 @@ class Mapper(object):
         databases[self._using].execute(self._update_query(obj))
 
     def delete(self, obj, visited=None):
-        """Deletes record from database"""
-
         if visited is None:
             visited = set()
         if self in visited:
@@ -699,7 +689,6 @@ class Mapper(object):
         return True
 
     def get(self, _obj_pk=None, **kwargs):
-        """Returns Q object"""
         if _obj_pk is not None:
             identity_map = IdentityMap(self._using)
             key = self._make_identity_key(self.model, _obj_pk)
@@ -720,13 +709,11 @@ class Mapper(object):
             return q[0]
 
     def get_pk(self, obj):
-        """Sets the current value of the primary key"""
         if type(self.pk) == tuple:
             return tuple(getattr(obj, k, None) for k in self.pk)
         return getattr(obj, self.pk, None)
 
     def set_pk(self, obj, value):
-        """Sets the primary key"""
         for k, v in zip(to_tuple(self.pk), to_tuple(value)):
             setattr(obj, k, v)
 
@@ -758,13 +745,11 @@ class ModelBase(type):
 
 
 class Model(ModelBase(b"NewBase", (object, ), {})):
-    """Model class"""
 
     _new_record = True
     _s = None
 
     def __init__(self, *args, **kwargs):
-        """Allows setting of fields using kwargs"""
         mapper = mapper_registry[self.__class__]
         pre_init.send(sender=self.__class__, instance=self, args=args, kwargs=kwargs, using=mapper._using)
         if args:
@@ -900,10 +885,8 @@ class SelectRelatedMapping(object):
 
 @cr
 class Table(smartsql.Table):
-    """Table class"""
 
     def __init__(self, mapper, *args, **kwargs):
-        """Constructor"""
         super(Table, self).__init__(mapper.db_table, *args, **kwargs)
         self._mapper = mapper
 
@@ -917,11 +900,9 @@ class Table(smartsql.Table):
         return self._mapper.query
 
     def get_fields(self, prefix=None):
-        """Returns field list."""
         return self._mapper.get_sql_fields()
 
     def __getattr__(self, name):
-        """Added some specific functional."""
         if name[0] == '_':
             raise AttributeError
         parts = name.split(smartsql.LOOKUP_SEP, 1)
@@ -949,7 +930,6 @@ class Table(smartsql.Table):
 
 @cr
 class TableAlias(smartsql.TableAlias, Table):
-    """Table alias class"""
     @property
     def _mapper(self):
         return getattr(self._table, '_mapper', None)  # Can be subquery
