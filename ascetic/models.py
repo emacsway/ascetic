@@ -565,7 +565,7 @@ class Mapper(object):
         fields -= set(exclude)
         data = self._do_unload(obj, fields)
         if to_db:
-            # check field is not virtual like annotation and subquery.
+            # check field is not virtual like annotation or subquery.
             data = {self.fields[name].column: value for name, value in data.items()
                     if not getattr(self.fields[name], 'virtual', False)}
         return data
