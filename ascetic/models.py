@@ -559,13 +559,19 @@ class Mapper(object):
         return self.model(**data)
 
     def unload(self, obj, fields=frozenset(), exclude=frozenset(), to_db=True):
-        data = {name: getattr(obj, name, None)
-                for name in self.fields
-                if not (name in exclude or (fields and name not in fields))}
+        if not fields:
+            fields = self.fields
+        fields = set(fields)  # Can be any iterable type: tuple, list etc.
+        fields -= set(exclude)
+        data = self._do_unload(obj, fields)
         if to_db:
             # check field is not virtual like annotation and subquery.
-            data = {self.fields[name].column: value for name, value in data.items() if not getattr(self.fields[name], 'virtual', False)}
+            data = {self.fields[name].column: value for name, value in data.items()
+                    if not getattr(self.fields[name], 'virtual', False)}
         return data
+
+    def _do_unload(self, obj, fields):
+        return {name: getattr(obj, name, None) for name in fields}
 
     def _make_identity_key(self, model, pk):
         return (model, to_tuple(pk))
