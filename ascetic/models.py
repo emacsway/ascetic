@@ -549,12 +549,14 @@ class Mapper(object):
                 return identity_map.get(key)
             except ObjectDoesNotExist:
                 pass
-        # TODO: obj = self._do_load(data_mapped)
-        obj = self.model(**data_mapped)
+        obj = self._do_load(data_mapped)
         self.set_original_data(obj, data_mapped)
         self.mark_new(obj, False)
         identity_map.add(key, obj)
         return obj
+
+    def _do_load(self, data):
+        return self.model(**data)
 
     def unload(self, obj, fields=frozenset(), exclude=frozenset(), to_db=True):
         data = {name: getattr(obj, name, None)
