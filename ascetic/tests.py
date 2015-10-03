@@ -5,9 +5,7 @@ from ascetic import utils
 from ascetic.databases import databases
 from ascetic.models import Model, Mapper, ForeignKey, IdentityMap, mapper_registry
 from sqlbuilder import smartsql
-from sqlbuilder.smartsql.tests import TestSmartSQL
-
-TestSmartSQL
+from sqlbuilder.smartsql.tests import *
 
 Author = Book = AuthorC = BookC = None
 
