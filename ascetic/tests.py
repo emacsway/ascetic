@@ -238,43 +238,25 @@ class TestModels(unittest.TestCase):
         self.assertRaises(validators.ValidationError, author_mapper.validate, a)
 
         print '### Testing for smartsql integration'
-        fields = [author_mapper.query.db.compile(i)[0] for i in author_mapper.get_sql_fields()]
-        if author_mapper.query.db.engine == 'postgresql':
-            self.assertListEqual(
-                fields,
-                ['"ascetic_tests_author"."id"',
-                 '"ascetic_tests_author"."first_name"',
-                 '"ascetic_tests_author"."last_name"',
-                 '"ascetic_tests_author"."bio"', ]
-            )
-        else:
-            self.assertListEqual(
-                fields,
-                ['`ascetic_tests_author`.`id`',
-                 '`ascetic_tests_author`.`first_name`',
-                 '`ascetic_tests_author`.`last_name`',
-                 '`ascetic_tests_author`.`bio`', ]
-            )
+        fields = [smartsql.compile(i)[0] for i in author_mapper.get_sql_fields()]
+        self.assertListEqual(
+            fields,
+            ['"ascetic_tests_author"."id"',
+             '"ascetic_tests_author"."first_name"',
+             '"ascetic_tests_author"."last_name"',
+             '"ascetic_tests_author"."bio"', ]
+        )
 
-        if author_mapper.query.db.engine == 'postgresql':
-            self.assertEqual(book_mapper.sql_table.author, '"book"."author_id"')
-        else:
-            self.assertEqual(book_mapper.sql_table.author, '`book`.`author_id`')
+        self.assertEqual(smartsql.compile(book_mapper.sql_table.author)[0], '"books"."author_id"')
 
         q = author_mapper.query
-        if q.db.engine == 'postgresql':
-            self.assertEqual(q.db.compile(q)[0], '''SELECT "ascetic_tests_author"."id", "ascetic_tests_author"."first_name", "ascetic_tests_author"."last_name", "ascetic_tests_author"."bio" FROM "ascetic_tests_author"''')
-        else:
-            self.assertEqual(q.db.compile(q)[0], """SELECT `ascetic_tests_author`.`id`, `ascetic_tests_author`.`first_name`, `ascetic_tests_author`.`last_name`, `ascetic_tests_author`.`bio` FROM `ascetic_tests_author`""")
+        self.assertEqual(smartsql.compile(q)[0], '''SELECT "ascetic_tests_author"."id", "ascetic_tests_author"."first_name", "ascetic_tests_author"."last_name", "ascetic_tests_author"."bio" FROM "ascetic_tests_author"''')
         self.assertEqual(len(q), 3)
         for obj in q:
             self.assertTrue(isinstance(obj, Author))
 
         q = q.where(author_mapper.sql_table.id == b.author_id)
-        if q.db.engine == 'postgresql':
-            self.assertEqual(q.db.compile(q)[0], """SELECT "ascetic_tests_author"."id", "ascetic_tests_author"."first_name", "ascetic_tests_author"."last_name", "ascetic_tests_author"."bio" FROM "ascetic_tests_author" WHERE "ascetic_tests_author"."id" = %s""")
-        else:
-            self.assertEqual(q.db.compile(q)[0], """SELECT `ascetic_tests_author`.`id`, `ascetic_tests_author`.`first_name`, `ascetic_tests_author`.`last_name`, `ascetic_tests_author`.`bio` FROM `ascetic_tests_author` WHERE `ascetic_tests_author`.`id` = %s""")
+        self.assertEqual(smartsql.compile(q)[0], """SELECT "ascetic_tests_author"."id", "ascetic_tests_author"."first_name", "ascetic_tests_author"."last_name", "ascetic_tests_author"."bio" FROM "ascetic_tests_author" WHERE "ascetic_tests_author"."id" = %s""")
         self.assertEqual(len(q), 1)
         self.assertTrue(isinstance(q[0], Author))
 
