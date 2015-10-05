@@ -47,7 +47,7 @@ class GenericForeignKey(ForeignKey):
     def get_rel_where(self, instance):
         t = mapper_registry[self.rel_model(instance)].sql_table
         return reduce(operator.and_,
-                      ((t.__getattr__(rf) == getattr(instance, f, None))
+                      ((t.get_field(rf) == getattr(instance, f, None))
                        for f, rf in zip(self.field, self.rel_field)))
 
     @property
@@ -111,7 +111,7 @@ class GenericRelation(OneToMany):
         if cached_query is None:
             t = mapper_registry[self.rel_model].sql_table
             q = super(GenericRelation, self).get(instance)
-            q = q.where(t.__getattr__(rel_type_field) == mapper_registry[instance.__class__].name)
+            q = q.where(t.get_field(rel_type_field) == mapper_registry[instance.__class__].name)
             self._set_cache(instance, self.name, q)
         return self._get_cache(instance, self.name)
 

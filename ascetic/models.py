@@ -713,7 +713,7 @@ class Mapper(object):
         if kwargs:
             q = self.query
             for k, v in kwargs.items():
-                q = q.where(self.sql_table.__getattr__(k) == v)
+                q = q.where(self.sql_table.get_field(k) == v)
             return q[0]
 
     def get_pk(self, obj):
@@ -910,9 +910,7 @@ class Table(smartsql.Table):
     def get_fields(self, prefix=None):
         return self._mapper.get_sql_fields()
 
-    def __getattr__(self, name):
-        if name[0] == '_':
-            raise AttributeError
+    def get_field(self, name):
         parts = name.split(smartsql.LOOKUP_SEP, 1)
         field = parts[0]
         # result = {'field': field, }
@@ -928,12 +926,12 @@ class Table(smartsql.Table):
             if len(parts) > 1:
                 # FIXME: "{}_{}".format(alias, field_name) ???
                 raise Exception("Can't set single alias for multiple fields of composite key {}.{}".format(self.model, name))
-            return smartsql.CompositeExpr(*(self.__getattr__(k) for k in field))
+            return smartsql.CompositeExpr(*(self.get_field(k) for k in field))
 
         if field in self._mapper.fields:
             field = self._mapper.fields[field].column
         parts[0] = field
-        return super(Table, self).__getattr__(smartsql.LOOKUP_SEP.join(parts))
+        return super(Table, self).get_field(smartsql.LOOKUP_SEP.join(parts))
 
 
 @cr
@@ -1046,24 +1044,24 @@ class Relation(BaseRelation):
 
     def get_where(self, rel_obj):
         t = mapper_registry[self.model].sql_table
-        return t.__getattr__(self.name) == self.get_rel_value(rel_obj)  # Use CompositeExpr
+        return t.get_field(self.name) == self.get_rel_value(rel_obj)  # Use CompositeExpr
         return reduce(operator.and_,
-                      ((t.__getattr__(f) == getattr(rel_obj, rf, None))
+                      ((t.get_field(f) == getattr(rel_obj, rf, None))
                        for f, rf in zip(self.field, self.rel_field)))
 
     def get_rel_where(self, obj):
         t = mapper_registry[self.rel_model].sql_table
-        return t.__getattr__(self.rel_name) == self.get_value(obj)  # Use CompositeExpr
+        return t.get_field(self.rel_name) == self.get_value(obj)  # Use CompositeExpr
         return reduce(operator.and_,
-                      ((t.__getattr__(rf) == getattr(obj, f, None))
+                      ((t.get_field(rf) == getattr(obj, f, None))
                        for f, rf in zip(self.field, self.rel_field)))
 
     def get_join_where(self):
         t = mapper_registry[self.model].sql_table
         rt = mapper_registry[self.rel_model].sql_table
-        return t.__getattr__(self.name) == rt.__getattr__(self.rel_name)  # Use CompositeExpr
+        return t.get_field(self.name) == rt.get_field(self.rel_name)  # Use CompositeExpr
         return reduce(operator.and_,
-                      ((t.__getattr__(f) == rt.__getattr__(rf))
+                      ((t.get_field(f) == rt.get_field(rf))
                        for f, rf in zip(self.field, self.rel_field)))
 
     def get_value(self, obj):
