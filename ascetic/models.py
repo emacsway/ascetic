@@ -39,7 +39,7 @@ def is_model(cls):
 def thread_safe(func):
     def _deco(*args, **kwargs):
         with RLock():
-            func(*args, **kwargs)
+            return func(*args, **kwargs)
     return _deco
 
 
@@ -739,6 +739,7 @@ class ModelBase(type):
     """Metaclass for Model"""
     mapper_class = Mapper
 
+    @thread_safe
     def __new__(cls, name, bases, attrs):
 
         new_cls = type.__new__(cls, name, bases, attrs)
