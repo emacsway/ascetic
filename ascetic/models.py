@@ -5,6 +5,7 @@ import weakref
 import operator
 import collections
 from functools import reduce
+from threading import RLock
 
 from sqlbuilder import smartsql
 from .databases import databases
@@ -33,6 +34,13 @@ def is_model_instance(obj):
 
 def is_model(cls):
     return cls in model_registry.values()
+
+
+def thread_safe(func):
+    def _deco(*args, **kwargs):
+        with RLock():
+            func(*args, **kwargs)
+    return _deco
 
 
 class OrmException(Exception):
@@ -330,6 +338,7 @@ class Mapper(object):
     field_factory = Field
     result_factory = Result
 
+    @thread_safe
     def __init__(self, model=None):
         if model:
             self.model = model
