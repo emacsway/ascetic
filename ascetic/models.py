@@ -412,26 +412,6 @@ class Mapper(object):
 
         return result
 
-    def _read_pk(self, db_table, using, columns):
-        db = databases[using]
-        if hasattr(db, 'get_pk'):
-            pk = tuple(columns[i].name for i in db.get_pk(db_table))
-            return pk[0] if len(pk) == 1 else pk
-        return self.__class__.pk
-
-    def _read_columns(self, db_table, using):
-        db = databases[using]
-        schema = db.describe_table(db_table)
-        q = db.execute('SELECT * FROM {0} LIMIT 1'.format(db.qn(self.db_table)))
-        # See cursor.description http://www.python.org/dev/peps/pep-0249/
-        result = []
-        for row in q.description:
-            column = row[0]
-            data = schema.get(column) or {}
-            data.update({'column': column, 'type_code': row[1]})
-            result.append(data)
-        return result
-
     def create_field(self, name, data, declared_fields=None):
         if declared_fields and name in declared_fields:
             field = copy.deepcopy(declared_fields[name])
@@ -451,6 +431,26 @@ class Mapper(object):
             if name not in fields:
                 fields[name] = self.create_field(name, {'virtual': True}, declared_fields)
         return fields
+
+    def _read_pk(self, db_table, using, columns):
+        db = databases[using]
+        if hasattr(db, 'get_pk'):
+            pk = tuple(columns[i].name for i in db.get_pk(db_table))
+            return pk[0] if len(pk) == 1 else pk
+        return self.__class__.pk
+
+    def _read_columns(self, db_table, using):
+        db = databases[using]
+        schema = db.describe_table(db_table)
+        q = db.execute('SELECT * FROM {0} LIMIT 1'.format(db.qn(self.db_table)))
+        # See cursor.description http://www.python.org/dev/peps/pep-0249/
+        result = []
+        for row in q.description:
+            column = row[0]
+            data = schema.get(column) or {}
+            data.update({'column': column, 'type_code': row[1]})
+            result.append(data)
+        return result
 
     def add_field(self, name, field):
         field.name = name
@@ -474,9 +474,6 @@ class Mapper(object):
         if prefix is None:
             prefix = self.sql_table
         return [smartsql.Field(f.column, prefix) for f in self.fields.values() if not getattr(f, 'virtual', False)]
-
-    def _do_prepare_model(self, model):
-        pass
 
     def _prepare_model(self, model):
         for name in self.model.__dict__:
@@ -512,6 +509,9 @@ class Mapper(object):
                     pass
         self._do_prepare_model(model)
         class_prepared.send(sender=model, using=self._using)
+
+    def _do_prepare_model(self, model):
+        pass
 
     def _inherit(self, successor, parents):
         for base in parents:  # recursive
