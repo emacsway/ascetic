@@ -65,7 +65,7 @@ class PolymorphicMapper(object):
                 break
         else:
             if getattr(mapper_registry[model], 'polymorphic', False):
-                setattr(model, "real_instance", GenericForeignKey(
+                setattr(model, "concrete_instance", GenericForeignKey(
                     type_field="polymorphic_type_id",
                     field=mapper_registry[model].pk
                 ))
@@ -138,7 +138,7 @@ class PolymorphicResult(Result):
 
     def iterator(self):
         for obj in super(PolymorphicResult, self).iterator():
-            yield obj.real_instance if self._polymorphic and hasattr(obj, 'real_instance') else obj
+            yield obj.concrete_instance if self._polymorphic and hasattr(obj, 'concrete_instance') else obj
 
     def _clone(self, *args, **kwargs):
         c = super(PolymorphicResult, self).clone(*args, **kwargs)
