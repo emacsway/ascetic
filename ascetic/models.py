@@ -782,10 +782,13 @@ class Model(ModelBase(b"NewBase", (object, ), {})):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    def __hash__(self):
+        if not all(to_tuple(self._get_pk())):
+            raise TypeError("Model instances without primary key value are unhashable")
+        return hash(self._get_pk())
+
     def __dir__(self):
         return dir(super(Model, self)) + list(mapper_registry[self.__class__].fields)
-
-    # Use basic __hash__() based on id(self) to be used in WeakKeyDictionary()
 
     def _get_pk(self):
         return mapper_registry[self.__class__].get_pk(self)
