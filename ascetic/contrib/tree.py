@@ -3,7 +3,13 @@ from sqlbuilder import smartsql
 from ..models import ForeignKey, RelationDescriptor, to_tuple, mapper_registry
 from ..utils import cached_property
 
-# Under construction!!! Not testet yet!!!
+try:
+    str = unicode  # Python 2.* compatible
+    string_types = (basestring,)
+    integer_types = (int, long)
+except NameError:
+    string_types = (str,)
+    integer_types = (int,)
 
 
 class MpMapper(object):
@@ -121,7 +127,7 @@ class MpMapper(object):
     def get_ancestors(self, obj, root=False, me=False, reverse=True):
         return self.get_ancestors_by_paths(obj, root=root, me=me, reverse=reverse)
 
-    def get_hierarchical_name(self, obj, sep=', ', root=False, me=True, reverse=True, namegetter=unicode):
+    def get_hierarchical_name(self, obj, sep=', ', root=False, me=True, reverse=True, namegetter=str):
         """returns children QuerySet instance for given parent_id"""
         return sep.join(map(namegetter, self.get_ancestors(obj, root=root, me=me, reverse=reverse)))
 
@@ -155,7 +161,7 @@ class MpModel(object):
     def get_ancestors(self, root=False, me=False, reverse=True):
         return mapper_registry[self.__class__].get_ancestors(self, root, me, reverse)
 
-    def get_hierarchical_name(self, sep=', ', root=False, me=True, reverse=True, namegetter=unicode):
+    def get_hierarchical_name(self, sep=', ', root=False, me=True, reverse=True, namegetter=str):
         return mapper_registry[self.__class__].get_hierarchical_name(self, sep, root, me, reverse, namegetter)
 
     def get_children(self):

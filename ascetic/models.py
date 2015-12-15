@@ -762,7 +762,7 @@ class ModelBase(type):
         return new_cls
 
 
-class Model(ModelBase(b"NewBase", (object, ), {})):
+class Model(ModelBase("NewBase", (object, ), {})):
 
     _new_record = True
     _s = None

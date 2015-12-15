@@ -237,7 +237,7 @@ class TestModels(unittest.TestCase):
         a = Author(first_name='I am a', last_name='BadGuy!')
         self.assertRaises(validators.ValidationError, author_mapper.validate, a)
 
-        print '### Testing for smartsql integration'
+        print('### Testing for smartsql integration')
         fields = [smartsql.compile(i)[0] for i in author_mapper.get_sql_fields()]
         self.assertListEqual(
             fields,

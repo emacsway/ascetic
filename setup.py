@@ -16,9 +16,9 @@ setup(
     long_description=open(os.path.join(os.path.dirname(__file__), 'README.rst')).read(),
     url="https://bitbucket.org/emacsway/ascetic",
     license="MIT License",
-    keywords = "ORM Database SQL",
+    keywords = "ORM Database DataMapper SQL",
     install_requires=[
-        'sqlbuilder >= 0.7.9.21'
+        'sqlbuilder >= 0.7.9.31'
     ],
     classifiers = [
         'Development Status :: 1 - Planning',
@@ -26,6 +26,12 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
         'Programming Language :: Python',
+        'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.2',
+        'Programming Language :: Python :: 3.3',
+        'Programming Language :: Python :: 3.4',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
 )
