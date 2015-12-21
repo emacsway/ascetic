@@ -82,7 +82,7 @@ class PolymorphicMapper(object):
                     data_mapped[key] = value
         else:
             data_mapped = dict(data)
-        obj = self.model(**data_mapped)
+        obj = self._do_load(data_mapped)
         self.set_original_data(obj, data_mapped)
         self.mark_new(obj, False)
         return obj

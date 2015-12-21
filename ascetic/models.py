@@ -617,7 +617,8 @@ class Mapper(object):
         return data
 
     def _do_unload(self, obj, fields):
-        return {name: getattr(obj, name, None) for name in fields}
+        fields = set(fields) & set(self.fields)
+        return {name: self.fields[name].get_value(obj) for name in fields}
 
     def _make_identity_key(self, model, pk):
         return (model, to_tuple(pk))
@@ -649,7 +650,7 @@ class Mapper(object):
     def get_changed(self, obj):
         if not self.get_original_data(obj):
             return set(self.fields)
-        return set(k for k, v in self.get_original_data(obj).items() if getattr(obj, k, None) != v)
+        return set(k for k, v in self.get_original_data(obj).items() if k in self.fields and self.fields[k].get_value(obj) != v)
 
     def set_defaults(self, obj):
         for name, field in self.fields.items():
@@ -662,6 +663,7 @@ class Mapper(object):
             fields = self.fields
         fields = set(fields)  # Can be any iterable type: tuple, list etc.
         fields -= set(exclude)
+        fields &= set(self.fields)
         self.set_defaults(obj)
         errors = {}
         for name in fields:
@@ -748,12 +750,12 @@ class Mapper(object):
 
     def get_pk(self, obj):
         if type(self.pk) == tuple:
-            return tuple(getattr(obj, k, None) for k in self.pk)
-        return getattr(obj, self.pk, None)
+            return tuple(self.fields[k].get_value(obj) for k in self.pk)
+        return self.fields[self.pk].get_value(obj)
 
     def set_pk(self, obj, value):
         for k, v in zip(to_tuple(self.pk), to_tuple(value)):
-            setattr(obj, k, v)
+            self.fields[k].set_value(obj, v)
 
 
 class ModelBase(type):
