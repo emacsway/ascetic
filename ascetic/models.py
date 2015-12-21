@@ -203,6 +203,30 @@ class Field(object):
         for k, v in kw.items():
             setattr(self, k, v)
 
+    def validate(self, obj):
+        errors = []
+        if not hasattr(self, 'validators'):
+            return errors
+        for validator in self.validators:
+            assert isinstance(validator, collections.Callable), 'The validator must be callable'
+            value = self.get_value(obj)
+            try:
+                valid_or_msg = validator(obj, self.name, value)
+            except TypeError:
+                valid_or_msg = validator(value)
+            if valid_or_msg is not True:
+                # Don't need message code. To rewrite message simple wrap (or extend) validator.
+                errors.append(
+                    valid_or_msg or 'Improper value "{0}" for "{1}"'.format(value, self.name)
+                )
+        return errors
+
+    def get_value(self, obj):
+        return getattr(obj, self.name, None)
+
+    def set_value(self, obj, value):
+        return setattr(obj, self.name, value)
+
 
 class Result(smartsql.Result):
     """Result adapted for table."""
@@ -629,25 +653,18 @@ class Mapper(object):
         return obj
 
     def validate(self, obj, fields=frozenset(), exclude=frozenset()):
+        # Don't need '__model__' key. Just override this method in subclass.
+        if not fields:
+            fields = self.fields
+        fields = set(fields)  # Can be any iterable type: tuple, list etc.
+        fields -= set(exclude)
         self.set_defaults(obj)
         errors = {}
-        for name, field in self.fields.items():
-            if name in exclude or (fields and name not in fields):
-                continue
-            if not hasattr(field, 'validators'):
-                continue
-            for validator in field.validators:
-                assert isinstance(validator, collections.Callable), 'The validator must be callable'
-                value = getattr(obj, name)
-                try:
-                    valid_or_msg = validator(obj, name, value)
-                except TypeError:
-                    valid_or_msg = validator(value)
-                if valid_or_msg is not True:
-                    # Don't need message code. To rewrite message simple wrap (or extend) validator.
-                    errors.setdefault(name, []).append(
-                        valid_or_msg or 'Improper value "{0}" for "{1}"'.format(value, name)
-                    )
+        for name in fields:
+            field = self.fields[name]
+            field_errors = field.validate(obj)
+            if field_errors:
+                errors[name] = field_errors
         if errors:
             raise ValidationError(errors)
 
