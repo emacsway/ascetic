@@ -202,6 +202,7 @@ class Field(object):
     def __init__(self, **kw):
         for k, v in kw.items():
             setattr(self, k, v)
+        # TODO: auto add validators and converters.
 
     def validate(self, obj):
         errors = []
@@ -220,6 +221,18 @@ class Field(object):
                     valid_or_msg or 'Improper value "{0}" for "{1}"'.format(value, self.name)
                 )
         return errors
+
+    def set_default(self, obj):
+        if not hasattr(self, 'default'):
+            return
+        default = self.default
+        if self.get_value(obj) is None:
+            if isinstance(default, collections.Callable):
+                try:
+                    default(obj, self.name)
+                except TypeError:
+                    default = default()
+            self.set_value(obj, default)
 
     def get_value(self, obj):
         return getattr(obj, self.name, None)
@@ -640,16 +653,7 @@ class Mapper(object):
 
     def set_defaults(self, obj):
         for name, field in self.fields.items():
-            if not hasattr(field, 'default'):
-                continue
-            default = field.default
-            if getattr(obj, name, None) is None:
-                if isinstance(default, collections.Callable):
-                    try:
-                        default(obj, name)
-                    except TypeError:
-                        default = default()
-                setattr(obj, name, default)
+            field.set_default(obj)
         return obj
 
     def validate(self, obj, fields=frozenset(), exclude=frozenset()):
