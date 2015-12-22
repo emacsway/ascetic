@@ -212,15 +212,21 @@ class Field(object):
             assert isinstance(validator, collections.Callable), 'The validator must be callable'
             value = self.get_value(obj)
             try:
-                valid_or_msg = validator(obj, self.name, value)
-            except TypeError:
-                valid_or_msg = validator(value)
-            if valid_or_msg is not True:
-                # Don't need message code. To rewrite message simple wrap (or extend) validator.
-                errors.append(
-                    valid_or_msg or 'Improper value "{0}" for "{1}"'.format(value, self.name)
-                )
-        return errors
+                try:
+                    valid_or_msg = validator(obj, self.name, value)
+                except TypeError:
+                    valid_or_msg = validator(value)
+            except ValidationError as e:
+                # TODO: How to allow rewrite message in this case? Extend validator?
+                errors.append(e.args[0])
+            else:
+                if valid_or_msg is False:
+                    errors.append('Improper value "{0}" for "{1}"'.format(value, self.name))
+                if isinstance(valid_or_msg, string_types):
+                    # Don't need message code. To rewrite message simple wrap (or extend) validator.
+                    errors.append(valid_or_msg)
+        if errors:
+            raise ValidationError(errors)
 
     def set_default(self, obj):
         if not hasattr(self, 'default'):
@@ -668,9 +674,10 @@ class Mapper(object):
         errors = {}
         for name in fields:
             field = self.fields[name]
-            field_errors = field.validate(obj)
-            if field_errors:
-                errors[name] = field_errors
+            try:
+                field.validate(obj)
+            except ValidationError as e:
+                errors[name] = e.args[0]
         if errors:
             raise ValidationError(errors)
 
