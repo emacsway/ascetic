@@ -204,6 +204,18 @@ class Database(object):
             del self._savepoints[self._savepoints.index(name):]
         self.execute("ROLLBACK TO SAVEPOINT %s", name)
 
+    def read_fields(self, db_table):
+        schema = self.describe_table(db_table)
+        q = self.execute('SELECT * FROM {0} LIMIT 1'.format(self.qn(db_table)))
+        # See cursor.description http://www.python.org/dev/peps/pep-0249/
+        result = []
+        for row in q.description:
+            column = row[0]
+            data = schema.get(column) or {}
+            data.update({'column': column, 'type_code': row[1]})
+            result.append(data)
+        return result
+
     def describe_table(self, table_name):
         return {}
 
@@ -263,7 +275,7 @@ class MySQLDatabase(Database):
         import MySQLdb
         return MySQLdb.connect(**kwargs)
 
-    def get_pk(self, table_name):
+    def read_pk(self, table_name):
         cursor = self.execute("""
             SELECT COLUMN_NAME
             FROM   information_schema.KEY_COLUMN_USAGE
@@ -311,7 +323,7 @@ class PostgreSQLDatabase(Database):
         cursor.execute("SELECT lastval()")
         return cursor.fetchone()[0]
 
-    def get_pk(self, table_name):
+    def read_pk(self, table_name):
         # https://wiki.postgresql.org/wiki/Retrieve_primary_key_columns
         cursor = self.execute("""
         SELECT a.attname, format_type(a.atttypid, a.atttypmod) AS data_type

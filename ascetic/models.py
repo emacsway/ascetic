@@ -414,10 +414,10 @@ class Mapper(object):
         self.fields = collections.OrderedDict()
         self.columns = collections.OrderedDict()
 
-        for name, field in self.create_fields(self._read_columns(self.db_table, self._using), self.declared_fields).items():
+        for name, field in self.create_fields(databases[self._using].read_fields(self.db_table), self.declared_fields).items():
             self.add_field(name, field)
 
-        self.pk = self._read_pk(self.db_table, self._using, self.columns)
+        self.pk = self._create_pk(self.db_table, self._using, self.columns)
 
         self.sql_table = self._create_sql_table()
         self.base_query = self._create_base_query()
@@ -475,31 +475,18 @@ class Mapper(object):
                 fields[name] = self.create_field(name, {'virtual': True}, declared_fields)
         return fields
 
-    def _read_pk(self, db_table, using, columns):
-        db = databases[using]
-        if hasattr(db, 'get_pk'):
-            pk = tuple(columns[i].name for i in db.get_pk(db_table))
-            return pk[0] if len(pk) == 1 else pk
-        return self.__class__.pk
-
-    def _read_columns(self, db_table, using):
-        db = databases[using]
-        schema = db.describe_table(db_table)
-        q = db.execute('SELECT * FROM {0} LIMIT 1'.format(db.qn(self.db_table)))
-        # See cursor.description http://www.python.org/dev/peps/pep-0249/
-        result = []
-        for row in q.description:
-            column = row[0]
-            data = schema.get(column) or {}
-            data.update({'column': column, 'type_code': row[1]})
-            result.append(data)
-        return result
-
     def add_field(self, name, field):
         field.name = name
         field._mapper = self
         self.fields[name] = field
         self.columns[field.column] = field
+
+    def _create_pk(self, db_table, using, columns):
+        db = databases[using]
+        if hasattr(db, 'read_pk'):
+            pk = tuple(columns[i].name for i in db.read_pk(db_table))
+            return pk[0] if len(pk) == 1 else pk
+        return self.__class__.pk
 
     def _create_sql_table(self):
         return Table(self)
@@ -611,11 +598,7 @@ class Mapper(object):
         return self.model(**data)
 
     def unload(self, obj, fields=frozenset(), exclude=frozenset(), to_db=True):
-        if not fields:
-            fields = self.fields
-        fields = set(fields)  # Can be any iterable type: tuple, list etc.
-        fields -= set(exclude)
-        data = self._do_unload(obj, fields)
+        data = self._do_unload(obj, self._get_specified_fields(fields, exclude))
         if to_db:
             # check field is not virtual like annotation or subquery.
             data = {self.fields[name].column: value for name, value in data.items()
@@ -623,7 +606,6 @@ class Mapper(object):
         return data
 
     def _do_unload(self, obj, fields):
-        fields = set(fields) & set(self.fields)
         return {name: self.fields[name].get_value(obj) for name in fields}
 
     def _make_identity_key(self, model, pk):
@@ -665,14 +647,9 @@ class Mapper(object):
 
     def validate(self, obj, fields=frozenset(), exclude=frozenset()):
         # Don't need '__model__' key. Just override this method in subclass.
-        if not fields:
-            fields = self.fields
-        fields = set(fields)  # Can be any iterable type: tuple, list etc.
-        fields -= set(exclude)
-        fields &= set(self.fields)
         self.set_defaults(obj)
         errors = {}
-        for name in fields:
+        for name in self._get_specified_fields(fields, exclude):
             field = self.fields[name]
             try:
                 field.validate(obj)
@@ -680,6 +657,14 @@ class Mapper(object):
                 errors[name] = e.args[0]
         if errors:
             raise ValidationError(errors)
+
+    def _get_specified_fields(self, fields=frozenset(), exclude=frozenset()):
+        if not fields:
+            fields = self.fields
+        fields = set(fields)  # Can be any iterable type: tuple, list etc.
+        fields -= set(exclude)
+        fields &= set(self.fields)
+        return fields
 
     def _insert_query(self, obj):
         auto_pk = not all(to_tuple(self.get_pk(obj)))
