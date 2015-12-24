@@ -683,12 +683,13 @@ class Mapper(object):
         self.set_defaults(obj)
         self.validate(obj, fields=self.get_changed(obj))
         pre_save.send(sender=self.model, instance=obj, using=self._using)
-        is_new = self.is_new(obj)
-        result = self._insert(obj) if is_new else self._update(obj)
-        post_save.send(sender=self.model, instance=obj, created=is_new, using=self._using)
+        self._do_save(obj)
+        post_save.send(sender=self.model, instance=obj, created=self.is_new(obj), using=self._using)
         self.update_original_data(obj, **self.unload(obj, to_db=False))
         self.mark_new(obj, False)
-        return result
+
+    def _do_save(self, obj):
+        return self._insert(obj) if self.is_new(obj) else self._update(obj)
 
     def _insert(self, obj):
         cursor = databases[self._using].execute(self._insert_query(obj))

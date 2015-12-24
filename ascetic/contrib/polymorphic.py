@@ -106,13 +106,14 @@ class PolymorphicMapper(object):
     def save(self, obj):
         if not getattr(obj, 'polymorphic_type_id', None):
             obj.polymorphic_type_id = mapper_registry[obj.__class__].name
+        super(PolymorphicMapper, self).save(obj)
+
+    def _do_save(self, obj):
         if self.polymorphic_parent:
-            new_record = self.is_new(obj)
-            self.polymorphic_parent.save(obj)
+            self.polymorphic_parent._do_save(obj)
             for key, parent_key in zip(to_tuple(self.pk), to_tuple(self.polymorphic_parent.pk)):
                 setattr(obj, key, getattr(obj, parent_key))
-            self.mark_new(obj, new_record)
-        return super(PolymorphicMapper, self).save(obj)
+        super(PolymorphicMapper, self)._do_save(obj)
 
 
 class PolymorphicResult(Result):
@@ -120,9 +121,8 @@ class PolymorphicResult(Result):
     _polymorphic = True
 
     def polymorphic(self, val=True):
-        c = self._clone()
-        c._polymorphic = val
-        return c
+        self._polymorphic = val
+        return self._query
 
     def fill_cache(self):
         if self._cache is not None or not self._polymorphic:
