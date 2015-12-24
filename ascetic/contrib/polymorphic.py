@@ -120,9 +120,8 @@ class PolymorphicResult(Result):
     _polymorphic = True
 
     def polymorphic(self, val=True):
-        c = self._clone()
-        c._polymorphic = val
-        return c
+        self._polymorphic = val
+        return self._query
 
     def fill_cache(self):
         if self._cache is not None or not self._polymorphic:
