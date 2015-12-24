@@ -139,11 +139,6 @@ class PolymorphicResult(Result):
         for obj in super(PolymorphicResult, self).iterator():
             yield obj.concrete_instance if self._polymorphic and hasattr(obj, 'concrete_instance') else obj
 
-    def _clone(self, *args, **kwargs):
-        c = super(PolymorphicResult, self).clone(*args, **kwargs)
-        c._polymorphic = self._polymorphic
-        return c
-
 
 def populate_polymorphic(rows):
     if not rows:
