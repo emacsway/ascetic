@@ -284,6 +284,3 @@ class TestModelTranslation(unittest.TestCase):
         self.assertEqual(avia.pk, avia_pk)
         self.assertEqual(avia.author.pk, author_pk)
         self.assertEqual(author.books[0], avia)
-
-        # avia.delete()
-        # self.assertEqual(Book.get(avia_pk), None)
