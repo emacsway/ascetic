@@ -37,6 +37,13 @@ class MpMapper(object):
     def _mp_decode(self, value):
         return value.replace('&p', self.PATH_SEPARATOR).replace('&k', self.KEY_SEPARATOR).replace('&a', '&')
 
+    def _make_tree_path(self, obj):
+        tree_path = self.KEY_SEPARATOR.join(self._mp_encode(i).zfill(self.PATH_DIGITS) for i in to_tuple(obj.pk))
+        if obj.parent:
+            tree_path = self.PATH_SEPARATOR.join((self.parent.tree_path, tree_path))
+        tree_path += self.PATH_SEPARATOR
+        return tree_path
+
     @cached_property
     def mp_root(self):
         return mapper_registry[self.relations['parent'].descriptor_class]
@@ -50,15 +57,13 @@ class MpMapper(object):
 
         super(MpMapper, self).save(obj)
 
-        tree_path = self.KEY_SEPARATOR.join(self._mp_encode(i).zfill(self.PATH_DIGITS) for i in to_tuple(obj.pk))
-        if obj.parent:
-            tree_path = self.PATH_SEPARATOR.join((self.parent.tree_path, tree_path))
+        tree_path = self._make_tree_path(obj)
 
         if old_tree_path != tree_path:
             obj.tree_path = tree_path
             self.update_original_data(obj, tree_path=tree_path)
             self.mp_root.base_query.where(
-                self.mp_root.sql_table.pk == obj.pk
+                self.mp_root.sql_table.pk == self.get_pk(obj)
             ).update({
                 'tree_path': tree_path
             })
@@ -66,10 +71,10 @@ class MpMapper(object):
             if old_tree_path is not None:
                 for obj in self.mp_root.base_query.where(
                     self.mp_root.sql_table.tree_path.startswith(old_tree_path) &
-                    self.mp_root.sql_table.pk != obj.pk
+                    self.mp_root.sql_table.pk != self.get_pk(obj)
                 ).iterator():
                     self.mp_root.base_query.where(
-                        self.mp_root.sql_table.pk == obj.pk
+                        self.mp_root.sql_table.pk == self.get_pk(obj)
                     ).update({
                         'tree_path': tree_path + obj.tree_path[len(old_tree_path):]
                     })
@@ -86,46 +91,37 @@ class MpMapper(object):
             objs.reverse()
         return objs
 
-    def get_ancestors_by_path(self, obj, root=False, me=False, reverse=True):
+    def get_ancestors(self, obj, root=False, me=False, reverse=True):
+        q = self.query
         t = self.mp_root.sql_table
-        q = self.query.where(
-            smartsql.P(obj.tree_path).startswith(t.tree_path)
-        )
+        steps = obj.tree_path.split(self.PATH_SEPARATOR)
+        paths = []
+        while steps:
+            paths.append(self.PATH_SEPARATOR.join(steps) + self.PATH_SEPARATOR)
+            paths.pop()
+        q = q.where(t.tree_path.in_(paths))
+
         if not root:
             q = q.where(t.parent.is_not(None))
         if not me:
-            q = q.where(t.pk != obj.pk)
+            q = q.where(t.pk != self.get_pk(obj))
+
         if reverse:
             q = q.order_by((t.tree_path,))
         else:
             q = q.order_by((t.tree_path.desc(),))
         return q
 
-    def get_ancestors_by_paths(self, obj, root=False, me=False, reverse=True):
-        q = self.query
-        t = self.mp_root.sql_table
-        cond = None
-        paths = obj.tree_path.split(self.PATH_SEPARATOR)
-        while paths:
-            q = (t.tree_path == self.PATH_SEPARATOR.join(paths))
-            cond = cond | q if cond is not None else q
+    def _make_ancestors_cond(self, obj):
+        steps = obj.tree_path.split(self.PATH_SEPARATOR)
+        paths = []
+        while steps:
+            paths.append(self.PATH_SEPARATOR.join(steps) + self.PATH_SEPARATOR)
             paths.pop()
+        return self.mp_root.sql_table.tree_path.in_(paths)
 
-        q = q.where(cond)
-
-        if not root:
-            q = q.where(t.parent.is_not(None))
-        if not me:
-            q = q.where(t.pk != obj.pk)
-
-        if reverse:
-            q = q.order_by(t.tree_path)
-        else:
-            q = q.order_by(t.tree_path.desc())
-        return q
-
-    def get_ancestors(self, obj, root=False, me=False, reverse=True):
-        return self.get_ancestors_by_paths(obj, root=root, me=me, reverse=reverse)
+    def _make_ancestors_cond2(self, obj):
+        return smartsql.P(obj.tree_path).startswith(self.mp_root.sql_table.tree_path)
 
     def get_hierarchical_name(self, obj, sep=', ', root=False, me=True, reverse=True, namegetter=str):
         """returns children QuerySet instance for given parent_id"""
@@ -133,7 +129,7 @@ class MpMapper(object):
 
     def get_children(self, obj):
         """Fix for MTI"""
-        return self.query.where(self.mp_root.sql_table.parent == obj.pk)
+        return self.query.where(self.mp_root.sql_table.parent == self.get_pk(obj))
 
     def _descendants(self, obj):
         r = list(self.get_children(obj))
@@ -152,7 +148,7 @@ class MpMapper(object):
         t = self.mp_root.sql_table
         q = self.query.where(t.tree_path.startswith(obj.tree_path))
         if not me:
-            q = q.where(t.pk != obj.pk)
+            q = q.where(t.pk != self.get_pk(obj))
         return q
 
 

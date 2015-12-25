@@ -87,5 +87,5 @@ class TestMpTree(unittest.TestCase):
             lang='en',
             name='root'
         )
-        obj_1_1.parent=root
+        obj_1_1.parent = root
         root.save()
