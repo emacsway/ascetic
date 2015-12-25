@@ -2,12 +2,12 @@ import unittest
 from ascetic import validators
 from ascetic.databases import databases
 from ascetic.contrib.polymorphic import PolymorphicMapper
-from ascetic.models import Model, ForeignKey, IdentityMap, mapper_registry
+from ascetic.models import Model, ForeignKey, IdentityMap, mapper_registry, ObjectDoesNotExist
 
 Author = Book = Nonfiction = Avia = None
 
 
-class TestModelTranslation(unittest.TestCase):
+class TestPolymorphic(unittest.TestCase):
 
     maxDiff = None
 
@@ -206,6 +206,9 @@ class TestModelTranslation(unittest.TestCase):
         author = Author.get(author_pk)
         self.assertEqual(author.books[0].pk, book_pk)
 
+        book.delete()
+        self.assertRaises(ObjectDoesNotExist, Book.get, book_pk)
+
     def test_nonfiction(self):
         author = Author(
             id=1,
@@ -245,6 +248,9 @@ class TestModelTranslation(unittest.TestCase):
         self.assertEqual(nonfiction.author.pk, author_pk)
         self.assertEqual(author.books[0], nonfiction)
 
+        nonfiction.delete()
+        self.assertRaises(ObjectDoesNotExist, Book.get, nonfiction_pk)
+
     def test_avia(self):
         author = Author(
             id=1,
@@ -269,8 +275,13 @@ class TestModelTranslation(unittest.TestCase):
         avia.save()
         avia_pk = (5, 'en')
 
+        book = Book.q.where(Book.pk == avia_pk).polymorphic(False)[0]
+        self.assertEqual(book.__class__, Book)
+        avia = book.concrete_instance
+        self.assertIsInstance(avia, Avia)
+
         avia = Book.get(avia_pk)
-        self.assertIsInstance(avia, Nonfiction)
+        self.assertIsInstance(avia, Avia)
         for k, v in avia_data.items():
             self.assertEqual(getattr(avia, k), v)
         self.assertEqual(avia.pk, avia_pk)
@@ -278,9 +289,12 @@ class TestModelTranslation(unittest.TestCase):
         self.assertEqual(author.books[0], avia)
 
         avia = Avia.get(avia_pk)
-        self.assertIsInstance(avia, Nonfiction)
+        self.assertIsInstance(avia, Avia)
         for k, v in avia_data.items():
             self.assertEqual(getattr(avia, k), v)
         self.assertEqual(avia.pk, avia_pk)
         self.assertEqual(avia.author.pk, author_pk)
         self.assertEqual(author.books[0], avia)
+
+        avia.delete()
+        self.assertRaises(ObjectDoesNotExist, Book.get, avia_pk)

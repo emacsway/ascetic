@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 from collections import OrderedDict
 from .. import validators
-from ..models import OneToOne, Result, classproperty, model_registry, mapper_registry, to_tuple
+from ..models import IdentityMap, ObjectDoesNotExist, OneToOne, Result, classproperty, model_registry, mapper_registry, to_tuple
 from ..utils import cached_property
 from .gfk import GenericForeignKey
 
-# Django-way with fields and local_fields???
+# TODO: Exclude Model interface, use only Mapper interface
 
 
 class PolymorphicMapper(object):
@@ -67,7 +67,8 @@ class PolymorphicMapper(object):
             if getattr(mapper_registry[model], 'polymorphic', False):
                 setattr(model, "concrete_instance", GenericForeignKey(
                     type_field="polymorphic_type_id",
-                    field=mapper_registry[model].pk
+                    rel_field=(lambda rel: mapper_registry[rel.rel_model].pk),
+                    field=mapper_registry[model].pk,
                 ))
         super(PolymorphicMapper, self)._do_prepare_model(self.model)
 
@@ -82,9 +83,17 @@ class PolymorphicMapper(object):
                     data_mapped[key] = value
         else:
             data_mapped = dict(data)
+        identity_map = IdentityMap(self._using)
+        key = self._make_identity_key(self.model, tuple(data_mapped[i] for i in to_tuple(self.pk)))
+        if identity_map.exists(key):
+            try:
+                return identity_map.get(key)
+            except ObjectDoesNotExist:
+                pass
         obj = self._do_load(data_mapped)
         self.set_original_data(obj, data_mapped)
         self.mark_new(obj, False)
+        identity_map.add(key, obj)
         return obj
 
     def validate(self, obj, fields=frozenset(), exclude=frozenset()):

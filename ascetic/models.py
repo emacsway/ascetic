@@ -398,30 +398,28 @@ class Mapper(object):
             getattr(self, 'validations', {}),
             getattr(self, 'declared_fields', {})
         )
-
-        self._prepare_model(model)
         self._inherit(self, (mapper_registry[base] for base in self.model.__bases__ if base in mapper_registry))  # recursive
 
-        if self.abstract:
-            return
+        if not self.abstract:
+            self._using = self.default_using
 
-        self._using = self.default_using
+            if not hasattr(self, 'db_table'):
+                self.db_table = self._create_default_db_table(model)
 
-        if not hasattr(self, 'db_table'):
-            self.db_table = self._create_default_db_table(model)
+            # fileds and columns can be a descriptor for multilingual mapping.
+            self.fields = collections.OrderedDict()
+            self.columns = collections.OrderedDict()
 
-        # fileds and columns can be a descriptor for multilingual mapping.
-        self.fields = collections.OrderedDict()
-        self.columns = collections.OrderedDict()
+            for name, field in self.create_fields(databases[self._using].read_fields(self.db_table), self.declared_fields).items():
+                self.add_field(name, field)
 
-        for name, field in self.create_fields(databases[self._using].read_fields(self.db_table), self.declared_fields).items():
-            self.add_field(name, field)
+            self.pk = self._create_pk(self.db_table, self._using, self.columns)
 
-        self.pk = self._create_pk(self.db_table, self._using, self.columns)
+            self.sql_table = self._create_sql_table()
+            self.base_query = self._create_base_query()
+            self.query = self._create_query()
 
-        self.sql_table = self._create_sql_table()
-        self.base_query = self._create_base_query()
-        self.query = self._create_query()
+        self._prepare_model(model)
 
     def _create_default_name(self, model):
         return ".".join((model.__module__, model.__name__))
@@ -506,6 +504,7 @@ class Mapper(object):
         return [smartsql.Field(f.column, prefix) for f in self.fields.values() if not getattr(f, 'virtual', False)]
 
     def _prepare_model(self, model):
+        self._do_prepare_model(model)
         for name in self.model.__dict__:
             field = getattr(model, name, None)
             if isinstance(field, Field):
@@ -537,7 +536,6 @@ class Mapper(object):
                         rel.setup_related()
                 except ModelNotRegistered:
                     pass
-        self._do_prepare_model(model)
         class_prepared.send(sender=model, using=self._using)
 
     def _do_prepare_model(self, model):
@@ -705,15 +703,18 @@ class Mapper(object):
         if self in visited:
             return False
         visited.add(self)
-
         pre_delete.send(sender=self.model, instance=obj, using=self._using)
         for key, rel in self.relations.items():
             if isinstance(rel, OneToMany):
                 for child in getattr(obj, key).iterator():
                     rel.on_delete(obj, child, rel, self._using, visited)
             elif isinstance(rel, OneToOne):
-                child = getattr(obj, key)
-                rel.on_delete(obj, child, rel, self._using, visited)
+                try:
+                    child = getattr(obj, key)
+                except ObjectDoesNotExist:
+                    pass
+                else:
+                    rel.on_delete(obj, child, rel, self._using, visited)
 
         databases[self._using].execute(self._delete_query(obj))
         post_delete.send(sender=self.model, instance=obj, using=self._using)
@@ -730,6 +731,7 @@ class Mapper(object):
                 obj = self.get(**{k: v for k, v in zip(to_tuple(self.pk), to_tuple(_obj_pk))})
             except ObjectDoesNotExist:
                 identity_map.add(key)
+                raise
             else:
                 # obj added to identity_map by loader (self.load())
                 return obj
@@ -1008,7 +1010,7 @@ class BaseRelation(object):
         mro_reversed = list(reversed(self.owner.__mro__))
         mro_reversed = mro_reversed[mro_reversed.index(result_cls) + 1:]
         for cls in mro_reversed:
-            if mapper_registry[cls].__dict__.get('polymorphic'):
+            if getattr(mapper_registry[cls], 'polymorphic', False):  # Don't look into mapper.__class__.__dict__, see ModelBase.__new__()
                 break
             result_cls = cls
         return result_cls
@@ -1079,6 +1081,7 @@ class Relation(BaseRelation):
 
     def get_rel_where(self, obj):
         t = mapper_registry[self.rel_model].sql_table
+        # TODO: It's not well to use self.rel_name here. Relation can be non-bidirectional.
         return t.get_field(self.rel_name) == self.get_value(obj)  # Use CompositeExpr
         return reduce(operator.and_,
                       ((t.get_field(rf) == getattr(obj, f, None))

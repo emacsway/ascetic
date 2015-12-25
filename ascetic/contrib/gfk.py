@@ -1,3 +1,4 @@
+import copy
 import operator
 import collections
 from ..models import ForeignKey, OneToMany, cascade, model_registry, mapper_registry, to_tuple, is_model_instance
@@ -8,7 +9,10 @@ class GenericForeignKey(ForeignKey):
 
     def __init__(self, type_field="object_type_id", rel_field=None, field=None, on_delete=cascade, rel_name=None, rel_query=None):
         self._type_field = type_field
-        self._rel_field = rel_field and to_tuple(rel_field)
+        if not rel_field or isinstance(rel_field, collections.Callable):
+            self._rel_field = rel_field
+        else:
+            self._rel_field = to_tuple(rel_field)
         self._field = field and to_tuple(field)
         self.on_delete = on_delete
         self._rel_name = rel_name
@@ -24,6 +28,8 @@ class GenericForeignKey(ForeignKey):
 
     @cached_property
     def rel_field(self):
+        if isinstance(self._rel_field, collections.Callable):
+            return to_tuple(self._rel_field(self))
         return self._rel_field
 
     @cached_property
@@ -31,46 +37,53 @@ class GenericForeignKey(ForeignKey):
         if self._rel_name is None:
             return '{0}_set'.format(self.model.__name__.lower())
         elif isinstance(self._rel_name, collections.Callable):
-            return self._rel_name
+            return self._rel_name(self)
         else:
             return self._rel_name
 
-    def rel_model(self, instance):
-        return model_registry[getattr(instance, self.type_field)]
+    @cached_property
+    def rel_model(self):
+        return model_registry[getattr(self.instance, self.type_field)]
 
-    def rel_query(self, instance):
+    @cached_property
+    def rel_query(self):
         if isinstance(self._rel_query, collections.Callable):
-            return self._rel_query(self, instance)
+            return self._rel_query(self)
         else:
-            return mapper_registry[self.rel_model(instance)].query
+            return mapper_registry[self.rel_model].query
 
-    def get_rel_where(self, instance):
-        t = mapper_registry[self.rel_model(instance)].sql_table
+    def get_rel_where(self, obj):
+        t = mapper_registry[self.rel_model].sql_table
         return reduce(operator.and_,
-                      ((t.get_field(rf) == getattr(instance, f, None))
+                      ((t.get_field(rf) == getattr(obj, f, None))
                        for f, rf in zip(self.field, self.rel_field)))
 
     @property
     def setup_related(self):
         raise AttributeError
 
+    def bind_instance(self, instance):
+        c = copy.copy(self)
+        c.instance = instance
+        return c
+
     def get(self, instance):
+        self = self.bind_instance(instance)
         val = self.get_value(instance)
         if not all(val):
             return None
 
         cached_obj = self._get_cache(instance, self.name)
-        rel_field = self.rel_field
-        rel_model = self.rel_model(instance)
-        if not isinstance(cached_obj, rel_model) or self.get_rel_value(cached_obj) != val:
-            if self._rel_query is None and rel_field == to_tuple(mapper_registry[rel_model].pk):
-                obj = mapper_registry[rel_model].get(val)  # to use IdentityMap
+        if not isinstance(cached_obj, self.rel_model) or self.get_rel_value(cached_obj) != val:
+            if self._rel_query is None and self.rel_field == to_tuple(mapper_registry[self.rel_model].pk):
+                obj = mapper_registry[self.rel_model].get(val)  # to use IdentityMap
             else:
-                obj = self.rel_query(instance).where(self.get_rel_where(instance))
+                obj = self.rel_query.where(self.get_rel_where(instance))[0]
             self._set_cache(instance, self.name, obj)
         return instance._cache[self.name]
 
     def set(self, instance, value):
+        self = self.bind_instance(instance)
         if is_model_instance(value):
             setattr(instance, self.type_field, mapper_registry[value.__class__].name)
             self._set_cache(instance, self.name, value)
@@ -78,6 +91,7 @@ class GenericForeignKey(ForeignKey):
         self.set_value(instance, value)
 
     def delete(self, instance):
+        self = self.bind_instance(instance)
         self._set_cache(instance, self.name, None)
         setattr(instance, self.type_field(instance.__class__), None)
         self.set_value(instance, None)
