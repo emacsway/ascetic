@@ -163,13 +163,15 @@ def populate_polymorphic(rows):
     if not rows:
         return
     current_model = rows[0].__class__
-    pks = {i.pk for i in rows}
+    current_mapper = mapper_registry[current_model]
+    pks = {current_mapper.get_pk(i) for i in rows}
     content_types = {i.polymorphic_type_id for i in rows}
-    content_types -= set((mapper_registry[current_model].name,))
+    content_types -= {mapper_registry[current_model].name}
     typical_objects = {}
     for ct in content_types:
         model = model_registry[ct]
-        typical_objects[ct] = {i.pk: i for i in mapper_registry[model].query.where(model.s.pk.in_(pks))}
+        mapper = mapper_registry[model]
+        typical_objects[ct] = {mapper.get_pk(i): i for i in mapper.query.where(mapper.sql_table.pk.in_(pks))}
     for i, obj in enumerate(rows):
         if obj.polymorphic_type_id in typical_objects:
-            rows[i] = typical_objects[obj.polymorphic_type_id][obj.pk]
+            rows[i] = typical_objects[obj.polymorphic_type_id][current_mapper.get_pk(obj)]
