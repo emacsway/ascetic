@@ -23,6 +23,16 @@ class PolymorphicMapper(object):
                 return mapper_registry[parent]
 
     @cached_property
+    def polymorphic_fields(self):
+        if self.polymorphic_parent:
+            cols = self.polymorphic_parent.polymorphic_fields
+        else:
+            cols = OrderedDict()
+        for k, v in self.fields.items():
+            cols[k] = v
+        return cols
+
+    @cached_property
     def polymorphic_columns(self):
         if self.polymorphic_parent:
             cols = self.polymorphic_parent.polymorphic_columns
