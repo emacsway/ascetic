@@ -1076,16 +1076,16 @@ class Relation(BaseRelation):
         t = mapper_registry[self.model].sql_table
         return t.get_field(self.name) == self.get_rel_value(rel_obj)  # Use CompositeExpr
         return reduce(operator.and_,
-                      ((t.get_field(f) == getattr(rel_obj, rf, None))
-                       for f, rf in zip(self.field, self.rel_field)))
+                      ((t.get_field(f) == rel_val)
+                       for f, rel_val in zip(self.field, self.get_rel_value(rel_obj))))
 
     def get_rel_where(self, obj):
         t = mapper_registry[self.rel_model].sql_table
         # TODO: It's not well to use self.rel_name here. Relation can be non-bidirectional.
         return t.get_field(self.rel_name) == self.get_value(obj)  # Use CompositeExpr
         return reduce(operator.and_,
-                      ((t.get_field(rf) == getattr(obj, f, None))
-                       for f, rf in zip(self.field, self.rel_field)))
+                      ((t.get_field(rf) == val)
+                       for rf, val in zip(self.rel_field, self.get_value(obj))))
 
     def get_join_where(self):
         t = mapper_registry[self.model].sql_table

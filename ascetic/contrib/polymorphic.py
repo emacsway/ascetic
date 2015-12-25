@@ -123,13 +123,13 @@ class PolymorphicMapper(object):
             raise validators.ValidationError(errors)
 
     def save(self, obj):
-        if not getattr(obj, 'polymorphic_type_id', None):
+        if not self.polymorphic_fields['polymorphic_type_id'].get_value(obj):
             obj.polymorphic_type_id = mapper_registry[obj.__class__].name
         if self.polymorphic_parent:
             new_record = self.is_new(obj)
             self.polymorphic_parent.save(obj)
             for key, parent_key in zip(to_tuple(self.pk), to_tuple(self.polymorphic_parent.pk)):
-                setattr(obj, key, getattr(obj, parent_key))
+                self.fields[key].set_value(obj, self.polymorphic_fields[parent_key].get_value(obj))
             self.mark_new(obj, new_record)
         return super(PolymorphicMapper, self).save(obj)
 

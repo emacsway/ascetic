@@ -55,8 +55,8 @@ class GenericForeignKey(ForeignKey):
     def get_rel_where(self, obj):
         t = mapper_registry[self.rel_model].sql_table
         return reduce(operator.and_,
-                      ((t.get_field(rf) == getattr(obj, f, None))
-                       for f, rf in zip(self.field, self.rel_field)))
+                      ((t.get_field(rf) == val)
+                       for rf, val in zip(self.rel_field, self.get_val(obj))))
 
     @property
     def setup_related(self):
