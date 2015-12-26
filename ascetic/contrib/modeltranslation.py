@@ -19,6 +19,49 @@ class TranslationField(Field):
     column = TranslationColumnDescriptor()
 
 
+class CreateFields(object):
+
+    def __init__(self, mapper, columns, declared_fields):
+        self._mapper = mapper
+        self._columns = columns
+        self._declared_fields = declared_fields
+        self._fields = collections.OrderedDict()
+        self._reversed_map = {
+            field.column: name for name, field in self._declared_fields.items() if hasattr(field, 'column')
+        }  # That's why we can't rename currently create_translation_field() to create_field()
+
+    def compute(self):
+        self._create_translated_columns_map()
+        self._create_fields()
+        self._create_virtual_fields()
+        return self._fields
+
+    def _create_translated_columns_map(self):
+        self._translated_columns_map = {}
+        for name in self._mapper.translated_fields:
+            if name in self._declared_fields and hasattr(self._declared_fields[name], 'column'):
+                field = self._declared_fields[name]
+                column = field.original_column if isinstance(field, TranslationField) else field.column
+            else:
+                column = name
+            for lang in self._mapper.get_languages():
+                self._translated_columns_map[self._mapper.translate_column(column, lang)] = column
+
+    def _create_fields(self):
+        for data in self._columns:
+            column_name = data['column']
+            column_name = self._translated_columns_map.get(column_name, column_name)
+            name = self._reversed_map.get(column_name, column_name)
+            if name in self._fields:
+                continue
+            self._fields[name] = self._mapper.create_translation_field(name, data, self._declared_fields)
+
+    def _create_virtual_fields(self):
+        for name, field in self._declared_fields.items():
+            if name not in self._fields:
+                self._fields[name] = self._mapper.create_translation_field(name, {'virtual': True}, self._declared_fields)
+
+
 class TranslationMapper(object):
 
     translated_fields = ()
@@ -28,38 +71,10 @@ class TranslationMapper(object):
         if name in self.translated_fields and not isinstance(field, TranslationField):
             NewField = type("Translation{}".format(field.__class__.__name__), (TranslationField, field.__class__), {})
             field = NewField(**field.__dict__)
-            # field.__class__ = NewField
         return field
 
     def create_fields(self, columns, declared_fields):
-        fields = collections.OrderedDict()
-        rmap = {field.column: name for name, field in declared_fields.items() if hasattr(field, 'column')}
-        translated_columns_map = self._create_translated_columns_map(declared_fields)
-
-        for data in columns:
-            column_name = data['column']
-            column_name = translated_columns_map.get(column_name, column_name)
-            name = rmap.get(column_name, column_name)
-            if name in fields:
-                continue
-            fields[name] = self.create_translation_field(name, data, declared_fields)
-
-        for name, field in declared_fields.items():
-            if name not in fields:
-                fields[name] = self.create_translation_field(name, {'virtual': True}, declared_fields)
-        return fields
-
-    def _create_translated_columns_map(self, declared_fields):
-        translated_columns_map = {}
-        for name in self.translated_fields:
-            if name in declared_fields and hasattr(declared_fields[name], 'column'):
-                field = declared_fields[name]
-                column = field.original_column if isinstance(field, TranslationField) else field.column
-            else:
-                column = name
-            for lang in self.get_languages():
-                translated_columns_map[self.translate_column(column, lang)] = column
-        return translated_columns_map
+        return CreateFields(self, columns, declared_fields).compute()
 
     def add_field(self, name, field):
         field.name = name
