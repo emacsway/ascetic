@@ -34,20 +34,11 @@ class TranslationMapper(object):
     def create_fields(self, columns, declared_fields):
         fields = collections.OrderedDict()
         rmap = {field.column: name for name, field in declared_fields.items() if hasattr(field, 'column')}
-
-        original_columns = {}
-        for name in self.translated_fields:
-            if name in declared_fields and hasattr(declared_fields[name], 'column'):
-                field = declared_fields[name]
-                column = field.original_column if isinstance(field, TranslationField) else field.column
-            else:
-                column = name
-            for lang in self.get_languages():
-                original_columns[self.translate_column(column, lang)] = column
+        translated_columns_map = self._create_translated_columns_map(declared_fields)
 
         for data in columns:
             column_name = data['column']
-            column_name = original_columns.get(column_name, column_name)
+            column_name = translated_columns_map.get(column_name, column_name)
             name = rmap.get(column_name, column_name)
             if name in fields:
                 continue
@@ -57,6 +48,18 @@ class TranslationMapper(object):
             if name not in fields:
                 fields[name] = self.create_translation_field(name, {'virtual': True}, declared_fields)
         return fields
+
+    def _create_translated_columns_map(self, declared_fields):
+        translated_columns_map = {}
+        for name in self.translated_fields:
+            if name in declared_fields and hasattr(declared_fields[name], 'column'):
+                field = declared_fields[name]
+                column = field.original_column if isinstance(field, TranslationField) else field.column
+            else:
+                column = name
+            for lang in self.get_languages():
+                translated_columns_map[self.translate_column(column, lang)] = column
+        return translated_columns_map
 
     def add_field(self, name, field):
         field.name = name
