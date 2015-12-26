@@ -2,7 +2,7 @@ import unittest
 from ascetic import validators
 from ascetic.databases import databases
 from ascetic.contrib.polymorphic import PolymorphicMapper
-from ascetic.models import Model, Mapper, ForeignKey, IdentityMap, mapper_registry, ObjectDoesNotExist
+from ascetic.models import Mapper, ForeignKey, IdentityMap, mapper_registry, ObjectDoesNotExist
 
 Author = Book = Nonfiction = Avia = None
 
@@ -145,7 +145,6 @@ class TestPolymorphic(unittest.TestCase):
         AuthorMapper(Author)
 
         class Book(object):
-
             def __init__(self, id=None, lang=None, polymorphic_type_id=None, title=None, author_id=None):
                 self.id = id
                 self.lang = lang
@@ -171,7 +170,6 @@ class TestPolymorphic(unittest.TestCase):
         BookMapper(Book)
 
         class Nonfiction(Book):
-
             def __init__(self, nonfiction_ptr_id=None, nonfiction_ptr_lang=None, branch=None, **kwargs):
                 super(Nonfiction, self).__init__(**kwargs)
                 self.nonfiction_ptr_id = nonfiction_ptr_id
@@ -186,7 +184,6 @@ class TestPolymorphic(unittest.TestCase):
         NonfictionMapper(Nonfiction)
 
         class Avia(Nonfiction):
-
             def __init__(self, avia_ptr_id=None, avia_ptr_lang=None, model=None, **kwargs):
                 super(Avia, self).__init__(**kwargs)
                 self.avia_ptr_id = avia_ptr_id

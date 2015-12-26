@@ -102,9 +102,8 @@ class TestModels(unittest.TestCase):
 
     @classmethod
     def create_models(cls):
-        class Author(object):
-            # books = OneToMany('ascetic.tests.models.Book')
 
+        class Author(object):
             def __init__(self, id=None, first_name=None, last_name=None, bio=None):
                 self.id = id
                 self.first_name = first_name
@@ -120,7 +119,6 @@ class TestModels(unittest.TestCase):
         AuthorMapper(Author)
 
         class Book(object):
-
             def __init__(self, id=None, title=None, author_id=None):
                 self.id = id
                 self.title = title
@@ -344,8 +342,8 @@ class TestCompositeRelation(unittest.TestCase):
 
     @classmethod
     def create_models(cls):
+
         class AuthorC(Model):
-            # books = OneToMany('ascetic.tests.models.Book')
 
             class Mapper(object):
                 db_table = 'ascetic_composite_author'

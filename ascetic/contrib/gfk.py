@@ -1,6 +1,7 @@
 import copy
 import operator
 import collections
+from functools import wraps
 from ..models import ForeignKey, OneToMany, cascade, model_registry, mapper_registry, to_tuple, is_model_instance
 from ..utils import cached_property
 
@@ -67,8 +68,14 @@ class GenericForeignKey(ForeignKey):
         c.instance = instance
         return c
 
+    def _bindable(func):
+        @wraps(func)
+        def _deco(self, instance, *a, **kw):
+            return func(self.bind_instance(instance), instance, *a, **kw)
+        return _deco
+
+    @_bindable
     def get(self, instance):
-        self = self.bind_instance(instance)
         val = self.get_value(instance)
         if not all(val):
             return None
@@ -82,16 +89,16 @@ class GenericForeignKey(ForeignKey):
             self._set_cache(instance, self.name, obj)
         return instance._cache[self.name]
 
+    @_bindable
     def set(self, instance, value):
-        self = self.bind_instance(instance)
         if is_model_instance(value):
             setattr(instance, self.type_field, mapper_registry[value.__class__].name)
             self._set_cache(instance, self.name, value)
             value = self.get_rel_value(value)
         self.set_value(instance, value)
 
+    @_bindable
     def delete(self, instance):
-        self = self.bind_instance(instance)
         self._set_cache(instance, self.name, None)
         setattr(instance, self.type_field(instance.__class__), None)
         self.set_value(instance, None)

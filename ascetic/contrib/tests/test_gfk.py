@@ -2,12 +2,12 @@ import unittest
 from ascetic import validators
 from ascetic.databases import databases
 from ascetic.contrib.gfk import GenericForeignKey, GenericRelation
-from ascetic.models import Model, IdentityMap
+from ascetic.models import Model, Mapper, IdentityMap, mapper_registry
 
 Author = Book = None
 
 
-class TestModelTranslation(unittest.TestCase):
+class TestGenericForeignKey(unittest.TestCase):
 
     maxDiff = None
 
@@ -77,21 +77,42 @@ class TestModelTranslation(unittest.TestCase):
     @classmethod
     def create_models(cls):
 
-        class Author(Model):
-            books = GenericRelation('ascetic.contrib.tests.test_gfk.Book', rel_name='author')
+        class Author(object):
+            def __init__(self, id=None, lang=None, first_name=None, last_name=None, bio=None):
+                self.id = id
+                self.lang = lang
+                self.first_name = first_name
+                self.last_name = last_name
+                self.bio = bio
 
-            class Mapper(object):
-                db_table = 'ascetic_gfk_author'
-                defaults = {'bio': 'No bio available'}
-                validations = {'first_name': validators.Length(),
-                               'last_name': (validators.Length(), lambda x: x != 'BadGuy!' or 'Bad last name', )}
+        class AuthorMapper(Mapper):
+            db_table = 'ascetic_gfk_author'
+            defaults = {'bio': 'No bio available'}
+            validations = {'first_name': validators.Length(),
+                           'last_name': (validators.Length(), lambda x: x != 'BadGuy!' or 'Bad last name', )}
+            relationships = {
+                'books': GenericRelation('ascetic.contrib.tests.test_gfk.Book', rel_name='author'),
+            }
 
-        class Book(Model):
-            author = GenericForeignKey(rel_field=('id', 'lang'), field=('object_id', 'lang'))
+        AuthorMapper(Author)
 
-            class Mapper(object):
-                name = 'ascetic.contrib.tests.test_gfk.Book'
-                db_table = 'ascetic_gfk_book'
+        class Book(object):
+            def __init__(self, id=None, lang=None, title=None, author_id=None, object_type_id=None, object_id=None):
+                self.id = id
+                self.lang = lang
+                self.title = title
+                self.author_id = author_id
+                self.object_type_id = object_type_id
+                self.object_id = object_id
+
+        class BookMapper(Mapper):
+            name = 'ascetic.contrib.tests.test_gfk.Book'
+            db_table = 'ascetic_gfk_book'
+            relationships = {
+                'author': GenericForeignKey(rel_field=('id', 'lang'), field=('object_id', 'lang')),
+            }
+
+        BookMapper(Book)
 
         return locals()
 
@@ -109,16 +130,18 @@ class TestModelTranslation(unittest.TestCase):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 
     def test_model(self):
+        author_mapper = mapper_registry[Author]
+        book_mapper = mapper_registry[Book]
         author = Author(
             id=1,
             lang='en',
             first_name='First name',
             last_name='Last name',
         )
-        author.save()
+        author_mapper.save(author)
         author_pk = (1, 'en')
-        author = Author.get(author_pk)
-        self.assertEqual(author.pk, author_pk)
+        author = author_mapper.get(author_pk)
+        self.assertEqual(author_mapper.get_pk(author), author_pk)
 
         book = Book(
             id=5,
@@ -126,11 +149,11 @@ class TestModelTranslation(unittest.TestCase):
             title='Book title'
         )
         book.author = author
-        book.save()
+        book_mapper.save(book)
         book_pk = (5, 'en')
-        book = Book.get(book_pk)
-        self.assertEqual(book.pk, book_pk)
-        self.assertEqual(book.author.pk, author_pk)
+        book = book_mapper.get(book_pk)
+        self.assertEqual(book_mapper.get_pk(book), book_pk)
+        self.assertEqual(author_mapper.get_pk(book.author), author_pk)
 
-        author = Author.get(author_pk)
-        self.assertEqual(author.books[0].pk, book_pk)
+        author = author_mapper.get(author_pk)
+        self.assertEqual(book_mapper.get_pk(author.books[0]), book_pk)

@@ -40,9 +40,9 @@ class Transaction(object):
             return self
 
         @wraps(f)
-        def _decorated(*args, **kw):
+        def _decorated(*a, **kw):
             with self:
-                rv = f(*args, **kw)
+                rv = f(*a, **kw)
             return rv
 
         return _decorated
