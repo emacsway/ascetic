@@ -1,6 +1,6 @@
 import unittest
 from ascetic.databases import databases
-from ascetic.models import Model, IdentityMap
+from ascetic.models import IdentityMap, Mapper, mapper_registry
 from ascetic.contrib.tree import MpMapper, MpModel
 
 Location = None
@@ -55,9 +55,19 @@ class TestMpTree(unittest.TestCase):
     @classmethod
     def create_models(cls):
 
-        class Location(MpModel, Model):
-            class Mapper(MpMapper):
-                db_table = 'ascetic_tree_location'
+        class Location(MpModel):
+            def __init__(self, id=None, lang=None, name=None, parent_id=None, parent_lang=None, tree_path=None):
+                self.id = id
+                self.lang = lang
+                self.name = name
+                self.parent_id = parent_id
+                self.parent_lang = parent_lang
+                self.tree_path = tree_path
+
+        class LocationMapper(MpMapper, Mapper):
+            db_table = 'ascetic_tree_location'
+
+        LocationMapper(Location)
 
         return locals()
 
@@ -75,17 +85,18 @@ class TestMpTree(unittest.TestCase):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 
     def test_model(self):
+        location_mapper = mapper_registry[Location]
         root = Location(
             id=1,
             lang='en',
             name='root'
         )
-        root.save()
+        location_mapper.save(root)
 
         obj_1_1 = Location(
-            id=1,
+            id=2,
             lang='en',
             name='root'
         )
         obj_1_1.parent = root
-        root.save()
+        location_mapper.save(obj_1_1)

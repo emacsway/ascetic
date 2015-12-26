@@ -40,7 +40,7 @@ class MpMapper(object):
     def _make_tree_path(self, obj):
         tree_path = self.KEY_SEPARATOR.join(self._mp_encode(i).zfill(self.PATH_DIGITS) for i in to_tuple(self.get_pk(obj)))
         if obj.parent:
-            tree_path = self.PATH_SEPARATOR.join((self.parent.tree_path, tree_path))
+            tree_path = self.PATH_SEPARATOR.join((obj.parent.tree_path, tree_path))
         tree_path += self.PATH_SEPARATOR
         return tree_path
 
