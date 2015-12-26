@@ -1,6 +1,6 @@
 import unittest
 from ascetic.databases import databases
-from ascetic.models import Model, IdentityMap, mapper_registry
+from ascetic.models import IdentityMap, Mapper, mapper_registry
 from ascetic.contrib.modeltranslation import TranslationMapper
 
 Author = None
@@ -49,10 +49,10 @@ class TestModelTranslation(unittest.TestCase):
             DROP TABLE IF EXISTS ascetic_modeltranslation_author;
             CREATE TABLE ascetic_modeltranslation_author (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                first_name VARCHAR(40),
-                first_name VARCHAR(40),
-                last_name VARCHAR(40),
-                last_name VARCHAR(40),
+                first_name_en VARCHAR(40),
+                first_name_ru VARCHAR(40),
+                last_name_en VARCHAR(40),
+                last_name_ru VARCHAR(40),
               bio TEXT
             );
         """
@@ -61,12 +61,20 @@ class TestModelTranslation(unittest.TestCase):
     @classmethod
     def create_models(cls):
 
-        class Author(Model):
-            class Mapper(TranslationMapper):
-                db_table = 'ascetic_modeltranslation_author'
-                map = {'first_alias': 'first_name'}
-                defaults = {'bio': 'No bio available'}
-                translated_fields = ('first_alias', 'last_name')
+        class Author(object):
+            def __init__(self, id=None, first_alias=None, last_name=None, bio=None):
+                self.id = id
+                self.first_alias = first_alias
+                self.last_name = last_name
+                self.bio = bio
+
+        class AuthorMapper(TranslationMapper, Mapper):
+            db_table = 'ascetic_modeltranslation_author'
+            map = {'first_alias': 'first_name'}
+            defaults = {'bio': 'No bio available'}
+            translated_fields = ('first_alias', 'last_name')
+
+        AuthorMapper(Author)
 
         return locals()
 
@@ -116,8 +124,9 @@ class TestModelTranslation(unittest.TestCase):
         mapper._language = current_language
 
     def test_model(self):
+        author_mapper = mapper_registry[Author]
         author = Author(first_alias='First name', last_name='Last name')
-        author.save()
-        author = Author.get(author.id)
+        author_mapper.save(author)
+        author = author_mapper.get(author_mapper.get_pk(author))
         self.assertEqual(author.first_alias, 'First name')
         self.assertEqual(author.last_name, 'Last name')
