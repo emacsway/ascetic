@@ -7,7 +7,7 @@ setup(
     name='ascetic',
     version='0.7.2.27',
 
-    packages = find_packages(),
+    packages = find_packages(exclude=('examples*',)),
     include_package_data=True,
 
     author="Ivan Zakrevsky",
