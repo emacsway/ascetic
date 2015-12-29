@@ -7,6 +7,7 @@ from .gfk import GenericForeignKey
 
 # TODO: Support for native support inheritance:
 # http://www.postgresql.org/docs/9.4/static/tutorial-inheritance.html
+# http://www.postgresql.org/docs/9.4/static/ddl-inherit.html
 
 
 class NativePolymorphicMapper(object):
