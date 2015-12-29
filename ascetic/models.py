@@ -647,14 +647,25 @@ class Mapper(object):
         # Don't need '__model__' key. Just override this method in subclass.
         self.set_defaults(obj)
         errors = {}
-        for name in self._get_specified_fields(fields, exclude):
+        fields = self._get_specified_fields(fields, exclude)
+        for name in fields:
             field = self.fields[name]
             try:
                 field.validate(obj)
             except ValidationError as e:
                 errors[name] = e.args[0]
+
+        try:
+            self._do_validate(fields)
+        except ValidationError as e:
+            for k, v in e.args[0]:
+                errors.setdefault(k, []).extend(v)
+
         if errors:
             raise ValidationError(errors)
+
+    def _do_validate(self, fields):
+        pass
 
     def _get_specified_fields(self, fields=frozenset(), exclude=frozenset()):
         if not fields:

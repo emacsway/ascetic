@@ -5,19 +5,24 @@ from ..models import IdentityMap, ObjectDoesNotExist, OneToOne, Result, classpro
 from ..utils import cached_property
 from .gfk import GenericForeignKey
 
-# TODO: Exclude Model interface, use only Mapper interface
+# TODO: Support for native support inheritance:
+# http://www.postgresql.org/docs/9.4/static/tutorial-inheritance.html
+
+
+class NativePolymorphicMapper(object):
+    pass
 
 
 class PolymorphicMapper(object):
 
     @cached_property
-    def polymorphic_parent(self):
+    def polymorphic_parent(self):  # TODO: polymorphic_parents (to support multiple inheritance)??? Or use C3 linearization???
         for parent in self.model.mro():
             if parent is not self.model and parent in mapper_registry and getattr(mapper_registry[parent], 'polymorphic', False):
                 return mapper_registry[parent]
 
     @classproperty
-    def polymorphic_root(self):
+    def polymorphic_root(self):  # TODO: delete me (to support multiple inheritance)
         for parent in self.model.mro().reverse():
             if parent is not self.model and parent in mapper_registry and getattr(mapper_registry[parent], 'polymorphic', False):
                 return mapper_registry[parent]
@@ -64,6 +69,7 @@ class PolymorphicMapper(object):
             if base is not model and getattr(mapper_registry.get(base), 'polymorphic', False):
                 pk_rel_name = "{}_ptr".format(base.__name__.lower())
                 # self.pk = "{}_id".format(pk_rel_name)  # Useless, pk read from DB
+                # TODO: support multiple inheritance
                 setattr(model, pk_rel_name, OneToOne(
                     base,
                     field=mapper_registry[model].pk,

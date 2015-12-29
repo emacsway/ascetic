@@ -46,7 +46,7 @@ class MpMapper(object):
 
     @cached_property
     def mp_root(self):
-        return mapper_registry[self.relations['parent'].descriptor_class]
+        return mapper_registry[self.relations['parent'].model]
 
     def save(self, obj):
         """Sets content_type and calls parent method."""
