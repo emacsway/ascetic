@@ -17,7 +17,7 @@ class NativePolymorphicMapper(object):
 class PolymorphicMapper(object):
 
     @cached_property
-    def polymorphic_parent(self):  # TODO: polymorphic_parents (to support multiple inheritance)??? Or use C3 linearization???
+    def polymorphic_parent(self):
         for parent in self.model.mro():
             if parent is not self.model and parent in mapper_registry and getattr(mapper_registry[parent], 'polymorphic', False):
                 return mapper_registry[parent]
@@ -76,7 +76,7 @@ class PolymorphicMapper(object):
                     field=mapper_registry[model].pk,
                     rel_field=mapper_registry[base].pk,
                     rel_name=model.__name__.lower(),
-                    query=(lambda rel: mapper_registry[rel.rel_model].query.polymorphic(False)),
+                    query=(lambda rel: mapper_registry[rel.rel_model].query.polymorphic(False)),  # TODO: rel.model instead of rel.rel_model?
                     rel_query=(lambda rel: mapper_registry[rel.rel_model].query.polymorphic(False))
                 ))
                 break
