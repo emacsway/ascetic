@@ -8,7 +8,6 @@ from datetime import datetime
 from ..models import mapper_registry
 
 # Under construction!!! Not testet yet!!!
-# TODO: Make it similar to MVCC of PostgreSQL???
 
 try:
     import cPickle as pickle
