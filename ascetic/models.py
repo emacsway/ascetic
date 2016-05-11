@@ -21,7 +21,7 @@ except NameError:
     string_types = (str,)
     integer_types = (int,)
 
-cr = copy.copy(smartsql.cr)
+factory = copy.copy(smartsql.factory)
 
 
 def to_tuple(val):
@@ -487,15 +487,15 @@ class Mapper(object):
         return self.__class__.pk
 
     def _create_sql_table(self):
-        return Table(self)
+        return factory.Table(self)
 
     def _create_base_query(self):
         """For relations."""
-        return smartsql.Q(self.sql_table, result=self.result_factory(self)).fields(self.get_sql_fields())
+        return factory.Query(self.sql_table, result=self.result_factory(self)).fields(self.get_sql_fields())
 
     def _create_query(self):
         """For selection."""
-        return smartsql.Q(self.sql_table, result=self.result_factory(self)).fields(self.get_sql_fields())
+        return factory.Query(self.sql_table, result=self.result_factory(self)).fields(self.get_sql_fields())
 
     def get_sql_fields(self, prefix=None):
         """Returns field list."""
@@ -932,7 +932,7 @@ class SelectRelatedMapping(object):
         return objs[0]
 
 
-@cr
+@factory.register
 class Table(smartsql.Table):
 
     def __init__(self, mapper, *args, **kwargs):
@@ -975,7 +975,7 @@ class Table(smartsql.Table):
         return super(Table, self).get_field(smartsql.LOOKUP_SEP.join(parts))
 
 
-@cr
+@factory.register
 class TableAlias(smartsql.TableAlias, Table):
     @property
     def _mapper(self):
