@@ -21,6 +21,8 @@ except NameError:
     string_types = (str,)
     integer_types = (int,)
 
+cr = copy.copy(smartsql.cr)
+
 
 def to_tuple(val):
     return val if type(val) == tuple else (val,)
@@ -930,6 +932,7 @@ class SelectRelatedMapping(object):
         return objs[0]
 
 
+@cr
 class Table(smartsql.Table):
 
     def __init__(self, mapper, *args, **kwargs):
@@ -971,10 +974,8 @@ class Table(smartsql.Table):
         parts[0] = field
         return super(Table, self).get_field(smartsql.LOOKUP_SEP.join(parts))
 
-    def as_(self, alias):
-        return TableAlias(alias, self)
 
-
+@cr
 class TableAlias(smartsql.TableAlias, Table):
     @property
     def _mapper(self):
