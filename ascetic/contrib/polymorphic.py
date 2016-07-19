@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from collections import OrderedDict
 from .. import validators
-from ..models import IdentityMap, ObjectDoesNotExist, OneToOne, Result, classproperty, model_registry, mapper_registry, to_tuple
+from ..models import IdentityMap, ObjectDoesNotExist, OneToOne, Result, model_registry, mapper_registry, to_tuple
 from ..utils import cached_property
 from .gfk import GenericForeignKey
 
@@ -21,19 +21,20 @@ class PolymorphicMapper(object):
         bases = []
         for base in derived_model.__bases__:
             if base in mapper_registry and getattr(mapper_registry[base], 'polymorphic', False):
-                bases.append(mapper_registry[base])
-        if not bases:
-            for base in derived_model.__bases__:
+                bases.append(base)
+            else:
                 bases += cls.get_polymorphic_bases(base)
         return tuple(bases)
 
     @cached_property
     def polymorphic_bases(self):
-        return self.get_polymorphic_bases(self.model)
+        return tuple(mapper_registry[base_model] for base_model in self.get_polymorphic_bases(self.model))
 
-    @cached_property
-    def polymorphic_mro(self):
-        pass  # TODO: Fix the diamond inheritance problem???
+    # TODO: Fix the diamond inheritance problem???
+    # I'm not sure is it a problem... After first base save model will has PK...
+    # @cached_property
+    # def polymorphic_mro(self):
+    #     pass
 
     @cached_property
     def polymorphic_fields(self):
@@ -166,7 +167,7 @@ class PolymorphicResult(Result):
         if self._cache is None:
             polymorphic, self._polymorphic = self._polymorphic, False
             self._cache = list(self.iterator())
-            populate_polymorphic(self._cache)
+            self._cache = PopulatePolymorphic(self._cache).compute()
             self.populate_prefetch()
             self._polymorphic = polymorphic
         return self
@@ -176,19 +177,38 @@ class PolymorphicResult(Result):
             yield obj.concrete_instance if self._polymorphic and hasattr(obj, 'concrete_instance') else obj
 
 
-def populate_polymorphic(rows):
-    if not rows:
-        return
-    current_model = rows[0].__class__
-    current_mapper = mapper_registry[current_model]
-    pks = {current_mapper.get_pk(i) for i in rows}
-    content_types = {i.polymorphic_type_id for i in rows}
-    content_types -= {mapper_registry[current_model].name}
-    typical_objects = {}
-    for ct in content_types:
-        model = model_registry[ct]
-        mapper = mapper_registry[model]
-        typical_objects[ct] = {mapper.get_pk(i): i for i in mapper.query.where(mapper.sql_table.pk.in_(pks))}
-    for i, obj in enumerate(rows):
-        if obj.polymorphic_type_id in typical_objects:
-            rows[i] = typical_objects[obj.polymorphic_type_id][current_mapper.get_pk(obj)]
+class PopulatePolymorphic(object):
+
+    def __init__(self, rows):
+        self._rows = rows
+
+    def compute(self):
+        if not self._rows:
+            return []
+        return self._get_populated_rows()
+
+    def _get_populated_rows(self):
+        rows = self._rows[:]
+        typical_objects = self._get_typical_objects()
+        for i, obj in enumerate(rows):
+            if obj.polymorphic_type_id in typical_objects:
+                rows[i] = typical_objects[obj.polymorphic_type_id][self._get_current_mapper().get_pk(obj)]
+        return rows
+
+    def _get_typical_objects(self):
+        typical_objects = {}
+        pks = {self._get_current_mapper().get_pk(i) for i in self._rows}
+        for ct in self._get_content_types():
+            model = model_registry[ct]
+            mapper = mapper_registry[model]
+            typical_objects[ct] = {mapper.get_pk(i): i for i in mapper.query.where(mapper.sql_table.pk.in_(pks))}
+        return typical_objects
+
+    def _get_current_mapper(self):
+        current_model = self._rows[0].__class__
+        return mapper_registry[current_model]
+
+    def _get_content_types(self):
+        content_types = {i.polymorphic_type_id for i in self._rows}
+        content_types -= {self._get_current_mapper().name}
+        return content_types
