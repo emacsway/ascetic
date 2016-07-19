@@ -17,26 +17,30 @@ class NativePolymorphicMapper(object):
 class PolymorphicMapper(object):
 
     @classmethod
-    def get_polymorphic_parents(cls, descendant_model):
-        parents = []
-        for base in descendant_model.__bases__:
+    def get_polymorphic_bases(cls, derived_model):
+        bases = []
+        for base in derived_model.__bases__:
             if base in mapper_registry and getattr(mapper_registry[base], 'polymorphic', False):
-                parents.append(mapper_registry[base])
-        if not parents:
-            for base in descendant_model.__bases__:
-                parents += cls.get_polymorphic_parents(base)
-        return tuple(parents)
+                bases.append(mapper_registry[base])
+        if not bases:
+            for base in derived_model.__bases__:
+                bases += cls.get_polymorphic_bases(base)
+        return tuple(bases)
 
     @cached_property
-    def polymorphic_parents(self):
-        return self.get_polymorphic_parents(self.model)
+    def polymorphic_bases(self):
+        return self.get_polymorphic_bases(self.model)
+
+    @cached_property
+    def polymorphic_mro(self):
+        pass  # TODO: Fix the diamond inheritance problem???
 
     @cached_property
     def polymorphic_fields(self):
         fields = OrderedDict()
-        for parent in self.polymorphic_parents:
+        for base in self.polymorphic_bases:
             for k, v in self.fields.items():
-                fields.update(parent.polymorphic_fields)
+                fields.update(base.polymorphic_fields)
         for name, field in self.fields.items():
             fields[name] = field
         return fields
@@ -44,27 +48,27 @@ class PolymorphicMapper(object):
     @cached_property
     def polymorphic_columns(self):
         cols = OrderedDict()
-        for parent in self.polymorphic_parents:
+        for base in self.polymorphic_bases:
             for k, v in self.fields.items():
-                cols.update(parent.polymorphic_columns)
+                cols.update(base.polymorphic_columns)
         for name, col in self.fields.items():
             cols[name] = col
         return cols
 
     def _create_query(self):
-        parents = self.polymorphic_parents
-        if parents:
-            parent = parents[-1]
-            q = parent._create_query()
-            descendants = (self,) + parents[:-1]
-            for descendant in descendants:
-                t = descendant.sql_table
+        bases = self.polymorphic_bases
+        if bases:
+            base = bases[-1]
+            q = base._create_query()
+            derived_mappers = (self,) + bases[:-1]
+            for derived_mapper in derived_mappers:
+                t = derived_mapper.sql_table
                 q = q.fields(
                     *self.get_sql_fields()
                 ).tables((
                     q.tables() & t
                 ).on(
-                    t.pk == parent.sql_table.pk
+                    t.pk == base.sql_table.pk
                 ))
         else:
             q = super(PolymorphicMapper, self)._create_query()
@@ -121,9 +125,9 @@ class PolymorphicMapper(object):
 
     def validate(self, obj, fields=frozenset(), exclude=frozenset()):
         errors = {}
-        for parent in self.polymorphic_parents:
+        for base in self.polymorphic_bases:
             try:
-                parent.validate(obj, fields=fields, exclude=exclude)
+                base.validate(obj, fields=fields, exclude=exclude)
             except validators.ValidationError as e:
                 errors.update(e.args[0])
 
@@ -138,11 +142,11 @@ class PolymorphicMapper(object):
     def save(self, obj):
         if not self.polymorphic_fields['polymorphic_type_id'].get_value(obj):
             obj.polymorphic_type_id = mapper_registry[obj.__class__].name
-        for parent in self.polymorphic_parents:
+        for base in self.polymorphic_bases:
             new_record = self.is_new(obj)
-            parent.save(obj)
-            for key, parent_key in zip(to_tuple(self.pk), to_tuple(parent.pk)):
-                self.fields[key].set_value(obj, self.polymorphic_fields[parent_key].get_value(obj))
+            base.save(obj)
+            for key, base_key in zip(to_tuple(self.pk), to_tuple(base.pk)):
+                self.fields[key].set_value(obj, self.polymorphic_fields[base_key].get_value(obj))
             self.mark_new(obj, new_record)
         return super(PolymorphicMapper, self).save(obj)
 
