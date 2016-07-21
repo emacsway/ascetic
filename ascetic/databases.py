@@ -171,7 +171,7 @@ class Database(object):
         if self._begin_level == 0:
             self.connection.commit()
             from ascetic.models import IdentityMap
-            IdentityMap().clear()
+            IdentityMap(self.alias).clear()
         else:
             self.savepoint_commit()
 
@@ -180,7 +180,7 @@ class Database(object):
         if self._begin_level == 0:
             self.connection.rollback()
             from ascetic.models import IdentityMap
-            IdentityMap().clear()
+            IdentityMap(self.alias).clear()
         else:
             self.savepoint_rollback()
 
