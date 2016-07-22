@@ -34,9 +34,8 @@ class BaseTransaction(interfaces.ITransaction):
     def __init__(self, using):
         self._using = using
 
-    @utils.cached_property
-    def _db(self):
-        return databases[self._using]
+    def parent(self):
+        return None
 
     def can_reconnect(self):
         return False
@@ -44,10 +43,12 @@ class BaseTransaction(interfaces.ITransaction):
     def set_autocommit(self, autocommit):
         raise Exception("You cannot set autocommit during a managed transaction!")
 
+    @utils.cached_property
+    def _db(self):
+        return databases[self._using]
+
 
 class Transaction(BaseTransaction):
-    def parent(self):
-        return None
 
     def begin(self):
         self._db.execute("BEGIN")
@@ -71,6 +72,9 @@ class SavePoint(BaseTransaction):
         self._parent = parent
         self._name = name or 's' + uuid4().hex
 
+    def parent(self):
+        return self._parent
+
     def begin(self, name=None):
         self._db.begin_savepoint(self._name)
 
@@ -82,9 +86,6 @@ class SavePoint(BaseTransaction):
 
 
 class NoneTransaction(BaseTransaction):
-    def parent(self):
-        return None
-
     def begin(self, name=None):
         pass
 
@@ -151,9 +152,11 @@ class TransactionManager(interfaces.ITransactionManager):
 
     def commit(self):
         self.current().commit()
+        self.current(self.current().parent())
 
     def rollback(self):
         self.current().rollback()
+        self.current(self.current().parent())
 
     def can_reconnect(self):
         return self.current().can_reconnect()
