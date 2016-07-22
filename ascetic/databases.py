@@ -9,7 +9,8 @@ from uuid import uuid4
 from sqlbuilder import smartsql
 from sqlbuilder.smartsql.compilers import mysql, sqlite
 from ascetic import settings
-from ascetic.utils import resolve
+from ascetic import interfaces
+from ascetic import utils
 
 try:
     import _thread
@@ -26,42 +27,146 @@ except NameError:
 
 PLACEHOLDER = '%s'
 
-resolve(settings.LOGGER_INIT)(settings)
+utils.resolve(settings.LOGGER_INIT)(settings)
 
 
-class Transaction(object):
+class BaseTransaction(interfaces.ITransaction):
+    def __init__(self, using):
+        self._using = using
 
-    def __init__(self, using='default'):
-        """Constructor of Transaction instance."""
-        self.db = databases[using]
+    @utils.cached_property
+    def _db(self):
+        return databases[self._using]
 
-    def __call__(self, f=None):
-        if f is None:
+    def can_reconnect(self):
+        return False
+
+    def set_autocommit(self, autocommit):
+        raise Exception("You cannot set autocommit during a managed transaction!")
+
+
+class Transaction(BaseTransaction):
+    def parent(self):
+        return None
+
+    def begin(self):
+        self._db.execute("BEGIN")
+
+    def commit(self):
+        self._db.commit()
+        self._clear_identity_map()
+
+    def rollback(self):
+        self._db.rollback()
+        self._clear_identity_map()
+
+    def _clear_identity_map(self):
+        from ascetic.models import IdentityMap
+        IdentityMap(self._using).clear()
+
+
+class SavePoint(BaseTransaction):
+    def __init__(self, using, parent, name=None):
+        BaseTransaction.__init__(self, using)
+        self._parent = parent
+        self._name = name or 's' + uuid4().hex
+
+    def begin(self, name=None):
+        self._db.begin_savepoint(self._name)
+
+    def commit(self):
+        self._db.commit_savepoint(self._name)
+
+    def rollback(self):
+        self.rollback_savepoint(self._name)
+
+
+class NoneTransaction(BaseTransaction):
+    def parent(self):
+        return None
+
+    def begin(self, name=None):
+        pass
+
+    def commit(self):
+        pass
+
+    def rollback(self):
+        pass
+
+    def can_reconnect(self):
+        return True
+
+    def set_autocommit(self, autocommit):
+        self._db.set_autocommit(autocommit)
+
+
+class TransactionManager(interfaces.ITransactionManager):
+    def __init__(self, using, autocommit):
+        self._using = using
+        self._current = None
+        self._autocommit = autocommit
+
+    def __call__(self, func=None):
+        if func is None:
             return self
 
-        @wraps(f)
+        @wraps(func)
         def _decorated(*a, **kw):
             with self:
-                rv = f(*a, **kw)
+                rv = func(*a, **kw)
             return rv
 
         return _decorated
 
     def __enter__(self):
-        self.db.begin()
+        self.begin()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         try:
             if exc_type:
-                self.db.rollback()
+                self.rollback()
             else:
                 try:
-                    self.db.commit()
+                    self.commit()
                 except:
-                    self.db.rollback()
+                    self.rollback()
                     raise
         finally:
             pass
+
+    def current(self, node=utils.Undef):
+        if node is utils.Undef:
+            return self._current or NoneTransaction(self._using)
+        self._current = node
+
+    def begin(self):
+        if self._current is None:
+            self.current().set_autocommit(False)
+            self.current(Transaction(self._using))
+        else:
+            self.current(SavePoint(self._using, self.current()))
+        self.current().begin()
+        return
+
+    def commit(self):
+        self.current().commit()
+
+    def rollback(self):
+        self.current().rollback()
+
+    def can_reconnect(self):
+        return self.current().can_reconnect()
+
+    def on_connect(self):
+        self._current = None
+        self.current().set_autocommit(self._autocommit)
+
+    def autocommit(self, autocommit=None):
+        if autocommit is None:
+            return self._autocommit and not self._current
+        self._autocommit = autocommit
+        self.current().set_autocommit(autocommit)
 
 
 class Database(object):
@@ -70,17 +175,14 @@ class Database(object):
     placeholder = '%s'
     compile = smartsql.compile
     connection = None
-    _begin_level = 0
-    _autocommit = False
 
-    def __init__(self, alias, engine, initial_sql, always_reconnect=False, autocommit=False, debug=False, **kwargs):
+    def __init__(self, alias, engine, transaction, initial_sql, always_reconnect=False, debug=False, **kwargs):
         self.alias = alias
         self.engine = engine
         self.debug = debug
         self.initial_sql = initial_sql
         self.always_reconnect = always_reconnect
-        self.autocommit = autocommit
-        self._savepoints = []
+        self.transaction = transaction
         self._conf = kwargs
         self._logger = logging.getLogger('.'.join((__name__, self.alias)))
 
@@ -92,8 +194,7 @@ class Database(object):
 
     def _ensure_connected(self):
         self.connection = self.connection_factory(**self._conf)
-        if self.autocommit:
-            self.set_autocommit(self.autocommit)
+        self.transaction.on_connect()
         if self.initial_sql:
             self.connection.cursor().execute(self.initial_sql)
         return self
@@ -124,11 +225,12 @@ class Database(object):
         try:
             cursor.execute(sql, params)
         except Exception:
-            if (not self._autocommit or self._begin_level > 0) and not self.always_reconnect:
+            if self.always_reconnect or self.transaction.can_reconnect():
+                self._ensure_connected()
+                cursor = self.cursor()
+                cursor.execute(sql, params)
+            else:
                 raise
-            self._ensure_connected()
-            cursor = self.cursor()
-            cursor.execute(sql, params)
         return cursor
 
     def execute(self, sql, params=()):
@@ -148,61 +250,26 @@ class Database(object):
     def last_insert_id(self, cursor):
         return cursor.lastrowid
 
-    def get_autocommit(self):
-        return self._autocommit and self._begin_level == 0
-
-    def set_autocommit(self, autocommit=True):
-        self._autocommit = autocommit
-        return self
-
-    @property
-    def transaction(self):
-        return Transaction(self.alias)
-
     def begin(self):
-        if self._begin_level == 0:
-            self.execute("BEGIN")
-        else:
-            self.savepoint_begin()
-        self._begin_level += 1
+        self.execute("BEGIN")
 
     def commit(self):
-        self._begin_level = max(0, self._begin_level - 1)
-        if self._begin_level == 0:
-            self.connection.commit()
-            from ascetic.models import IdentityMap
-            IdentityMap(self.alias).clear()
-        else:
-            self.savepoint_commit()
+        self.connection.commit()
 
     def rollback(self):
-        self._begin_level = max(0, self._begin_level - 1)
-        if self._begin_level == 0:
-            self.connection.rollback()
-            from ascetic.models import IdentityMap
-            IdentityMap(self.alias).clear()
-        else:
-            self.savepoint_rollback()
+        self.connection.rollback()
 
-    def savepoint_begin(self, name=None):
-        if name is None:
-            name = 's' + uuid4().hex
-        self._savepoints.append(name)
+    def begin_savepoint(self, name):
         self.execute("SAVEPOINT %s", name)
 
-    def savepoint_commit(self, name=None):
-        if name is None:
-            name = self._savepoints.pop()
-        else:
-            del self._savepoints[self._savepoints.index(name):]
+    def commit_savepoint(self, name):
         self.execute("RELEASE SAVEPOINT %s", name)
 
-    def savepoint_rollback(self, name=None):
-        if name is None:
-            name = self._savepoints.pop()
-        else:
-            del self._savepoints[self._savepoints.index(name):]
+    def rollback_savepoint(self, name):
         self.execute("ROLLBACK TO SAVEPOINT %s", name)
+
+    def set_autocommit(self, autocommit):
+        pass
 
     def read_fields(self, db_table):
         schema = self.describe_table(db_table)
@@ -231,16 +298,18 @@ class Database(object):
     def register(cls, engine):
         def _deco(engine_cls):
             cls._engines[engine] = engine_cls
-            return cls
+            return engine_cls
         return _deco
 
     @classmethod
     def factory(cls, **kwargs):
+        transaction = TransactionManager(kwargs['alias'], kwargs.pop('autocommit', False))
         try:
             Cls = cls._engines[kwargs['engine']]
         except KeyError:
-            Cls = resolve(kwargs['engine'])
-        database = Cls(**kwargs)
+            Cls = utils.resolve(kwargs['engine'])
+
+        database = Cls(transaction=transaction, **kwargs)
         if 'django_alias' in kwargs:
             database.connection_factory = django_connection_factory
         return database
@@ -307,8 +376,9 @@ class MySQLDatabase(Database):
             schema[col['column']] = col
         return schema
 
-    def set_autocommit(self, autocommit=True):
+    def set_autocommit(self, autocommit):
         self.execute("SET autocommit={}".format(int(autocommit)))
+        # self.connection.autocommit(autocommit)
         super(MySQLDatabase, self).set_autocommit(autocommit)
 
 
@@ -355,8 +425,14 @@ class PostgreSQLDatabase(Database):
             schema[col['column']] = col
         return schema
 
-    def set_autocommit(self, autocommit=True):
-        self.execute("SET AUTOCOMMIT = {}".format('ON' if autocommit else 'OFF'))
+    def set_autocommit(self, autocommit):
+        # The server-side autocommit setting was removed and reimplemented in client applications and languages.
+        # Server-side autocommit was causing too many problems with languages and applications that wanted
+        # to control their own autocommit behavior, so autocommit was removed from the server and added to individual
+        # client APIs as appropriate.
+        # https://www.postgresql.org/docs/7.4/static/release-7-4.html
+        # self.execute("SET AUTOCOMMIT = {}".format('ON' if autocommit else 'OFF'))
+        self.connection.set_session(autocommit=autocommit)
         super(PostgreSQLDatabase, self).set_autocommit(autocommit)
 
 

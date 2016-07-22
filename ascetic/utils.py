@@ -10,6 +10,17 @@ except NameError:
     integer_types = (int,)
 
 
+class UndefType(object):
+
+    def __repr__(self):
+        return "Undef"
+
+    def __reduce__(self):
+        return "Undef"
+
+Undef = UndefType()
+
+
 class cached_property(object):
     def __init__(self, func, name=None):
         self.func = func
