@@ -205,6 +205,8 @@ class Field(object):
         # TODO: auto add validators and converters.
 
     def validate(self, obj):
+        # FIXME: High coupling.
+        # We need ability to use this method in model setter before value will be assigned.
         errors = []
         if not hasattr(self, 'validators'):
             return errors
