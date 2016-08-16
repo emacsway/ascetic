@@ -11,7 +11,7 @@ from sqlbuilder import smartsql
 from .databases import databases
 from .signals import pre_save, post_save, pre_delete, post_delete, pre_init, post_init, class_prepared
 from .utils import classproperty, cached_property
-from .validators import ValidationError
+from .validators import ValidationError, ChainValidator
 
 try:
     str = unicode  # Python 2.* compatible
@@ -205,26 +205,9 @@ class Field(object):
         # TODO: auto add validators and converters.
 
     def validate(self, value):
-        # FIXME: High coupling.
-        # We need ability to use this method in model setter before value will be assigned.
-        errors = []
         if not hasattr(self, 'validators'):
-            return errors
-        for validator in self.validators:
-            assert isinstance(validator, collections.Callable), 'The validator must be callable'
-            try:
-                    valid_or_msg = validator(value)
-            except ValidationError as e:
-                # TODO: How to allow rewrite message in this case? Extend validator?
-                errors.append(e.args[0])
-            else:
-                if valid_or_msg is False:
-                    errors.append('Improper value "{0!r}"'.format(value))
-                if isinstance(valid_or_msg, string_types):
-                    # Don't need message code. To rewrite message simple wrap (or extend) validator.
-                    errors.append(valid_or_msg)
-        if errors:
-            raise ValidationError(errors)
+            return True
+        return ChainValidator(*self.validators)(value)
 
     def set_default(self, obj):
         if not hasattr(self, 'default'):

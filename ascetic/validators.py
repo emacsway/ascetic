@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 import re
+import collections
 
 try:
     str = unicode  # Python 2.* compatible
@@ -64,13 +65,24 @@ class Number(Validator):
             (self.maximum is None or number <= self.maximum)
 
 
-class ValidatorChain(object):
+class ChainValidator(object):
     def __init__(self, *validators):
         self.validators = validators
 
-    def __call__(self, *a, **kw):
+    def __call__(self, value):
+        errors = []
         for validator in self.validators:
-            test = validator(*a, **kw)
-            if test is not True:
-                return test
+            assert isinstance(validator, collections.Callable), 'The validator must be callable'
+            try:
+                valid_or_msg = validator(value)
+            except ValidationError as e:
+                errors.append(e.args[0])
+            else:
+                if valid_or_msg is False:
+                    errors.append('Improper value "{0!r}"'.format(value))
+                if isinstance(valid_or_msg, string_types):
+                    # Don't need message code. To rewrite message simple wrap (or extend) validator.
+                    errors.append(valid_or_msg)
+        if errors:
+            raise ValidationError(errors)
         return True

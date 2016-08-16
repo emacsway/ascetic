@@ -29,10 +29,12 @@ class TestValidators(unittest.TestCase):
         assert validators.Number(1)(100.0)
         assert not validators.Number()('rawr!')
 
-        vc = validators.ValidatorChain(validators.Length(8), validators.Email())
-        assert vc('test@example.com')
-        assert not vc('a@a.com')
-        assert not vc('asdfasdfasdfasdfasdf')
+        vc = validators.ChainValidator(validators.Length(8), validators.Email())
+        self.assertTrue(vc('test@example.com'))
+        with self.assertRaises(validators.ValidationError):
+            vc('a@a.com')
+        with self.assertRaises(validators.ValidationError):
+            vc('asdfasdfasdfasdfasdf')
 
 
 class TestUtils(unittest.TestCase):
