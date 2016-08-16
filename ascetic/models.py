@@ -204,7 +204,7 @@ class Field(object):
             setattr(self, k, v)
         # TODO: auto add validators and converters.
 
-    def validate(self, obj):
+    def validate(self, value):
         # FIXME: High coupling.
         # We need ability to use this method in model setter before value will be assigned.
         errors = []
@@ -212,18 +212,14 @@ class Field(object):
             return errors
         for validator in self.validators:
             assert isinstance(validator, collections.Callable), 'The validator must be callable'
-            value = self.get_value(obj)
             try:
-                try:
-                    valid_or_msg = validator(obj, self.name, value)
-                except TypeError:
                     valid_or_msg = validator(value)
             except ValidationError as e:
                 # TODO: How to allow rewrite message in this case? Extend validator?
                 errors.append(e.args[0])
             else:
                 if valid_or_msg is False:
-                    errors.append('Improper value "{0}" for "{1}"'.format(value, self.name))
+                    errors.append('Improper value "{0!r}"'.format(value))
                 if isinstance(valid_or_msg, string_types):
                     # Don't need message code. To rewrite message simple wrap (or extend) validator.
                     errors.append(valid_or_msg)
@@ -654,7 +650,7 @@ class Mapper(object):
         for name in fields:
             field = self.fields[name]
             try:
-                field.validate(obj)
+                field.validate(field.get_value(obj))
             except ValidationError as e:
                 errors[name] = e.args[0]
 
