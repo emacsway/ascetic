@@ -11,7 +11,7 @@ from sqlbuilder import smartsql
 from .databases import databases
 from .signals import pre_save, post_save, pre_delete, post_delete, pre_init, post_init, class_prepared
 from .utils import classproperty, cached_property
-from .validators import ValidationError, ChainValidator
+from .validators import ChainValidator, MappingValidator, CompositeMappingValidator
 
 try:
     str = unicode  # Python 2.* compatible
@@ -199,14 +199,13 @@ class IdentityMap(object):
 
 class Field(object):
 
-    def __init__(self, **kw):
+    def __init__(self, validators=(), **kw):
         for k, v in kw.items():
             setattr(self, k, v)
+        self.validators = validators
         # TODO: auto add validators and converters.
 
     def validate(self, value):
-        if not hasattr(self, 'validators'):
-            return True
         return ChainValidator(*self.validators)(value)
 
     def set_default(self, obj):
@@ -628,25 +627,15 @@ class Mapper(object):
     def validate(self, obj, fields=frozenset(), exclude=frozenset()):
         # Don't need '__model__' key. Just override this method in subclass.
         self.set_defaults(obj)
-        errors = {}
         fields = self._get_specified_fields(fields, exclude)
-        for name in fields:
-            field = self.fields[name]
-            try:
-                field.validate(field.get_value(obj))
-            except ValidationError as e:
-                errors[name] = e.args[0]
+        CompositeMappingValidator(
+            MappingValidator({name: self.fields[name].validate for name in fields}),
+            self._do_validate
+        )(
+            {name: self.fields[name].get_value(obj) for name in fields}
+        )
 
-        try:
-            self._do_validate(fields)
-        except ValidationError as e:
-            for k, v in e.args[0]:
-                errors.setdefault(k, []).extend(v)
-
-        if errors:
-            raise ValidationError(errors)
-
-    def _do_validate(self, fields):
+    def _do_validate(self, items):
         pass
 
     def _get_specified_fields(self, fields=frozenset(), exclude=frozenset()):

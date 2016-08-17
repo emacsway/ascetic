@@ -86,3 +86,34 @@ class ChainValidator(object):
         if errors:
             raise ValidationError(errors)
         return True
+
+
+class MappingValidator(object):
+    def __init__(self, *args, **kwargs):
+        self.validators = kwargs or args[0]
+
+    def __call__(self, items):
+        errors = {}
+        for name, validator in self.validators.items():
+            try:
+                validator(items.get(name))
+            except ValidationError as e:
+                errors[name] = e.args[0]
+        if errors:
+            raise ValidationError(errors)
+
+
+class CompositeMappingValidator(object):
+    def __init__(self, *validators):
+        self.validators = validators
+
+    def __call__(self, items):
+        errors = {}
+        for validator in self.validators:
+            try:
+                validator(items)
+            except ValidationError as e:
+                for k, v in e.args[0].items():
+                    errors.setdefault(k, []).extend(v)
+        if errors:
+            raise ValidationError(errors)
