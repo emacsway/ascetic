@@ -1,5 +1,5 @@
 import collections
-from sqlbuilder.smartsql.compilers import mysql
+from sqlbuilder.smartsql.dialects import mysql
 from .base import Database
 
 

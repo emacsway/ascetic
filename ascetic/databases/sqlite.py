@@ -1,4 +1,4 @@
-from sqlbuilder.smartsql.compilers import sqlite
+from sqlbuilder.smartsql.dialects import sqlite
 from .base import Database
 
 
