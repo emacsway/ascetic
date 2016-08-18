@@ -33,6 +33,7 @@ def do_nothing(parent, child, parent_rel, using, visited):
 class BaseRelation(object):
 
     owner = None
+    _rel_model_or_name = None
     descriptor = NotImplemented
 
     @cached_property
@@ -103,6 +104,14 @@ class Relation(BaseRelation):
 
     @cached_property
     def field(self):
+        raise NotImplementedError
+
+    @cached_property
+    def rel_field(self):
+        raise NotImplementedError
+
+    @cached_property
+    def rel_name(self):
         raise NotImplementedError
 
     @cached_property

@@ -81,7 +81,7 @@ You can configure in one the following ways:
 \1. Put in your PYTHONPATH file ascetic_settings.py with your settings.
 See file ascetic/settings.py for more details.
 
-\2. Define settings module in evironment variable ASCETIC_SETTINGS.
+\2. Define settings module in environment variable ASCETIC_SETTINGS.
 
 \3. Call ascetic.settings.configure(), for example::
 
@@ -154,10 +154,11 @@ Indeed, it's not an ActiveRecord, - it's just a wrapper over DataMapper.
 
 ::
 
-    from ascetic.model import Model, ForeignKey, OneToMany, get_mapper
+    from ascetic.model import Model
+    from ascetic.mappers import get_mapper
+    from ascetic.relations import ForeignKey, OneToMany
 
     class Author(Model):
-
         class Mapper(object):
             defaults = {'bio': 'No bio available'}
             validations = {'first_name': (

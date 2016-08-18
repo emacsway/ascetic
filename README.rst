@@ -83,10 +83,11 @@ We setup our objects like so:
 
 ::
 
-    from ascetic.model import Model, ForeignKey, OneToMany, get_mapper
+    from ascetic.model import Model
+    from ascetic.mappers import get_mapper
+    from ascetic.relations import ForeignKey, OneToMany
 
     class Author(Model):
-
         class Mapper(object):
             defaults = {'bio': 'No bio available'}
             validations = {'first_name': (
