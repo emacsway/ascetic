@@ -5,7 +5,7 @@ import base64
 # import json
 import hashlib
 from datetime import datetime
-from ..models import mapper_registry
+from ..mappers import mapper_registry
 
 # Under construction!!! Not testet yet!!!
 

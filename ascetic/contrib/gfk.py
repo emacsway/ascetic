@@ -2,7 +2,8 @@ import copy
 import operator
 import collections
 from functools import wraps
-from ..models import ForeignKey, OneToMany, cascade, model_registry, mapper_registry, to_tuple, is_model_instance
+from ..mappers import model_registry, mapper_registry, to_tuple, is_model_instance
+from ..relations import ForeignKey, OneToMany, cascade
 from ..utils import cached_property
 
 

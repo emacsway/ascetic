@@ -11,7 +11,7 @@ except NameError:
     integer_types = (int,)
 
 
-class ValidationError(Exception):
+class ValidationError(ValueError):
     pass
 
 

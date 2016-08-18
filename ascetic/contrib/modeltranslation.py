@@ -1,5 +1,5 @@
 import collections
-from ..models import Field
+from ..mappers import Field
 
 # We can't use TranslationRegistry, because Mapper can be inherited, and we need to fix hierarchy???
 

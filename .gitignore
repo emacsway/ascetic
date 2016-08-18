@@ -4,6 +4,7 @@ ascetic.egg-info/
 .comments
 .gis
 sqlbuilder
+.idea
 .ropeproject
 *.pyc
 MANIFEST

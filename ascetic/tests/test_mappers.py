@@ -3,9 +3,10 @@ import unittest
 from ascetic import validators
 from ascetic import utils
 from ascetic.databases import databases
-from ascetic.models import Model, Mapper, ForeignKey, IdentityMap, mapper_registry
+from ascetic.mappers import Model, Mapper, IdentityMap, mapper_registry
+from ascetic.relations import ForeignKey
 from sqlbuilder import smartsql
-from sqlbuilder.smartsql.tests import *
+from sqlbuilder.smartsql.tests import *  # TODO: use suite
 
 Author = Book = AuthorC = BookC = None
 

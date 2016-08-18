@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 from sqlbuilder import smartsql
-from ..models import ForeignKey, RelationDescriptor, to_tuple, mapper_registry
+from ..mappers import to_tuple, mapper_registry
+from ..relations import ForeignKey, RelationDescriptor
 from ..utils import cached_property
 
 try:

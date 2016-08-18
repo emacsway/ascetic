@@ -36,7 +36,7 @@ class Transaction(BaseTransaction):
         self._clear_identity_map()
 
     def _clear_identity_map(self):
-        from ascetic.models import IdentityMap
+        from ascetic.mappers import IdentityMap
         IdentityMap(self._using).clear()
 
 

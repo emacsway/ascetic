@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from collections import OrderedDict
 from .. import validators
-from ..models import IdentityMap, ObjectDoesNotExist, OneToOne, Result, model_registry, mapper_registry, to_tuple
+from ..mappers import IdentityMap, ObjectDoesNotExist, OneToOne, Result, model_registry, mapper_registry, to_tuple
 from ..utils import cached_property
 from .gfk import GenericForeignKey
 

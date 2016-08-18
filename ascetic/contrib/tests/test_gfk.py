@@ -2,7 +2,7 @@ import unittest
 from ascetic import validators
 from ascetic.databases import databases
 from ascetic.contrib.gfk import GenericForeignKey, GenericRelation
-from ascetic.models import Model, Mapper, IdentityMap, mapper_registry
+from ascetic.mappers import Model, Mapper, IdentityMap, mapper_registry
 
 Author = Book = None
 
