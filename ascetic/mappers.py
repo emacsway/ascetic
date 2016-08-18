@@ -8,9 +8,10 @@ from threading import RLock
 
 from sqlbuilder import smartsql
 
+from ascetic.fields import Field
 from .databases import databases
 from .signals import pre_save, post_save, pre_delete, post_delete, class_prepared
-from .validators import ChainValidator, MappingValidator, CompositeMappingValidator
+from .validators import MappingValidator, CompositeMappingValidator
 
 try:
     str = unicode  # Python 2.* compatible
@@ -192,36 +193,6 @@ class IdentityMap(object):
         if not hasattr(self, '_last_isolation_level'):
             self._last_isolation_level = self._isolation_level
             self._isolation_level = self.READ_UNCOMMITTED
-
-
-class Field(object):
-
-    def __init__(self, validators=(), **kw):
-        for k, v in kw.items():
-            setattr(self, k, v)
-        self.validators = validators
-        # TODO: auto add validators and converters.
-
-    def validate(self, value):
-        return ChainValidator(*self.validators)(value)
-
-    def set_default(self, obj):
-        if not hasattr(self, 'default'):
-            return
-        default = self.default
-        if self.get_value(obj) is None:
-            if isinstance(default, collections.Callable):
-                try:
-                    default(obj, self.name)
-                except TypeError:
-                    default = default()
-            self.set_value(obj, default)
-
-    def get_value(self, obj):
-        return getattr(obj, self.name, None)
-
-    def set_value(self, obj, value):
-        return setattr(obj, self.name, value)
 
 
 class Mapper(object):
