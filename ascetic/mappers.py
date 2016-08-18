@@ -340,15 +340,15 @@ class Mapper(object):
         return self.__class__.pk
 
     def _create_sql_table(self):
-        return factory.Table(self)
+        return sql.Table(self)
 
     def _create_base_query(self):
         """For relations."""
-        return factory.Query(self.sql_table, result=self.result_factory(self)).fields(self.get_sql_fields())
+        return sql.Query(self.sql_table, result=self.result_factory(self)).fields(self.get_sql_fields())
 
     def _create_query(self):
         """For selection."""
-        return factory.Query(self.sql_table, result=self.result_factory(self)).fields(self.get_sql_fields())
+        return sql.Query(self.sql_table, result=self.result_factory(self)).fields(self.get_sql_fields())
 
     def get_sql_fields(self, prefix=None):
         """Returns field list."""
@@ -607,4 +607,4 @@ class Mapper(object):
 
 
 from .relations import BaseRelation, RelationDescriptor, OneToOne, OneToMany
-from .query import factory, Result
+from .query import factory as sql, Result
