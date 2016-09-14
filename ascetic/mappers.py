@@ -89,7 +89,7 @@ class MapperRegistry(BaseRegistry):
 mapper_registry = get_mapper = MapperRegistry()
 
 
-class CacheLRU(object):
+class CacheLru(object):
 
     def __init__(self, size=1000):
         self._order = []
@@ -140,7 +140,7 @@ class IdentityMap(object):
     def __new__(cls, alias='default', *args, **kwargs):
         if not hasattr(databases[alias], 'identity_map'):
             self = databases[alias].identity_map = object.__new__(cls)
-            self._cache = CacheLRU()
+            self._cache = CacheLru()
             self._alive = weakref.WeakValueDictionary()
         return databases[alias].identity_map
 
