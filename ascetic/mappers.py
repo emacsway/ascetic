@@ -89,7 +89,7 @@ class MapperRegistry(BaseRegistry):
 mapper_registry = get_mapper = MapperRegistry()
 
 
-class WeakCache(object):
+class CacheLRU(object):
 
     def __init__(self, size=1000):
         self._order = []
@@ -101,11 +101,12 @@ class WeakCache(object):
             self._order.pop(0)
 
     def touch(self, value):
+        obj = value
         try:
-            self._order.remove(value)
-        except IndexError:
+            obj = self._order.pop(self._order.index(obj))
+        except (ValueError, IndexError):
             pass
-        self._order.append(value)
+        self._order.append(obj)
 
     def remove(self, value):
         try:
@@ -139,7 +140,7 @@ class IdentityMap(object):
     def __new__(cls, alias='default', *args, **kwargs):
         if not hasattr(databases[alias], 'identity_map'):
             self = databases[alias].identity_map = object.__new__(cls)
-            self._cache = WeakCache()
+            self._cache = CacheLRU()
             self._alive = weakref.WeakValueDictionary()
         return databases[alias].identity_map
 
