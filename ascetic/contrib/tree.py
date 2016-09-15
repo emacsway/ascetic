@@ -1,8 +1,8 @@
 from __future__ import absolute_import
 from sqlbuilder import smartsql
-from ..mappers import to_tuple, mapper_registry
-from ..relations import ForeignKey, RelationDescriptor
-from ..utils import cached_property
+from ascetic.mappers import mapper_registry
+from ascetic.relations import ForeignKey, RelationDescriptor
+from ascetic.utils import cached_property, to_tuple
 
 try:
     str = unicode  # Python 2.* compatible

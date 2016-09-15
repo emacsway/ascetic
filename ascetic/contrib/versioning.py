@@ -5,7 +5,7 @@ import base64
 # import json
 import hashlib
 from datetime import datetime
-from ..mappers import mapper_registry
+from ascetic.mappers import mapper_registry
 
 # Under construction!!! Not testet yet!!!
 

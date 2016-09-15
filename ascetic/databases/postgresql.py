@@ -1,5 +1,5 @@
 import collections
-from .base import Database
+from ascetic.databases.base import Database
 
 
 @Database.register('postgresql')

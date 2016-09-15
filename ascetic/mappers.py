@@ -7,12 +7,13 @@ from threading import RLock
 
 from sqlbuilder import smartsql
 
-from ascetic.exceptions import ObjectDoesNotExist, OrmException
+from ascetic.exceptions import ObjectDoesNotExist, OrmException, ModelNotRegistered, MapperNotRegistered
 from ascetic.fields import Field
 from ascetic.identity_maps import IdentityMap
-from .databases import databases
-from .signals import pre_save, post_save, pre_delete, post_delete, class_prepared
-from .validators import MappingValidator, CompositeMappingValidator
+from ascetic.utils import to_tuple
+from ascetic.databases import databases
+from ascetic.signals import pre_save, post_save, pre_delete, post_delete, class_prepared
+from ascetic.validators import MappingValidator, CompositeMappingValidator
 
 try:
     str = unicode  # Python 2.* compatible
@@ -21,10 +22,6 @@ try:
 except NameError:
     string_types = (str,)
     integer_types = (int,)
-
-
-def to_tuple(val):
-    return val if type(val) == tuple else (val,)
 
 
 def is_model_instance(obj):
@@ -40,14 +37,6 @@ def thread_safe(func):
         with RLock():
             return func(*args, **kwargs)
     return _deco
-
-
-class ModelNotRegistered(OrmException):
-    pass
-
-
-class MapperNotRegistered(OrmException):
-    pass
 
 
 class BaseRegistry(dict):
@@ -464,5 +453,5 @@ class Mapper(object):
             self.fields[k].set_value(obj, v)
 
 
-from .relations import BaseRelation, RelationDescriptor, OneToOne, OneToMany
-from .query import factory as sql, Result
+from ascetic.relations import BaseRelation, RelationDescriptor, OneToOne, OneToMany
+from ascetic.query import factory as sql, Result

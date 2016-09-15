@@ -52,3 +52,7 @@ def resolve(str_or_obj):
     __import__(mod_name)
     mod = sys.modules[mod_name]
     return getattr(mod, obj_name) if obj_name else mod
+
+
+def to_tuple(val):
+    return val if type(val) == tuple else (val,)

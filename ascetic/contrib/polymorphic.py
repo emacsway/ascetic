@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 from collections import OrderedDict
-from .. import validators
-from ..mappers import OneToOne, Result, model_registry, mapper_registry, to_tuple
+from ascetic import validators
+from ascetic.mappers import OneToOne, Result, model_registry, mapper_registry
+from ascetic.utils import to_tuple
 from ascetic.exceptions import ObjectDoesNotExist
 from ascetic.identity_maps import IdentityMap
-from ..utils import cached_property
-from .gfk import GenericForeignKey
+from ascetic.utils import cached_property
+from ascetic.contrib.gfk import GenericForeignKey
 
 # TODO: Support for native support inheritance:
 # http://www.postgresql.org/docs/9.4/static/tutorial-inheritance.html

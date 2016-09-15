@@ -2,7 +2,7 @@ from sqlbuilder import smartsql
 
 from ascetic.mappers import mapper_registry, to_tuple, Mapper, thread_safe
 from ascetic.signals import pre_init, post_init
-from ascetic.utils import classproperty
+from ascetic.utils import classproperty, to_tuple
 
 
 class ModelBase(type):

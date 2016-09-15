@@ -1,6 +1,6 @@
 import collections
 from sqlbuilder.smartsql.dialects import mysql
-from .base import Database
+from ascetic.databases.base import Database
 
 
 @Database.register('mysql')

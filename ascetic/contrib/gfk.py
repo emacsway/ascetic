@@ -2,9 +2,10 @@ import copy
 import operator
 import collections
 from functools import wraps
-from ..mappers import model_registry, mapper_registry, to_tuple, is_model_instance
-from ..relations import ForeignKey, OneToMany, cascade
-from ..utils import cached_property
+from ascetic.mappers import model_registry, mapper_registry, is_model_instance
+from ascetic.utils import to_tuple
+from ascetic.relations import ForeignKey, OneToMany, cascade
+from ascetic.utils import cached_property
 
 
 class GenericForeignKey(ForeignKey):

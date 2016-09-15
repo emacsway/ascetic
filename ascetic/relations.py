@@ -3,8 +3,10 @@ import weakref
 import operator
 import collections
 from functools import reduce
-from .mappers import mapper_registry, model_registry, is_model_instance, to_tuple, Mapper, ModelNotRegistered
-from .utils import cached_property
+from ascetic.mappers import mapper_registry, model_registry, is_model_instance, Mapper
+from ascetic.utils import to_tuple
+from ascetic.exceptions import ModelNotRegistered
+from ascetic.utils import cached_property
 
 try:
     str = unicode  # Python 2.* compatible
