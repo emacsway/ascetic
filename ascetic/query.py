@@ -3,7 +3,8 @@ import operator
 from functools import reduce
 from sqlbuilder import smartsql
 from .databases import databases
-from .mappers import to_tuple, ObjectDoesNotExist
+from .mappers import to_tuple
+from ascetic.exceptions import ObjectDoesNotExist
 from .relations import Relation, ForeignKey, OneToOne, OneToMany
 
 factory = copy.copy(smartsql.factory)

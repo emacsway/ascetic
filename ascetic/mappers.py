@@ -3,12 +3,13 @@ from __future__ import absolute_import
 import collections
 import copy
 import re
-import weakref
 from threading import RLock
 
 from sqlbuilder import smartsql
 
+from ascetic.exceptions import ObjectDoesNotExist, OrmException
 from ascetic.fields import Field
+from ascetic.identity_maps import IdentityMap
 from .databases import databases
 from .signals import pre_save, post_save, pre_delete, post_delete, class_prepared
 from .validators import MappingValidator, CompositeMappingValidator
@@ -41,19 +42,11 @@ def thread_safe(func):
     return _deco
 
 
-class OrmException(Exception):
-    pass
-
-
 class ModelNotRegistered(OrmException):
     pass
 
 
 class MapperNotRegistered(OrmException):
-    pass
-
-
-class ObjectDoesNotExist(OrmException):
     pass
 
 
@@ -87,113 +80,6 @@ class MapperRegistry(BaseRegistry):
     exception_class = MapperNotRegistered
 
 mapper_registry = get_mapper = MapperRegistry()
-
-
-class CacheLru(object):
-
-    def __init__(self, size=1000):
-        self._order = []
-        self._size = size
-
-    def add(self, value):
-        self._order.append(value)
-        if len(self._order) > self._size:
-            self._order.pop(0)
-
-    def touch(self, value):
-        obj = value
-        try:
-            obj = self._order.pop(self._order.index(obj))
-        except (ValueError, IndexError):
-            pass
-        self._order.append(obj)
-
-    def remove(self, value):
-        try:
-            self._order.remove(value)
-        except IndexError:
-            pass
-
-    def clear(self):
-        del self._order[:]
-
-    def set_size(self, size):
-        self._size = size
-
-
-class IdentityMap(object):
-    # TODO: bind to connect or store
-
-    READ_UNCOMMITTED = 0  # IdentityMap is disabled
-    READ_COMMITTED = 1  # IdentityMap is disabled
-    REPEATABLE_READ = 2  # Prevent repeated DB-query only for existent objects
-    SERIALIZABLE = 3  # Prevent repeated DB-query for both, existent and nonexistent objects
-
-    INFLUENCING_LEVELS = (REPEATABLE_READ, SERIALIZABLE)
-
-    # _isolation_level = READ_UNCOMMITTED  # Disabled currently
-    _isolation_level = SERIALIZABLE
-
-    class Nonexistent(object):
-        pass
-
-    def __new__(cls, alias='default', *args, **kwargs):
-        if not hasattr(databases[alias], 'identity_map'):
-            self = databases[alias].identity_map = object.__new__(cls)
-            self._cache = CacheLru()
-            self._alive = weakref.WeakValueDictionary()
-        return databases[alias].identity_map
-
-    def add(self, key, value=None):
-        if self._isolation_level not in self.INFLUENCING_LEVELS:
-            return
-        if value is None:
-            if self._isolation_level != self.SERIALIZABLE:
-                return
-            value = self.Nonexistent()
-        self._cache.add(value)
-        self._alive[key] = value
-
-    def get(self, key):
-        if self._isolation_level not in self.INFLUENCING_LEVELS:
-            raise KeyError
-        value = self._alive[key]
-        self._cache.touch(value)
-        if value.__class__ == self.Nonexistent:
-            if self._isolation_level != self.SERIALIZABLE:
-                raise KeyError
-            raise ObjectDoesNotExist
-        return value
-
-    def remove(self, key):
-        try:
-            value = self._alive[key]
-            self._cache.remove(value)
-            del self._alive[key]
-        except KeyError:
-            pass
-
-    def clear(self):
-        self._cache.clear()
-        self._alive.clear()
-
-    def exists(self, key):
-        if self._isolation_level not in self.INFLUENCING_LEVELS:
-            return False
-        return key in self._alive
-
-    def set_isolation_level(self, level):
-        self._isolation_level = level
-
-    def enable(self):
-        if hasattr(self, '_last_isolation_level'):
-            self._isolation_level = self._last_isolation_level
-            del self._last_isolation_level
-
-    def disable(self):
-        if not hasattr(self, '_last_isolation_level'):
-            self._last_isolation_level = self._isolation_level
-            self._isolation_level = self.READ_UNCOMMITTED
 
 
 class Mapper(object):

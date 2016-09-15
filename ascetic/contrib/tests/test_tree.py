@@ -1,6 +1,7 @@
 import unittest
 from ascetic.databases import databases
-from ascetic.mappers import IdentityMap, Mapper, mapper_registry
+from ascetic.mappers import Mapper, mapper_registry
+from ascetic.identity_maps import IdentityMap
 from ascetic.contrib.tree import MpMapper, MpModel
 
 Location = None

@@ -2,7 +2,9 @@ import unittest
 from ascetic import validators
 from ascetic.databases import databases
 from ascetic.contrib.polymorphic import PolymorphicMapper
-from ascetic.mappers import Mapper, IdentityMap, mapper_registry, ObjectDoesNotExist
+from ascetic.mappers import Mapper, mapper_registry
+from ascetic.exceptions import ObjectDoesNotExist
+from ascetic.identity_maps import IdentityMap
 from ascetic.relations import ForeignKey
 
 Author = Book = Nonfiction = Avia = None

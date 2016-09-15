@@ -3,7 +3,8 @@ import unittest
 from ascetic import validators
 from ascetic import utils
 from ascetic.databases import databases
-from ascetic.mappers import Mapper, IdentityMap, mapper_registry
+from ascetic.mappers import Mapper, mapper_registry
+from ascetic.identity_maps import IdentityMap
 from ascetic.models import Model
 from ascetic.relations import ForeignKey
 from sqlbuilder import smartsql
