@@ -57,15 +57,15 @@ class BaseStrategy(IStrategy):
         """
         :type identity_map: IdentityMap
         """
-        self._identity_map = identity_map
+        self._identity_map = weakref.ref(identity_map)
 
     def _do_add(self, key, value=None):
-        self._identity_map.cache.add(value)
-        self._identity_map.alive[key] = value
+        self._identity_map().cache.add(value)
+        self._identity_map().alive[key] = value
 
     def _do_get(self, key):
-        value = self._identity_map.alive[key]
-        self._identity_map.cache.touch(value)
+        value = self._identity_map().alive[key]
+        self._identity_map().cache.touch(value)
         return value
 
 
@@ -106,7 +106,7 @@ class RepeatableReadsStrategy(BaseStrategy):
         return value
 
     def exists(self, key):
-        return self._identity_map.alive.get(key).__class__ not in (NonexistentObject, type(None))
+        return self._identity_map().alive.get(key).__class__ not in (NonexistentObject, type(None))
 
 
 class SerializableStrategy(BaseStrategy):
@@ -123,7 +123,7 @@ class SerializableStrategy(BaseStrategy):
         return value
 
     def exists(self, key):
-        return key in self._identity_map.alive
+        return key in self._identity_map().alive
 
 
 class IdentityMap(object):
