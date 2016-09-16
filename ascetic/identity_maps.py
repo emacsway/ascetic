@@ -90,17 +90,17 @@ class RepeatableReadsStrategy(BaseStrategy):
 
     def add(self, key, value=None):
         if value is not None:
-            self._identity_map.do_add(key, value)
+            self._identity_map().do_add(key, value)
 
     def get(self, key):
-        obj = self._identity_map.do_get(key)
+        obj = self._identity_map().do_get(key)
         if isinstance(obj, NonexistentObject):
             raise KeyError
         return obj
 
     def exists(self, key):
         try:
-            obj = self._identity_map.do_get(key)
+            obj = self._identity_map().do_get(key)
         except KeyError:
             return False
         else:
@@ -112,17 +112,17 @@ class SerializableStrategy(BaseStrategy):
     def add(self, key, value=None):
         if value is None:
             value = NonexistentObject()
-        self._identity_map.do_add(key, value)
+        self._identity_map().do_add(key, value)
 
     def get(self, key):
-        obj = self._identity_map.do_get(key)
+        obj = self._identity_map().do_get(key)
         if isinstance(obj, NonexistentObject):
             raise ObjectDoesNotExist()
         return obj
 
     def exists(self, key):
         try:
-            self._identity_map.do_get(key)
+            self._identity_map().do_get(key)
         except KeyError:
             return False
         else:
@@ -184,7 +184,7 @@ class IdentityMap(object):
         self.alive.clear()
 
     def sync(self):
-        Sync(self.cache).compute()
+        Sync(self).compute()
 
     def set_isolation_level(self, level):
         self._isolation_level = level
@@ -220,7 +220,7 @@ class Sync(object):
 
     def _get_typical_objects(self):
         typical_objects = {}
-        for obj in self._identity_map.cache:
+        for obj in self._identity_map.alive.values():
             model = obj.__class__
             if model not in typical_objects:
                 typical_objects[model] = {}
