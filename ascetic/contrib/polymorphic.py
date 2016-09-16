@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 from collections import OrderedDict
 from ascetic import validators
-from ascetic.mappers import Load, OneToOne, Result, model_registry, mapper_registry
+from ascetic.mappers import Load, Mapper, OneToOne, Result, model_registry, mapper_registry
 from ascetic.utils import to_tuple
-from ascetic.exceptions import ObjectDoesNotExist
-from ascetic.identity_maps import IdentityMap
 from ascetic.utils import cached_property
 from ascetic.contrib.gfk import GenericForeignKey
 
@@ -17,7 +15,7 @@ class NativePolymorphicMapper(object):
     pass
 
 
-class PolymorphicMapper(object):
+class PolymorphicMapper(Mapper):
 
     @classmethod
     def get_polymorphic_bases(cls, derived_model):
@@ -43,8 +41,7 @@ class PolymorphicMapper(object):
     def polymorphic_fields(self):
         fields = OrderedDict()
         for base in self.polymorphic_bases:
-            for k, v in self.fields.items():
-                fields.update(base.polymorphic_fields)
+            fields.update(base.polymorphic_fields)
         for name, field in self.fields.items():
             fields[name] = field
         return fields
@@ -53,8 +50,7 @@ class PolymorphicMapper(object):
     def polymorphic_columns(self):
         cols = OrderedDict()
         for base in self.polymorphic_bases:
-            for k, v in self.fields.items():
-                cols.update(base.polymorphic_columns)
+            cols.update(base.polymorphic_columns)
         for name, col in self.fields.items():
             cols[name] = col
         return cols

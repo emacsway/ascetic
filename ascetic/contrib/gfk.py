@@ -10,6 +10,8 @@ from ascetic.utils import cached_property
 
 class GenericForeignKey(ForeignKey):
 
+    instance = None
+
     def __init__(self, type_field="object_type_id", rel_field=None, field=None, on_delete=cascade, rel_name=None, rel_query=None):
         self._type_field = type_field
         if not rel_field or isinstance(rel_field, collections.Callable):

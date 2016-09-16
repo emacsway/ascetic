@@ -25,14 +25,16 @@ class Result(smartsql.Result):
     _mapper = None
     _raw = None
     _cache = None
-    _using = 'default'
 
     def __init__(self, mapper):
+        """
+        :type mapper: ascetic.mappers.Mapper
+        """
+        self.mapper = mapper
         self._prefetch = {}
         self._select_related = {}
         self._is_base = True
         self._mapping = default_mapping
-        self._mapper = mapper
         self._using = mapper._using
 
     def __len__(self):
@@ -114,7 +116,7 @@ class Result(smartsql.Result):
 
     def prefetch(self, *a, **kw):
         """Prefetch relations"""
-        relations = self._mapper.relations
+        relations = self.mapper.relations
         if a and not a[0]:  # .prefetch(False)
             self._prefetch = {}
         else:
@@ -124,7 +126,7 @@ class Result(smartsql.Result):
         return self._query
 
     def populate_prefetch(self):
-        relations = self._mapper.relations
+        relations = self.mapper.relations
         for key, q in self._prefetch.items():
             rel = relations[key]
             # recursive handle prefetch
@@ -145,7 +147,7 @@ class Result(smartsql.Result):
 
 
 def default_mapping(result, row, state):
-    return result._mapper.load(row, from_db=True)
+    return result.mapper.load(row, from_db=True)
 
 
 class SelectRelatedMapping(object):

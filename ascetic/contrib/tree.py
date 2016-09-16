@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 from sqlbuilder import smartsql
-from ascetic.mappers import mapper_registry
+from ascetic.mappers import mapper_registry, Mapper
 from ascetic.relations import ForeignKey, RelationDescriptor
 from ascetic.utils import cached_property, to_tuple
 
@@ -13,7 +13,7 @@ except NameError:
     integer_types = (int,)
 
 
-class MpMapper(object):
+class MpMapper(Mapper):
     """The simplest Materialized Path realization.
 
     Strong KISS principle.

@@ -202,7 +202,7 @@ class Mapper(object):
 
     def add_field(self, name, field):
         field.name = name
-        field._mapper = self
+        field.mapper = self
         self.fields[name] = field
         self.columns[field.column] = field
 

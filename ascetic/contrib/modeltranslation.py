@@ -1,6 +1,6 @@
 import collections
 from ascetic.fields import Field
-
+from ascetic.mappers import Mapper
 
 # We can't use TranslationRegistry, because Mapper can be inherited, and we need to fix hierarchy???
 
@@ -10,7 +10,7 @@ class TranslationColumnDescriptor(object):
     def __get__(self, instance, owner):
         if not instance:
             return self
-        return instance._mapper.translate_column(instance.original_column)
+        return instance.mapper.translate_column(instance.original_column)
 
     def __set__(self, instance, value):
         instance.original_column = value.rsplit('_', 1)[0]
@@ -63,7 +63,7 @@ class CreateFields(object):
                 self._fields[name] = self._mapper.create_translation_field(name, {'virtual': True}, self._declared_fields)
 
 
-class TranslationMapper(object):
+class TranslationMapper(Mapper):
 
     translated_fields = ()
 
@@ -79,7 +79,7 @@ class TranslationMapper(object):
 
     def add_field(self, name, field):
         field.name = name
-        field._mapper = self
+        field.mapper = self
         self.fields[name] = field
         if isinstance(field, TranslationField):
             for lang in self.get_languages():

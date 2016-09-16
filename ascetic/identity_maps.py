@@ -234,7 +234,7 @@ class Sync(object):
         ).where(
             mapper.sql_table.pk.in_(pks)
         )
-        query = query.map(lambda result, row, state: result._mapper.load(row, from_db=True, reload=True))
+        query = query.map(lambda result, row, state: result.mapper.load(row, from_db=True, reload=True))
         return query
 
     def compute(self):
