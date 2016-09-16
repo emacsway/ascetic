@@ -268,47 +268,7 @@ class Mapper(object):
         return result
 
     def load(self, data, from_db=True, reload=False):
-        if from_db:
-            data_mapped = self._map_data_from_db(data)
-        else:
-            data_mapped = dict(data)
-        identity_map = IdentityMap(self._using)
-        key = self._make_identity_key(self.model, tuple(data_mapped[i] for i in to_tuple(self.pk)))
-        try:
-            obj = identity_map.get(key)
-        except KeyError:  # First loading
-            obj = self._do_load(data_mapped)
-        except ObjectDoesNotExist:  # Serializable transaction level
-            raise
-        else:
-            if reload:
-                self._do_reload(obj, data)
-            else:
-                return obj
-        self.set_original_data(obj, data_mapped)
-        self.mark_new(obj, False)
-        identity_map.add(key, obj)
-        return obj
-
-    def _map_data_from_db(self, data, columns=None):
-        columns = columns or self.columns
-        data_mapped = {}
-        for key, value in data:
-            try:
-                data_mapped[columns[key].name] = value
-            except KeyError:
-                data_mapped[key] = value
-        return data_mapped
-
-    def _do_load(self, data):
-        return self.model(**data)
-
-    def _do_reload(self, obj, data):
-        for name, value in data.items():
-            try:
-                self.fields[name].set_value(obj, data[name])
-            except KeyError:
-                setattr(obj, name, value)
+        return Load(self, data, from_db, reload).compute()
 
     def unload(self, obj, fields=frozenset(), exclude=frozenset(), to_db=True):
         data = self._do_unload(obj, self._get_specified_fields(fields, exclude))
@@ -471,6 +431,57 @@ class Mapper(object):
         for k, v in zip(to_tuple(self.pk), to_tuple(value)):
             self.fields[k].set_value(obj, v)
 
+
+class Load(object):
+
+    def __init__(self, mapper, data, from_db, reload):
+        self._mapper = mapper
+        self._data = data
+        self._from_db = from_db
+        self._reload = reload
+
+    def compute(self):
+        if self._from_db:
+            data_mapped = self._map_data_from_db(self._data)
+        else:
+            data_mapped = dict(self._data)
+        identity_map = IdentityMap(self._mapper.using())
+        key = self._mapper._make_identity_key(self._mapper.model, tuple(data_mapped[i] for i in to_tuple(self._mapper.pk)))
+        try:
+            obj = identity_map.get(key)
+        except KeyError:  # First loading
+            obj = self._do_load(data_mapped)
+        except ObjectDoesNotExist:  # Serializable transaction level
+            raise
+        else:
+            if reload:
+                self._do_reload(obj, data_mapped)
+            else:
+                return obj
+        self._mapper.set_original_data(obj, data_mapped)
+        self._mapper.mark_new(obj, False)
+        identity_map.add(key, obj)
+        return obj
+
+    def _map_data_from_db(self, data, columns=None):
+        columns = columns or self._mapper.columns
+        data_mapped = {}
+        for key, value in data:
+            try:
+                data_mapped[columns[key].name] = value
+            except KeyError:
+                data_mapped[key] = value
+        return data_mapped
+
+    def _do_load(self, data):
+        return self._mapper.model(**data)
+
+    def _do_reload(self, obj, data):
+        for name, value in data.items():
+            try:
+                self._mapper.fields[name].set_value(obj, data[name])
+            except KeyError:
+                setattr(obj, name, value)
 
 from ascetic.relations import BaseRelation, RelationDescriptor, OneToOne, OneToMany
 from ascetic.query import factory as sql, Result

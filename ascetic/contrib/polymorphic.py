@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from collections import OrderedDict
 from ascetic import validators
-from ascetic.mappers import OneToOne, Result, model_registry, mapper_registry
+from ascetic.mappers import Load, OneToOne, Result, model_registry, mapper_registry
 from ascetic.utils import to_tuple
 from ascetic.exceptions import ObjectDoesNotExist
 from ascetic.identity_maps import IdentityMap
@@ -103,8 +103,8 @@ class PolymorphicMapper(object):
                 ))
         super(PolymorphicMapper, self)._do_prepare_model(self.model)
 
-    def _map_data_from_db(self, data):
-        return super(PolymorphicMapper, self)._map_data_from_db(data, self.polymorphic_columns)
+    def load(self, data, from_db=True, reload=False):
+        return PolymorphicLoad(self, data, from_db, reload).compute()
 
     def validate(self, obj, fields=frozenset(), exclude=frozenset()):
         errors = {}
@@ -194,3 +194,8 @@ class PopulatePolymorphic(object):
         content_types = {i.polymorphic_type_id for i in self._rows}
         content_types -= {self._get_current_mapper().name}
         return content_types
+
+
+class PolymorphicLoad(Load):
+    def _map_data_from_db(self, data):
+        return super(PolymorphicLoad, self)._map_data_from_db(data, self._mapper.polymorphic_columns)
