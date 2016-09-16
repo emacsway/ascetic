@@ -2,6 +2,8 @@ import weakref
 
 from ascetic.databases import databases
 from ascetic.exceptions import ObjectDoesNotExist
+from ascetic.mappers import mapper_registry
+from ascetic.utils import to_tuple
 
 
 class NonexistentObject(object):
@@ -59,15 +61,6 @@ class BaseStrategy(IStrategy):
         """
         self._identity_map = weakref.ref(identity_map)
 
-    def _do_add(self, key, value=None):
-        self._identity_map().cache.add(value)
-        self._identity_map().alive[key] = value
-
-    def _do_get(self, key):
-        value = self._identity_map().alive[key]
-        self._identity_map().cache.touch(value)
-        return value
-
 
 class ReadUncommittedStrategy(BaseStrategy):
 
@@ -97,16 +90,21 @@ class RepeatableReadsStrategy(BaseStrategy):
 
     def add(self, key, value=None):
         if value is not None:
-            self._do_add(key, value)
+            self._identity_map.do_add(key, value)
 
     def get(self, key):
-        value = self._do_get(key)
-        if value.__class__ is NonexistentObject:
+        obj = self._identity_map.do_get(key)
+        if isinstance(obj, NonexistentObject):
             raise KeyError
-        return value
+        return obj
 
     def exists(self, key):
-        return self._identity_map().alive.get(key).__class__ not in (NonexistentObject, type(None))
+        try:
+            obj = self._identity_map.do_get(key)
+        except KeyError:
+            return False
+        else:
+            return not isinstance(obj, NonexistentObject)
 
 
 class SerializableStrategy(BaseStrategy):
@@ -114,16 +112,21 @@ class SerializableStrategy(BaseStrategy):
     def add(self, key, value=None):
         if value is None:
             value = NonexistentObject()
-        self._do_add(key, value)
+        self._identity_map.do_add(key, value)
 
     def get(self, key):
-        value = self._do_get(key)
-        if value.__class__ == NonexistentObject:
+        obj = self._identity_map.do_get(key)
+        if isinstance(obj, NonexistentObject):
             raise ObjectDoesNotExist()
-        return value
+        return obj
 
     def exists(self, key):
-        return key in self._identity_map().alive
+        try:
+            self._identity_map.do_get(key)
+        except KeyError:
+            return False
+        else:
+            return True
 
 
 class IdentityMap(object):
@@ -144,6 +147,7 @@ class IdentityMap(object):
     def __new__(cls, alias='default', *args, **kwargs):
         if not hasattr(databases[alias], 'identity_map'):
             self = databases[alias].identity_map = object.__new__(cls)
+            self.using = alias
             self.cache = CacheLru()
             self.alive = weakref.WeakValueDictionary()
             self.set_isolation_level(self._default_isolation_level)
@@ -158,6 +162,15 @@ class IdentityMap(object):
     def exists(self, key):
         return self._strategy.exists(key)
 
+    def do_add(self, key, value=None):
+        self.cache.add(value)
+        self.alive[key] = value
+
+    def do_get(self, key):
+        value = self.alive[key]
+        self.cache.touch(value)
+        return value
+
     def remove(self, key):
         try:
             value = self.alive[key]
@@ -169,6 +182,9 @@ class IdentityMap(object):
     def clear(self):
         self.cache.clear()
         self.alive.clear()
+
+    def sync(self):
+        Sync(self.cache).compute()
 
     def set_isolation_level(self, level):
         self._isolation_level = level
@@ -183,3 +199,43 @@ class IdentityMap(object):
         if not hasattr(self, '_last_isolation_level'):
             self._last_isolation_level = self._isolation_level
             self.set_isolation_level(self.READ_UNCOMMITTED)
+
+
+class Sync(object):
+    def __init__(self, identity_map):
+        """
+        :type identity_map: IdentityMap
+        """
+        self._identity_map = identity_map
+
+    def _sync(self):
+        for model, model_object_map in self._get_typical_objects():
+            mapper = mapper_registry[model]
+            pks = list(model_object_map.values())
+            for pk in model_object_map.keys():
+                self._identity_map.remove(mapper._make_identity_key(model, to_tuple(pk)))
+            for obj in self._make_query(mapper, pks):
+                assert mapper.get_pk(obj) in model_object_map
+                assert not mapper.get_changed(obj)
+
+    def _get_typical_objects(self):
+        typical_objects = {}
+        for obj in self._identity_map.cache:
+            model = obj.__class__
+            if model not in typical_objects:
+                typical_objects[model] = {}
+            mapper = mapper_registry[model]
+            typical_objects[model][mapper.get_pk(obj)] = obj
+        return typical_objects
+
+    def _make_query(self, mapper, pks):
+        query = mapper.query.using(
+            self._identity_map.using
+        ).where(
+            mapper.sql_table.pk.in_(pks)
+        )
+        query = query.map(lambda result, row, state: result._mapper.load(row, from_db=True, reload=True))
+        return query
+
+    def compute(self):
+        self._sync()

@@ -103,29 +103,8 @@ class PolymorphicMapper(object):
                 ))
         super(PolymorphicMapper, self)._do_prepare_model(self.model)
 
-    def load(self, data, from_db=True):
-        if from_db:
-            cols = self.polymorphic_columns
-            data_mapped = {}
-            for key, value in data:
-                try:
-                    data_mapped[cols[key].name] = value
-                except KeyError:
-                    data_mapped[key] = value
-        else:
-            data_mapped = dict(data)
-        identity_map = IdentityMap(self._using)
-        key = self._make_identity_key(self.model, tuple(data_mapped[i] for i in to_tuple(self.pk)))
-        if identity_map.exists(key):
-            try:
-                return identity_map.get(key)
-            except ObjectDoesNotExist:
-                pass
-        obj = self._do_load(data_mapped)
-        self.set_original_data(obj, data_mapped)
-        self.mark_new(obj, False)
-        identity_map.add(key, obj)
-        return obj
+    def _map_data_from_db(self, data):
+        return super(PolymorphicMapper, self)._map_data_from_db(data, self.polymorphic_columns)
 
     def validate(self, obj, fields=frozenset(), exclude=frozenset()):
         errors = {}

@@ -9,7 +9,6 @@ from sqlbuilder import smartsql
 
 from ascetic.exceptions import ObjectDoesNotExist, OrmException, ModelNotRegistered, MapperNotRegistered
 from ascetic.fields import Field
-from ascetic.identity_maps import IdentityMap
 from ascetic.utils import to_tuple
 from ascetic.databases import databases
 from ascetic.signals import pre_save, post_save, pre_delete, post_delete, class_prepared
@@ -268,40 +267,60 @@ class Mapper(object):
                 result[name] = attr.get_bound_relation(self.model)
         return result
 
-    def load(self, data, from_db=True):
+    def load(self, data, from_db=True, reload=False):
         if from_db:
-            cols = self.columns
-            data_mapped = {}
-            for key, value in data:
-                try:
-                    data_mapped[cols[key].name] = value
-                except KeyError:
-                    data_mapped[key] = value
+            data_mapped = self._map_data_from_db(data)
         else:
             data_mapped = dict(data)
         identity_map = IdentityMap(self._using)
         key = self._make_identity_key(self.model, tuple(data_mapped[i] for i in to_tuple(self.pk)))
-        if identity_map.exists(key):
-            try:
-                return identity_map.get(key)
-            except ObjectDoesNotExist:
-                pass
-        obj = self._do_load(data_mapped)
+        try:
+            obj = identity_map.get(key)
+        except KeyError:  # First loading
+            obj = self._do_load(data_mapped)
+        except ObjectDoesNotExist:  # Serializable transaction level
+            raise
+        else:
+            if reload:
+                self._do_reload(obj, data)
+            else:
+                return obj
         self.set_original_data(obj, data_mapped)
         self.mark_new(obj, False)
         identity_map.add(key, obj)
         return obj
 
+    def _map_data_from_db(self, data, columns=None):
+        columns = columns or self.columns
+        data_mapped = {}
+        for key, value in data:
+            try:
+                data_mapped[columns[key].name] = value
+            except KeyError:
+                data_mapped[key] = value
+        return data_mapped
+
     def _do_load(self, data):
         return self.model(**data)
+
+    def _do_reload(self, obj, data):
+        for name, value in data.items():
+            try:
+                self.fields[name].set_value(obj, data[name])
+            except KeyError:
+                setattr(obj, name, value)
 
     def unload(self, obj, fields=frozenset(), exclude=frozenset(), to_db=True):
         data = self._do_unload(obj, self._get_specified_fields(fields, exclude))
         if to_db:
-            # check field is not virtual like annotation or subquery.
-            data = {self.fields[name].column: value for name, value in data.items()
-                    if not getattr(self.fields[name], 'virtual', False)}
+            data = self._map_data_to_db(data)
         return data
+
+    def _map_data_to_db(self, data):
+        fields = self.fields
+        # check field is not virtual like annotation or subquery.
+        return {fields[name].column: value for name, value in data.items()
+                if not getattr(fields[name], 'virtual', False)}
 
     def _do_unload(self, obj, fields):
         return {name: self.fields[name].get_value(obj) for name in fields}
@@ -455,3 +474,4 @@ class Mapper(object):
 
 from ascetic.relations import BaseRelation, RelationDescriptor, OneToOne, OneToMany
 from ascetic.query import factory as sql, Result
+from ascetic.identity_maps import IdentityMap
