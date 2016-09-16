@@ -70,6 +70,33 @@ class MapperRegistry(BaseRegistry):
 mapper_registry = get_mapper = MapperRegistry()
 
 
+class OriginalDataStrategy(object):
+    @staticmethod
+    def set(obj, data):
+        # TODO: use WeakKeyDictionary?
+        obj._original_data = data
+
+    @classmethod
+    def update(cls, obj, **data):
+        cls.get(obj).update(data)
+
+    @staticmethod
+    def get(obj):
+        if not hasattr(obj, '_original_data'):
+            obj._original_data = {}
+        return obj._original_data
+
+    def __call__(self, obj, *args, **kwargs):
+        if args:
+            data = args[0]
+            self.set(obj, data)
+        elif kwargs:
+            data = kwargs
+            self.update(obj, **data)
+        else:
+            return self.get(obj)
+
+
 class Mapper(object):
 
     pk = 'id'
@@ -78,6 +105,7 @@ class Mapper(object):
     abstract = False
     field_factory = Field
     result_factory = staticmethod(lambda *a, **kw: Result(*a, **kw))
+    original_data = OriginalDataStrategy()
 
     @thread_safe
     def __init__(self, model=None):
@@ -289,16 +317,13 @@ class Mapper(object):
         return (model, to_tuple(pk))
 
     def set_original_data(self, obj, data):
-        # TODO: use WeakKeyDictionary?
-        obj._original_data = data
+        self.original_data.set(obj, data)
 
     def update_original_data(self, obj, **data):
-        self.get_original_data(obj).update(data)
+        self.original_data.update(obj, **data)
 
     def get_original_data(self, obj):
-        if not hasattr(obj, '_original_data'):
-            obj._original_data = {}
-        return obj._original_data
+        return self.original_data.get(obj)
 
     def mark_new(self, obj, status=True):
         if status is not None:
