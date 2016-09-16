@@ -313,7 +313,7 @@ class Mapper(object):
     def _do_unload(self, obj, fields):
         return {name: self.fields[name].get_value(obj) for name in fields}
 
-    def _make_identity_key(self, model, pk):
+    def make_identity_key(self, model, pk):
         return (model, to_tuple(pk))
 
     def set_original_data(self, obj, data):
@@ -397,7 +397,7 @@ class Mapper(object):
         cursor = databases[self._using].execute(self._insert_query(obj))
         if not all(to_tuple(self.get_pk(obj))):
             self.set_pk(obj, self.base_query.result.db.last_insert_id(cursor))
-        IdentityMap(self._using).add(self._make_identity_key(self.model, self.get_pk(obj)))
+        IdentityMap(self._using).add(self.make_identity_key(self.model, self.get_pk(obj)))
 
     def _update(self, obj):
         databases[self._using].execute(self._update_query(obj))
@@ -423,13 +423,13 @@ class Mapper(object):
 
         databases[self._using].execute(self._delete_query(obj))
         post_delete.send(sender=self.model, instance=obj, using=self._using)
-        IdentityMap(self._using).remove(self._make_identity_key(self.model, self.get_pk(obj)))
+        IdentityMap(self._using).remove(self.make_identity_key(self.model, self.get_pk(obj)))
         return True
 
     def get(self, _obj_pk=None, **kwargs):
         if _obj_pk is not None:
             identity_map = IdentityMap(self._using)
-            key = self._make_identity_key(self.model, _obj_pk)
+            key = self.make_identity_key(self.model, _obj_pk)
             if identity_map.exists(key):
                 return identity_map.get(key)
             try:
@@ -471,7 +471,7 @@ class Load(object):
         else:
             data_mapped = dict(self._data)
         identity_map = IdentityMap(self._mapper.using())
-        key = self._mapper._make_identity_key(self._mapper.model, tuple(data_mapped[i] for i in to_tuple(self._mapper.pk)))
+        key = self._mapper.make_identity_key(self._mapper.model, tuple(data_mapped[i] for i in to_tuple(self._mapper.pk)))
         try:
             obj = identity_map.get(key)
         except KeyError:  # First loading

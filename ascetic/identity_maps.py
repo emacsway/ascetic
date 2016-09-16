@@ -213,7 +213,7 @@ class Sync(object):
             mapper = mapper_registry[model]
             pks = list(model_object_map.values())
             for pk in model_object_map.keys():
-                self._identity_map.remove(mapper._make_identity_key(model, to_tuple(pk)))
+                self._identity_map.remove(mapper.make_identity_key(model, to_tuple(pk)))
             for obj in self._make_query(mapper, pks):
                 assert mapper.get_pk(obj) in model_object_map
                 assert not mapper.get_changed(obj)
