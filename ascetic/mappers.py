@@ -299,21 +299,10 @@ class Mapper(object):
         return Load(self, data, from_db, reload).compute()
 
     def unload(self, obj, fields=frozenset(), exclude=frozenset(), to_db=True):
-        data = self._do_unload(obj, self._get_specified_fields(fields, exclude))
-        if to_db:
-            data = self._map_data_to_db(data)
-        return data
+        return Unload(self, obj, self._get_specified_fields(fields, exclude), to_db).compute()
 
-    def _map_data_to_db(self, data):
-        fields = self.fields
-        # check field is not virtual like annotation or subquery.
-        return {fields[name].column: value for name, value in data.items()
-                if not getattr(fields[name], 'virtual', False)}
-
-    def _do_unload(self, obj, fields):
-        return {name: self.fields[name].get_value(obj) for name in fields}
-
-    def make_identity_key(self, model, pk):
+    @staticmethod
+    def make_identity_key(model, pk):
         return (model, to_tuple(pk))
 
     def set_original_data(self, obj, data):
@@ -331,6 +320,8 @@ class Mapper(object):
 
     def is_new(self, obj, status=None):
         # TODO: use WeakKeyDictionary?
+        if status is not None:
+            return self.mark_new(obj, status)
         try:
             return obj._new_record
         except AttributeError:
@@ -460,6 +451,12 @@ class Mapper(object):
 class Load(object):
 
     def __init__(self, mapper, data, from_db, reload):
+        """
+        :type mapper: Mapper
+        :type data: tuple
+        :type from_db: bool
+        :type reload: bool
+        """
         self._mapper = mapper
         self._data = data
         self._from_db = from_db
@@ -507,6 +504,36 @@ class Load(object):
                 self._mapper.fields[name].set_value(obj, data[name])
             except KeyError:
                 setattr(obj, name, value)
+
+
+class Unload(object):
+
+    def __init__(self, mapper, obj, fields, to_db):
+        """
+        :type mapper: Mapper
+        :type obj: object
+        :type fields: set
+        :type to_db: bool
+        """
+        self._mapper = mapper
+        self._obj = obj
+        self._fields = fields
+        self._to_db = to_db
+
+    def compute(self):
+        data = self._do_unload()
+        if self._to_db:
+            data = self._map_data_to_db(data)
+        return data
+
+    def _map_data_to_db(self, data):
+        fields = self._mapper.fields
+        # check field is not virtual like annotation or subquery.
+        return {fields[name].column: value for name, value in data.items()
+                if not getattr(fields[name], 'virtual', False)}
+
+    def _do_unload(self):
+        return {name: self._mapper.fields[name].get_value(self._obj) for name in self._fields}
 
 from ascetic.relations import BaseRelation, RelationDescriptor, OneToOne, OneToMany
 from ascetic.query import factory as sql, Result
