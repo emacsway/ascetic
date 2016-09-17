@@ -3,9 +3,10 @@ import operator
 from functools import reduce
 from sqlbuilder import smartsql
 from ascetic.databases import databases
-from ascetic.utils import to_tuple
 from ascetic.exceptions import ObjectDoesNotExist
+from ascetic.mappers import mapper_registry
 from ascetic.relations import Relation, ForeignKey, OneToOne, OneToMany
+from ascetic.utils import to_tuple
 
 factory = copy.copy(smartsql.factory)
 
@@ -19,12 +20,61 @@ except NameError:
     integer_types = (int,)
 
 
+@factory.register
+class Table(smartsql.Table):
+
+    def __init__(self, mapper, *args, **kwargs):
+        """
+        :type mapper: ascetic.mappers.Mapper
+        """
+        super(Table, self).__init__(mapper.db_table, *args, **kwargs)
+        self._mapper = mapper
+
+    @property
+    def q(self):
+        return self._mapper.query
+
+    @property
+    def qs(self):
+        smartsql.warn('Table.qs', 'Table.q')
+        return self._mapper.query
+
+    def get_fields(self, prefix=None):
+        return self._mapper.get_sql_fields()
+
+    def get_field(self, name):
+        parts = name.split(smartsql.LOOKUP_SEP, 1)
+        field = parts[0]
+        # result = {'field': field, }
+        # field_conversion.send(sender=self, result=result, field=field, model=self.model)
+        # field = result['field']
+
+        if field == 'pk':
+            field = self._mapper.pk
+        elif isinstance(self._mapper.relations.get(field, None), Relation):
+            field = self._mapper.relations.get(field).field
+
+        if type(field) == tuple:
+            if len(parts) > 1:
+                # FIXME: "{}_{}".format(alias, field_name) ???
+                raise Exception("Can't set single alias for multiple fields of composite key {}.{}".format(self.model, name))
+            return smartsql.CompositeExpr(*(self.get_field(k) for k in field))
+
+        if field in self._mapper.fields:
+            field = self._mapper.fields[field].column
+        parts[0] = field
+        return super(Table, self).get_field(smartsql.LOOKUP_SEP.join(parts))
+
+
+@factory.register
+class TableAlias(smartsql.TableAlias, Table):
+    @property
+    def _mapper(self):
+        return getattr(self._table, '_mapper', None)  # Can be subquery
+
+
 class Result(smartsql.Result):
     """Result adapted for table."""
-
-    _mapper = None
-    _raw = None
-    _cache = None
 
     def __init__(self, mapper):
         """
@@ -36,6 +86,7 @@ class Result(smartsql.Result):
         self._is_base = True
         self._mapping = default_mapping
         self._using = mapper._using
+        self._cache = None
 
     def __len__(self):
         self.fill_cache()
@@ -164,13 +215,14 @@ class SelectRelatedMapping(object):
     def get_objects(self, models, rows, state):
         objs = []
         for model, model_row in zip(models, rows):
-            pk = to_tuple(model._mapper.pk)
-            pk_columns = tuple(model._mapper.fields[k].columns for k in pk)
+            mapper = mapper_registry[model]
+            pk = to_tuple(mapper.pk)
+            pk_columns = tuple(mapper.fields[k].columns for k in pk)
             model_row_dict = dict(model_row)
             pk_values = tuple(model_row_dict[k] for k in pk_columns)
             key = (model, pk_values)
             if key not in state:
-                state[key] = model._mapper.load(model_row, from_db=True)
+                state[key] = mapper.load(model_row, from_db=True)
             objs.append(state[key])
         return objs
 
@@ -191,7 +243,7 @@ class SelectRelatedMapping(object):
                 setattr(rel_obj, rel_name, obj)
 
     def __call__(self, result, row, state):
-        models = [result.model]
+        models = [result.mapper.model]
         relations = result._select_related
         for rel in relations:
             models.append(rel.rel_model)
@@ -199,53 +251,3 @@ class SelectRelatedMapping(object):
         objs = self.get_objects(models, rows, state)
         self.build_relations(relations, objs)
         return objs[0]
-
-
-@factory.register
-class Table(smartsql.Table):
-
-    def __init__(self, mapper, *args, **kwargs):
-        super(Table, self).__init__(mapper.db_table, *args, **kwargs)
-        self._mapper = mapper
-
-    @property
-    def q(self):
-        return self._mapper.query
-
-    @property
-    def qs(self):
-        smartsql.warn('Table.qs', 'Table.q')
-        return self._mapper.query
-
-    def get_fields(self, prefix=None):
-        return self._mapper.get_sql_fields()
-
-    def get_field(self, name):
-        parts = name.split(smartsql.LOOKUP_SEP, 1)
-        field = parts[0]
-        # result = {'field': field, }
-        # field_conversion.send(sender=self, result=result, field=field, model=self.model)
-        # field = result['field']
-
-        if field == 'pk':
-            field = self._mapper.pk
-        elif isinstance(self._mapper.relations.get(field, None), Relation):
-            field = self._mapper.relations.get(field).field
-
-        if type(field) == tuple:
-            if len(parts) > 1:
-                # FIXME: "{}_{}".format(alias, field_name) ???
-                raise Exception("Can't set single alias for multiple fields of composite key {}.{}".format(self.model, name))
-            return smartsql.CompositeExpr(*(self.get_field(k) for k in field))
-
-        if field in self._mapper.fields:
-            field = self._mapper.fields[field].column
-        parts[0] = field
-        return super(Table, self).get_field(smartsql.LOOKUP_SEP.join(parts))
-
-
-@factory.register
-class TableAlias(smartsql.TableAlias, Table):
-    @property
-    def _mapper(self):
-        return getattr(self._table, '_mapper', None)  # Can be subquery
