@@ -206,7 +206,11 @@ def default_mapping(result, row, state):
 
 class SelectRelatedMapping(object):
 
-    def get_model_rows(self, models, row):
+    def __init__(self, result):
+        self._result = result
+        self._state = {}
+
+    def _get_model_rows(self, models, row):
         rows = []
         start = 0
         for m in models:
@@ -215,7 +219,7 @@ class SelectRelatedMapping(object):
             start += length
         return rows
 
-    def get_objects(self, models, rows, state):
+    def _get_objects(self, models, rows):
         objs = []
         for model, model_row in zip(models, rows):
             mapper = mapper_registry[model]
@@ -224,12 +228,12 @@ class SelectRelatedMapping(object):
             model_row_dict = dict(model_row)
             pk_values = tuple(model_row_dict[k] for k in pk_columns)
             key = (model, pk_values)
-            if key not in state:
-                state[key] = mapper.load(model_row, from_db=True)
-            objs.append(state[key])
+            if key not in self._state:
+                self._state[key] = mapper.load(model_row, from_db=True)
+            objs.append(self._state[key])
         return objs
 
-    def build_relations(self, relations, objs):
+    def _build_relations(self, relations, objs):
         for i, rel in enumerate(relations):
             obj, rel_obj = objs[i], objs[i + 1]
             name = rel.name
@@ -245,12 +249,12 @@ class SelectRelatedMapping(object):
                 getattr(obj, name).append[rel_obj]
                 setattr(rel_obj, rel_name, obj)
 
-    def __call__(self, result, row, state):
-        models = [result.mapper.model]
-        relations = result._select_related
+    def __call__(self, row):
+        models = [self._result.mapper.model]
+        relations = self._result._select_related
         for rel in relations:
             models.append(rel.rel_model)
-        rows = self.get_model_rows(models, row)
-        objs = self.get_objects(models, rows, state)
-        self.build_relations(relations, objs)
+        rows = self._get_model_rows(models, row)
+        objs = self._get_objects(models, rows)
+        self._build_relations(relations, objs)
         return objs[0]
