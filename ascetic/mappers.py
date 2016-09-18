@@ -39,7 +39,6 @@ def thread_safe(func):
 
 
 class BaseRegistry(dict):
-
     exception_class = OrmException
 
     def __getitem__(self, key):
@@ -61,11 +60,25 @@ class BaseRegistry(dict):
 class ModelRegistry(BaseRegistry):
     exception_class = ModelNotRegistered
 
+    def __getitem__(self, key):
+        """
+        :type key: str
+        :rtype: object
+        """
+        return BaseRegistry.__getitem__(self, key)
+
 model_registry = get_model = ModelRegistry()
 
 
 class MapperRegistry(BaseRegistry):
     exception_class = MapperNotRegistered
+
+    def __getitem__(self, key):
+        """
+        :type key: object
+        :rtype: Mapper
+        """
+        return BaseRegistry.__getitem__(self, key)
 
 mapper_registry = get_mapper = MapperRegistry()
 

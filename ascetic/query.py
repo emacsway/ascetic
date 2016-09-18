@@ -210,11 +210,22 @@ class SelectRelatedMapping(object):
         self._result = result
         self._state = {}
 
+    def __call__(self, row):
+        models = [self._result.mapper.model]
+        relations = self._result._select_related
+        for rel in relations:
+            models.append(rel.rel_model)
+        rows = self._get_model_rows(models, row)
+        objs = self._get_objects(models, rows)
+        self._build_relations(relations, objs)
+        return objs[0]
+
     def _get_model_rows(self, models, row):
-        rows = []
+        rows = []  # There can be multiple the same models, so, using dict instead of model
         start = 0
-        for m in models:
-            length = len(m.s.get_fields())
+        for model in models:
+            mapper = mapper_registry[model]
+            length = len(mapper.get_sql_fields())
             rows.append(row[start:length])
             start += length
         return rows
@@ -234,27 +245,26 @@ class SelectRelatedMapping(object):
         return objs
 
     def _build_relations(self, relations, objs):
-        for i, rel in enumerate(relations):
+        for i, relation in enumerate(relations):
             obj, rel_obj = objs[i], objs[i + 1]
-            name = rel.name
-            rel_name = rel.rel_name
-            if isinstance(rel, (ForeignKey, OneToOne)):
-                setattr(obj, name, rel_obj)
-                if not hasattr(rel_obj, rel_name):
-                    setattr(rel_obj, rel_name, [])
-                getattr(rel_obj, rel_name).append[obj]
-            elif isinstance(rel, OneToMany):
-                if not hasattr(obj, name):
-                    setattr(obj, name, [])
-                getattr(obj, name).append[rel_obj]
-                setattr(rel_obj, rel_name, obj)
+            self._build_relation(relation, obj, rel_obj)
 
-    def __call__(self, row):
-        models = [self._result.mapper.model]
-        relations = self._result._select_related
-        for rel in relations:
-            models.append(rel.rel_model)
-        rows = self._get_model_rows(models, row)
-        objs = self._get_objects(models, rows)
-        self._build_relations(relations, objs)
-        return objs[0]
+    def _build_relation(self, relation, obj, rel_obj):
+        if isinstance(relation, (ForeignKey, OneToOne)):
+            self._build_fk(relation, obj, rel_obj)
+        elif isinstance(relation, OneToMany):
+            self._build_o2m(relation, obj, rel_obj)
+
+    def _build_fk(self, relation, obj, rel_obj):
+        name, rel_name = relation.name, relation.rel_name
+        setattr(obj, name, rel_obj)
+        if not hasattr(rel_obj, rel_name):
+            setattr(rel_obj, rel_name, [])
+        getattr(rel_obj, rel_name).append[obj]
+
+    def _build_o2m(self, relation, obj, rel_obj):
+        name, rel_name = relation.name, relation.rel_name
+        if not hasattr(obj, name):
+            setattr(obj, name, [])
+        getattr(obj, name).append[rel_obj]
+        setattr(rel_obj, rel_name, obj)
