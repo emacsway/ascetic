@@ -1,6 +1,6 @@
 import copy
 import operator
-from functools import reduce
+from functools import reduce, partial
 from sqlbuilder import smartsql
 from ascetic.databases import databases
 from ascetic.exceptions import ObjectDoesNotExist
@@ -138,9 +138,12 @@ class Result(smartsql.Result):
         """Iterator"""
         cursor = self.execute()
         fields = tuple(f[0] for f in cursor.description)
-        state = {}
+        if isinstance(self._mapping, type):
+            map_row = self._mapping(self)
+        else:
+            map_row = partial(self._mapping, result=self, state={})
         for row in cursor.fetchall():
-            yield self._mapping(self, zip(fields, row), state)
+            yield map_row(row=zip(fields, row))
 
     def using(self, alias=False):
         if alias is None:
