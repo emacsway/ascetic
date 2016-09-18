@@ -8,7 +8,7 @@ from ascetic.identity_maps import IdentityMap
 from ascetic.models import Model
 from ascetic.relations import ForeignKey
 from sqlbuilder import smartsql
-from sqlbuilder.smartsql.tests import *  # TODO: use suite
+from sqlbuilder.smartsql.tests import *
 
 Author = Book = AuthorC = BookC = None
 
@@ -49,7 +49,7 @@ class TestUtils(unittest.TestCase):
         self.assertTrue(utils.resolve('ascetic.databases.Database') is Database)
 
 
-class TestModels(unittest.TestCase):
+class TestMapper(unittest.TestCase):
 
     maxDiff = None
 
@@ -152,12 +152,9 @@ class TestModels(unittest.TestCase):
         for table in ('ascetic_tests_author', 'books'):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 
-    def test_model(self):
-        # Create tables
         author_mapper = mapper_registry[Author]
         book_mapper = mapper_registry[Book]
 
-        # Test Creation
         james = Author(first_name='James', last_name='Joyce')
         author_mapper.save(james)
         kurt = Author(first_name='Kurt', last_name='Vonnegut')
@@ -170,8 +167,17 @@ class TestModels(unittest.TestCase):
         book_mapper.save(Book(title='Jitterbug Perfume', author_id=tom.id))
         slww = Book(title='Still Life with Woodpecker', author_id=tom.id)
         book_mapper.save(slww)
+        self.data = {
+            'james': james,
+            'kurt': kurt,
+            'tom': tom,
+            'slww': slww,
+        }
 
-        # Test Model.pk getter and setter
+    def test_pk(self):
+        book_mapper = mapper_registry[Book]
+        tom, slww = self.data['tom'], self.data['slww']
+
         pk = book_mapper.get_pk(slww)
         self.assertEqual(book_mapper.get_pk(slww), slww.id)
         book_mapper.set_pk(slww, tom.id)
@@ -182,7 +188,9 @@ class TestModels(unittest.TestCase):
         # self.assertTrue(kurt == author_mapper.get(kurt.id))
         # self.assertTrue(kurt != tom)
 
-        # Test ForeignKey
+    def test_fk(self):
+        kurt, tom, slww = self.data['kurt'], self.data['tom'], self.data['slww']
+
         self.assertEqual(slww.author.first_name, 'Tom')
         slww.author = kurt
         self.assertEqual(slww.author.first_name, 'Kurt')
@@ -193,11 +201,13 @@ class TestModels(unittest.TestCase):
         slww.author = tom.id
         self.assertEqual(slww.author.first_name, 'Tom')
 
-        # Test OneToMany
+    def test_o2m(self):
+        tom = self.data['tom']
         self.assertEqual(len(list(tom.books)), 2)
 
-        kid = kurt.id
-        del(james, kurt, tom, slww)
+    def test_retrieval(self):
+        author_mapper, book_mapper = mapper_registry[Author], mapper_registry[Book]
+        tom = self.data['tom']
 
         # Test retrieval
         b = book_mapper.get(title='Ulysses')
@@ -208,8 +218,13 @@ class TestModels(unittest.TestCase):
         a = author_mapper.query.where(author_mapper.sql_table.id == b.id)[:]
         # self.assert_(isinstance(a, list))
         self.assert_(isinstance(a, smartsql.Q))
+        self.assertEqual(len(list(tom.books)), 2)
 
-        # Test update
+    def test_update(self):
+        author_mapper = mapper_registry[Author]
+        kurt = self.data['kurt']
+
+        kid = kurt.id
         new_last_name = 'Vonnegut, Jr.'
         a = author_mapper.get(id=kid)
         a.last_name = new_last_name
@@ -218,29 +233,41 @@ class TestModels(unittest.TestCase):
         a = author_mapper.get(kid)
         self.assertEqual(a.last_name, new_last_name)
 
-        # Test count
+    def test_count(self):
+        author_mapper, book_mapper = mapper_registry[Author], mapper_registry[Book]
+
         self.assertEqual(author_mapper.query.count(), 3)
         self.assertEqual(len(book_mapper.query.clone()), 4)
         self.assertEqual(len(book_mapper.query.clone()[1:4]), 3)
 
-        # Test delete
-        author_mapper.delete(a)
+    def test_delete(self):
+        author_mapper, book_mapper = mapper_registry[Author], mapper_registry[Book]
+        kurt = self.data['kurt']
+
+        author_mapper.delete(kurt)
         self.assertEqual(author_mapper.query.count(), 2)
         self.assertEqual(len(book_mapper.query.clone()), 3)
 
-        # Test validation
+    def test_validation(self):
+        author_mapper = mapper_registry[Author]
+
         a = Author(first_name='', last_name='Ted')
         self.assertRaises(validators.ValidationError, author_mapper.validate, a)
 
-        # Test defaults
-        a.first_name = 'Bill and'
+    def test_defaults(self):
+        author_mapper = mapper_registry[Author]
+
+        a = Author(first_name='Bill and', last_name='Ted')
         author_mapper.save(a)
         self.assertEqual(a.bio, 'No bio available')
 
         a = Author(first_name='I am a', last_name='BadGuy!')
         self.assertRaises(validators.ValidationError, author_mapper.validate, a)
 
-        print('### Testing for smartsql integration')
+    def test_smartsql(self):
+        author_mapper, book_mapper = mapper_registry[Author], mapper_registry[Book]
+        slww = self.data['slww']
+
         fields = [smartsql.compile(i)[0] for i in author_mapper.get_sql_fields()]
         self.assertListEqual(
             fields,
@@ -258,12 +285,14 @@ class TestModels(unittest.TestCase):
         for obj in q:
             self.assertTrue(isinstance(obj, Author))
 
-        q = q.where(author_mapper.sql_table.id == b.author_id)
+        q = q.where(author_mapper.sql_table.id == slww.author_id)
         self.assertEqual(smartsql.compile(q)[0], """SELECT "ascetic_tests_author"."id", "ascetic_tests_author"."first_name", "ascetic_tests_author"."last_name", "ascetic_tests_author"."bio" FROM "ascetic_tests_author" WHERE "ascetic_tests_author"."id" = %s""")
         self.assertEqual(len(q), 1)
         self.assertTrue(isinstance(q[0], Author))
 
-        # prefetch
+    def test_prefetch(self):
+        author_mapper, book_mapper = mapper_registry[Author], mapper_registry[Book]
+
         q = book_mapper.query.prefetch('author').order_by(book_mapper.sql_table.id)
         for obj in q:
             self.assertTrue(hasattr(obj, '_cache'))
