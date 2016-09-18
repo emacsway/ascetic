@@ -295,6 +295,10 @@ class OneToMany(Relation):
         return self._rel_name or self.model.__name__.lower()
 
     def get(self, instance):
+        """
+        :type instance: object
+        :rtype: sqlbuilder.smartsql.Query
+        """
         val = self.get_value(instance)
         cached_query = self._get_cache(instance, self.name)
         # Be sure that value of related fields equals to value of field

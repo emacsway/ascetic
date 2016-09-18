@@ -86,7 +86,7 @@ class Result(smartsql.Result):
         self._is_base = True
         self._mapping = default_mapping
         self._using = mapper._using
-        self._cache = None
+        self._cache = None  # empty list also can be a cached result, so, using None instead of empty list
 
     def __len__(self):
         self.fill_cache()
@@ -99,13 +99,14 @@ class Result(smartsql.Result):
     def __getitem__(self, key):
         if self._cache:
             return self._cache[key]
-        if isinstance(key, integer_types):
+        elif isinstance(key, integer_types):
             self._query = super(Result, self).__getitem__(key)
             try:
                 return list(self)[0]
             except IndexError:
                 raise ObjectDoesNotExist
-        return super(Result, self).__getitem__(key)
+        else:
+            return super(Result, self).__getitem__(key)
 
     def execute(self):
         """Implementation of query execution"""
@@ -130,7 +131,7 @@ class Result(smartsql.Result):
     def fill_cache(self):
         if self.is_base():
             raise Exception('You should clone base queryset before query.')
-        if self._cache is None:
+        elif self._cache is None:
             self._cache = list(self.iterator())
             self.populate_prefetch()
 
@@ -181,23 +182,78 @@ class Result(smartsql.Result):
 
     def populate_prefetch(self):
         relations = self.mapper.relations
-        for key, q in self._prefetch.items():
-            rel = relations[key]
+        for key, query in self._prefetch.items():
+            relation = relations[key]
+            preset_relation = RelationPresetter(relation)
             # recursive handle prefetch
-
-            cond = reduce(operator.or_, (rel.get_rel_where(obj) for obj in self._cache))
-            q = q.where(cond)
-            rows = list(q)
+            cond = reduce(operator.or_, (relation.get_rel_where(obj) for obj in self._cache))
+            query = query.where(cond)
             for obj in self._cache:
-                val = [i for i in rows if rel.get_rel_value(i) == rel.get_value(obj)]
-                if isinstance(rel, (ForeignKey, OneToOne)):
-                    val = val[0] if val else None
-                    if val and isinstance(rel, OneToOne):
-                        setattr(val, rel.rel_name, obj)
-                elif isinstance(rel, OneToMany):
-                    for i in val:
-                        setattr(i, rel.rel_name, obj)
-                setattr(obj, key, val)
+                for prefetched_obj in query:
+                    if relation.get_value(obj) == relation.get_rel_value(prefetched_obj):
+                        preset_relation(obj, rel_obj=prefetched_obj)
+
+
+class RelationPresetter(object):
+    def __new__(cls, relation):
+        if isinstance(relation, ForeignKey):
+            return object.__new__(ForeignKeyPresetter)
+        elif isinstance(relation, OneToOne):
+            return object.__new__(OneToOnePresetter)
+        elif isinstance(relation, OneToMany):
+            return object.__new__(OneToManyPresetter)
+        else:
+            raise NotImplementedError(relation)
+
+    def __init__(self, relation):
+        """
+        :type relation: ascetic.relations.Relation
+        """
+        self._relation = relation
+
+    def __call__(self, obj, rel_obj):
+        raise NotImplementedError
+
+    @property
+    def name(self):
+        return self._relation.name
+
+    @property
+    def rel_name(self):
+        return self._relation.rel_name
+
+    @staticmethod
+    def set_attr(obj, attr_name, rel_obj):
+        setattr(obj, attr_name, rel_obj)
+
+    @staticmethod
+    def append_attr(obj, attr_name, rel_item):
+        query = getattr(obj, attr_name)
+        if query._cache is None:
+            query._cache = []
+        query._cache.append(rel_item)
+
+
+
+class ForeignKeyPresetter(RelationPresetter):
+    def __call__(self, obj, rel_obj):
+        self.set_attr(obj, self.name, rel_obj)
+        self.append_attr(rel_obj, self.rel_name, obj)
+
+
+
+class OneToOnePresetter(RelationPresetter):
+    def __call__(self, obj, rel_obj):
+        self.set_attr(obj, self.name, rel_obj)
+        self.set_attr(rel_obj, self.rel_name, obj)
+
+
+class OneToManyPresetter(RelationPresetter):
+    def __call__(self, obj, rel_obj):
+        if not hasattr(obj, self.name):
+            setattr(obj, self.name, [])
+        self.append_attr(obj, self.name, rel_obj)
+        self.set_attr(rel_obj, self.rel_name, obj)
 
 
 def default_mapping(result, row, state):
@@ -247,24 +303,4 @@ class SelectRelatedMapping(object):
     def _build_relations(self, relations, objs):
         for i, relation in enumerate(relations):
             obj, rel_obj = objs[i], objs[i + 1]
-            self._build_relation(relation, obj, rel_obj)
-
-    def _build_relation(self, relation, obj, rel_obj):
-        if isinstance(relation, (ForeignKey, OneToOne)):
-            self._build_fk(relation, obj, rel_obj)
-        elif isinstance(relation, OneToMany):
-            self._build_o2m(relation, obj, rel_obj)
-
-    def _build_fk(self, relation, obj, rel_obj):
-        name, rel_name = relation.name, relation.rel_name
-        setattr(obj, name, rel_obj)
-        if not hasattr(rel_obj, rel_name):
-            setattr(rel_obj, rel_name, [])
-        getattr(rel_obj, rel_name).append[obj]
-
-    def _build_o2m(self, relation, obj, rel_obj):
-        name, rel_name = relation.name, relation.rel_name
-        if not hasattr(obj, name):
-            setattr(obj, name, [])
-        getattr(obj, name).append[rel_obj]
-        setattr(rel_obj, rel_name, obj)
+            RelationPresetter(relation)(obj, rel_obj)

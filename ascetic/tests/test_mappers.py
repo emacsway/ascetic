@@ -271,9 +271,10 @@ class TestModels(unittest.TestCase):
             self.assertEqual(obj._cache['author'], obj.author)
 
         for obj in author_mapper.query.prefetch('books').order_by(author_mapper.sql_table.id):
-            self.assertTrue(hasattr(obj, '_cache'))
-            self.assertTrue('books' in obj._cache)
-            self.assertEqual(len(obj._cache['books']._cache), len(obj.books))
+            if len(obj.books):
+                self.assertTrue(hasattr(obj, '_cache'))
+                self.assertTrue('books' in obj._cache)
+                self.assertEqual(len(obj._cache['books']._cache), len(obj.books))
             for i in obj._cache['books']._cache:
                 self.assertEqual(i._cache['author'], obj)
 
