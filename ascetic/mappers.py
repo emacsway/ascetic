@@ -94,8 +94,8 @@ class Mapper(object):
 
     @thread_safe
     def __init__(self, model=None):
-        self.original_data = SpecialMappingAccessor(SpecialAttrAccessor('original_data'))
-        self.is_new = SpecialAttrAccessor('new_record', init_value=True)
+        self.original_data = SpecialMappingAccessor(SpecialAttrAccessor('original_data', default=dict))
+        self.is_new = SpecialAttrAccessor('new_record', default=True)
 
         if model:
             self.model = model

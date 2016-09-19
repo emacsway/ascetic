@@ -61,9 +61,9 @@ def to_tuple(val):
 
 class SpecialAttrAccessor(object):
     # TODO: use WeakKeyDictionary?
-    def __init__(self, key, init_value=None):
+    def __init__(self, key, default=None):
         self._key = self._prepare_key(key)
-        self._init_value = init_value
+        self._default = default
 
     def _prepare_key(self, key):
         return '_{0}'.format(key)
@@ -75,10 +75,10 @@ class SpecialAttrAccessor(object):
         try:
             return getattr(obj, self._key)
         except AttributeError:
-            init_value = self._init_value
-            if isinstance(init_value, collections.Callable):
-                init_value = init_value()
-            self.set(obj, init_value)
+            default = self._default
+            if isinstance(default, collections.Callable):
+                default = default()
+            self.set(obj, default)
             return self.get(obj)
 
     def del_(self, obj):
@@ -106,12 +106,7 @@ class SpecialMappingAccessor(object):
         self.get(obj).update(data)
 
     def get(self, obj):
-        if self.attr_accessor.get(obj) is None:
-            self.attr_accessor.set(obj, self._make_init_mapping())
         return self.attr_accessor.get(obj)
-
-    def _make_init_mapping(self):
-        return dict()
 
     def __call__(self, obj, *args, **kwargs):
         if args:

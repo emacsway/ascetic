@@ -13,7 +13,7 @@ class GenericForeignKey(ForeignKey):
     instance = None
 
     def __init__(self, type_field="object_type_id", rel_field=None, field=None, on_delete=cascade, rel_name=None, rel_query=None):
-        self._cache = SpecialMappingAccessor(SpecialAttrAccessor('cache'))
+        self._cache = SpecialMappingAccessor(SpecialAttrAccessor('cache', default=dict))
         self._type_field = type_field
         if not rel_field or isinstance(rel_field, collections.Callable):
             self._rel_field = rel_field

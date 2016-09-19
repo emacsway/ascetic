@@ -94,7 +94,7 @@ class BaseRelation(object):
 class Relation(BaseRelation):
 
     def __init__(self, rel_model, rel_field=None, field=None, on_delete=cascade, rel_name=None, rel_query=None, query=None):
-        self._cache = SpecialMappingAccessor(SpecialAttrAccessor('cache'))
+        self._cache = SpecialMappingAccessor(SpecialAttrAccessor('cache', default=dict))
         if isinstance(rel_model, Mapper):
             rel_model = rel_model.model
         self._rel_model_or_name = rel_model
