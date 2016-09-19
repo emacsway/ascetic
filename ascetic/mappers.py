@@ -9,7 +9,7 @@ from sqlbuilder import smartsql
 
 from ascetic.exceptions import ObjectDoesNotExist, OrmException, ModelNotRegistered, MapperNotRegistered
 from ascetic.fields import Field
-from ascetic.utils import to_tuple
+from ascetic.utils import to_tuple, SpecialAttrAccessor, SpecialMappingAccessor
 from ascetic.databases import databases
 from ascetic.signals import pre_save, post_save, pre_delete, post_delete, class_prepared
 from ascetic.validators import MappingValidator, CompositeMappingValidator
@@ -83,33 +83,6 @@ class MapperRegistry(BaseRegistry):
 mapper_registry = get_mapper = MapperRegistry()
 
 
-class OriginalDataStrategy(object):
-    @staticmethod
-    def set(obj, data):
-        # TODO: use WeakKeyDictionary?
-        obj._original_data = data
-
-    @classmethod
-    def update(cls, obj, **data):
-        cls.get(obj).update(data)
-
-    @staticmethod
-    def get(obj):
-        if not hasattr(obj, '_original_data'):
-            obj._original_data = {}
-        return obj._original_data
-
-    def __call__(self, obj, *args, **kwargs):
-        if args:
-            data = args[0]
-            self.set(obj, data)
-        elif kwargs:
-            data = kwargs
-            self.update(obj, **data)
-        else:
-            return self.get(obj)
-
-
 class Mapper(object):
 
     pk = 'id'
@@ -118,10 +91,12 @@ class Mapper(object):
     abstract = False
     field_factory = Field
     result_factory = staticmethod(lambda *a, **kw: Result(*a, **kw))
-    original_data = OriginalDataStrategy()
 
     @thread_safe
     def __init__(self, model=None):
+        self.original_data = SpecialMappingAccessor(SpecialAttrAccessor('original_data'))
+        self.is_new = SpecialAttrAccessor('new_record', init_value=True)
+
         if model:
             self.model = model
 
@@ -318,33 +293,10 @@ class Mapper(object):
     def make_identity_key(model, pk):
         return (model, to_tuple(pk))
 
-    def set_original_data(self, obj, data):
-        self.original_data.set(obj, data)
-
-    def update_original_data(self, obj, **data):
-        self.original_data.update(obj, **data)
-
-    def get_original_data(self, obj):
-        return self.original_data.get(obj)
-
-    def mark_new(self, obj, status=True):
-        if status is not None:
-            obj._new_record = status
-
-    def is_new(self, obj, status=None):
-        # TODO: use WeakKeyDictionary?
-        if status is not None:
-            return self.mark_new(obj, status)
-        try:
-            return obj._new_record
-        except AttributeError:
-            obj._new_record = True
-            return obj._new_record
-
     def get_changed(self, obj):
-        if not self.get_original_data(obj):
+        if not self.original_data(obj):
             return set(self.fields)
-        return set(k for k, v in self.get_original_data(obj).items() if k in self.fields and self.fields[k].get_value(obj) != v)
+        return set(k for k, v in self.original_data(obj).items() if k in self.fields and self.fields[k].get_value(obj) != v)
 
     def set_defaults(self, obj):
         for name, field in self.fields.items():
@@ -393,8 +345,8 @@ class Mapper(object):
         is_new = self.is_new(obj)
         result = self._insert(obj) if is_new else self._update(obj)
         post_save.send(sender=self.model, instance=obj, created=is_new, using=self._using)
-        self.update_original_data(obj, **self.unload(obj, to_db=False))
-        self.mark_new(obj, False)
+        self.original_data(obj, **self.unload(obj, to_db=False))
+        self.is_new(obj, False)
         return result
 
     def _insert(self, obj):
@@ -493,8 +445,8 @@ class Load(object):
                 self._do_reload(obj, data_mapped)
             else:
                 return obj
-        self._mapper.set_original_data(obj, data_mapped)
-        self._mapper.mark_new(obj, False)
+        self._mapper.original_data(obj, data_mapped)
+        self._mapper.is_new(obj, False)
         identity_map.add(key, obj)
         return obj
 

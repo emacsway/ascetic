@@ -5,7 +5,7 @@ from functools import wraps
 from ascetic.mappers import model_registry, mapper_registry, is_model_instance
 from ascetic.utils import to_tuple
 from ascetic.relations import ForeignKey, OneToMany, cascade
-from ascetic.utils import cached_property
+from ascetic.utils import cached_property, SpecialAttrAccessor, SpecialMappingAccessor
 
 
 class GenericForeignKey(ForeignKey):
@@ -13,6 +13,7 @@ class GenericForeignKey(ForeignKey):
     instance = None
 
     def __init__(self, type_field="object_type_id", rel_field=None, field=None, on_delete=cascade, rel_name=None, rel_query=None):
+        self._cache = SpecialMappingAccessor(SpecialAttrAccessor('cache'))
         self._type_field = type_field
         if not rel_field or isinstance(rel_field, collections.Callable):
             self._rel_field = rel_field

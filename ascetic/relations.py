@@ -6,7 +6,7 @@ from functools import reduce
 from ascetic.mappers import mapper_registry, model_registry, is_model_instance, Mapper
 from ascetic.utils import to_tuple
 from ascetic.exceptions import ModelNotRegistered
-from ascetic.utils import cached_property
+from ascetic.utils import cached_property, SpecialAttrAccessor, SpecialMappingAccessor
 
 try:
     str = unicode  # Python 2.* compatible
@@ -94,6 +94,7 @@ class BaseRelation(object):
 class Relation(BaseRelation):
 
     def __init__(self, rel_model, rel_field=None, field=None, on_delete=cascade, rel_name=None, rel_query=None, query=None):
+        self._cache = SpecialMappingAccessor(SpecialAttrAccessor('cache'))
         if isinstance(rel_model, Mapper):
             rel_model = rel_model.model
         self._rel_model_or_name = rel_model
@@ -185,16 +186,12 @@ class Relation(BaseRelation):
 
     def _get_cache(self, instance, key):
         try:
-            return instance._cache[key]
+            return self._cache.get(instance)[key]
         except (AttributeError, KeyError):
             return None
 
     def _set_cache(self, instance, key, value):
-        try:
-            instance._cache[key] = value
-        except AttributeError:
-            instance._cache = {}
-            self._set_cache(instance, key, value)
+        self._cache.update(instance, {key: value})
 
 
 class ForeignKey(Relation):

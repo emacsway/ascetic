@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 import sys
+import collections
 
 try:
     str = unicode  # Python 2.* compatible
@@ -56,3 +57,68 @@ def resolve(str_or_obj):
 
 def to_tuple(val):
     return val if type(val) == tuple else (val,)
+
+
+class SpecialAttrAccessor(object):
+    # TODO: use WeakKeyDictionary?
+    def __init__(self, key, init_value=None):
+        self._key = self._prepare_key(key)
+        self._init_value = init_value
+
+    def _prepare_key(self, key):
+        return '_{0}'.format(key)
+
+    def set(self, obj, value):
+        setattr(obj, self._key, value)
+
+    def get(self, obj):
+        try:
+            return getattr(obj, self._key)
+        except AttributeError:
+            init_value = self._init_value
+            if isinstance(init_value, collections.Callable):
+                init_value = init_value()
+            self.set(obj, init_value)
+            return self.get(obj)
+
+    def del_(self, obj):
+        return delattr(obj, self._key)
+
+    def __call__(self, obj, value=Undef):
+        if value is Undef:
+            return self.get(obj)
+        else:
+            self.set(obj, value)
+
+
+class SpecialMappingAccessor(object):
+    def __init__(self, attr_accessor):
+        self.attr_accessor = attr_accessor
+
+    def set(self, obj, data):
+        self.attr_accessor.set(obj, data)
+
+    def update(self, obj, *args, **kwargs):
+        if args:
+            data = args[0]
+        else:
+            data = kwargs
+        self.get(obj).update(data)
+
+    def get(self, obj):
+        if self.attr_accessor.get(obj) is None:
+            self.attr_accessor.set(obj, self._make_init_mapping())
+        return self.attr_accessor.get(obj)
+
+    def _make_init_mapping(self):
+        return dict()
+
+    def __call__(self, obj, *args, **kwargs):
+        if args:
+            data = args[0]
+            self.set(obj, data)
+        elif kwargs:
+            data = kwargs
+            self.update(obj, **data)
+        else:
+            return self.get(obj)

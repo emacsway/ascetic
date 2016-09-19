@@ -126,7 +126,7 @@ class PolymorphicMapper(Mapper):
             base.save(obj)
             for key, base_key in zip(to_tuple(self.pk), to_tuple(base.pk)):
                 self.fields[key].set_value(obj, self.polymorphic_fields[base_key].get_value(obj))
-            self.mark_new(obj, new_record)
+            self.is_new(obj, new_record)
         return super(PolymorphicMapper, self).save(obj)
 
 
