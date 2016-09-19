@@ -67,6 +67,7 @@ class Database(object):
                     '%s - (%.4f) %s; args=%s' % (alias, duration, sql, params),
                     extra={'alias': alias, 'duration': duration, 'sql': sql, 'params': params}
                 )
+                # import traceback; traceback.print_stack()
         return wrapper
 
     def _execute(self, sql, params=()):

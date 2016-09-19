@@ -229,9 +229,9 @@ class RelationPresetter(object):
     @staticmethod
     def append_attr(obj, attr_name, rel_item):
         query = getattr(obj, attr_name)
-        if query._cache is None:
-            query._cache = []
-        query._cache.append(rel_item)
+        if query.result._cache is None:
+            query.result._cache = []
+        query.result._cache.append(rel_item)
 
 
 

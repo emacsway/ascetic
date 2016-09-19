@@ -316,7 +316,7 @@ class OneToMany(Relation):
                 self.validate_rel_obj(cached_obj)
                 if self.get_rel_value(cached_obj) != val:
                     return
-        self.get(instance)._cache = object_list
+        self.get(instance).result._cache = object_list
 
 
 class ManyToMany(BaseRelation):
