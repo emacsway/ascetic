@@ -147,6 +147,10 @@ class Mapper(object):
     def _create_declared_fields(self, model, map, defaults, validations, declared_fields):
         # We don't need depend on the state of instance, to be able to customise, or even reproduce some steps of initialisation.
         # So, we accept all data as arguments.
+        # Dependencies should be made obvious through the use of good routine names, parameter lists,
+        # see Chapter 14. Organizing Straight-Line Code of "Code Complete" by Steve McConnell
+        # G22: Make Logical Dependencies Physical and
+        # G31: Hidden Temporal Couplings of "Clean Code" by Robert Martin
         # TODO: Add class-methods for long methods
         result = {}
 
