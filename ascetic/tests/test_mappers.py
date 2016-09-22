@@ -1,52 +1,15 @@
 #!/usr/bin/env python
 import unittest
-from ascetic import validators
-from ascetic import utils
-from ascetic.databases import databases
-from ascetic.mappers import Mapper, mapper_registry
-from ascetic.identity_maps import IdentityMap
-from ascetic.models import Model
-from ascetic.relations import ForeignKey
+
 from sqlbuilder import smartsql
-from sqlbuilder.smartsql.tests import *
 
-Author = Book = AuthorC = BookC = None
+from ascetic import validators
+from ascetic.databases import databases
+from ascetic.identity_maps import IdentityMap
+from ascetic.mappers import Mapper, mapper_registry
+from ascetic.relations import ForeignKey
 
-
-class TestValidators(unittest.TestCase):
-
-    maxDiff = None
-
-    def test_validators(self):
-        ev = validators.Email()
-        assert ev('test@example.com')
-        assert not ev('adsf@.asdf.asdf')
-        assert validators.Length()('a')
-        assert not validators.Length(2)('a')
-        assert validators.Length(max_length=10)('abcdegf')
-        assert not validators.Length(max_length=3)('abcdegf')
-
-        n = validators.Number(1, 5)
-        assert n(2)
-        assert not n(6)
-        assert validators.Number(1)(100.0)
-        assert not validators.Number()('rawr!')
-
-        vc = validators.ChainValidator(validators.Length(8), validators.Email())
-        self.assertTrue(vc('test@example.com'))
-        with self.assertRaises(validators.ValidationError):
-            vc('a@a.com')
-        with self.assertRaises(validators.ValidationError):
-            vc('asdfasdfasdfasdfasdf')
-
-
-class TestUtils(unittest.TestCase):
-
-    maxDiff = None
-
-    def test_resolve(self):
-        from ascetic.databases import Database
-        self.assertTrue(utils.resolve('ascetic.databases.Database') is Database)
+Author = Book = None
 
 
 class TestMapper(unittest.TestCase):
@@ -305,132 +268,3 @@ class TestMapper(unittest.TestCase):
             self.assertEqual(len(obj._cache['books']._cache), len(obj.books))
             for i in obj._cache['books']._cache:
                 self.assertEqual(i._cache['author'], obj)
-
-
-class TestCompositeRelation(unittest.TestCase):
-
-    maxDiff = None
-
-    create_sql = {
-        'postgresql': """
-            DROP TABLE IF EXISTS ascetic_composite_author CASCADE;
-            CREATE TABLE ascetic_composite_author (
-                id integer NOT NULL,
-                lang VARCHAR(6) NOT NULL,
-                first_name VARCHAR(40) NOT NULL,
-                last_name VARCHAR(40) NOT NULL,
-                bio TEXT,
-                PRIMARY KEY (id, lang)
-            );
-            DROP TABLE IF EXISTS ascetic_composite_book CASCADE;
-            CREATE TABLE ascetic_composite_book (
-                id integer NOT NULL,
-                lang VARCHAR(6) NOT NULL,
-                title VARCHAR(255),
-                author_id integer,
-                PRIMARY KEY (id, lang),
-                FOREIGN KEY (author_id, lang) REFERENCES ascetic_composite_author (id, lang) ON DELETE CASCADE
-            );
-         """,
-        'mysql': """
-            DROP TABLE IF EXISTS ascetic_composite_author CASCADE;
-            CREATE TABLE ascetic_composite_author (
-                id INT(11) NOT NULL,
-                lang VARCHAR(6) NOT NULL,
-                first_name VARCHAR(40) NOT NULL,
-                last_name VARCHAR(40) NOT NULL,
-                bio TEXT,
-                PRIMARY KEY (id, lang)
-            );
-            DROP TABLE IF EXISTS ascetic_composite_book CASCADE;
-            CREATE TABLE ascetic_composite_book (
-                id INT(11) NOT NULL,
-                lang VARCHAR(6) NOT NULL,
-                title VARCHAR(255),
-                author_id INT(11),
-                PRIMARY KEY (id, lang),
-                FOREIGN KEY (author_id, lang) REFERENCES ascetic_composite_author (id, lang)
-            );
-         """,
-        'sqlite3': """
-            DROP TABLE IF EXISTS ascetic_composite_author;
-            CREATE TABLE ascetic_composite_author (
-                id INTEGER NOT NULL,
-                lang VARCHAR(6) NOT NULL,
-                first_name VARCHAR(40) NOT NULL,
-                last_name VARCHAR(40) NOT NULL,
-                bio TEXT,
-                PRIMARY KEY (id, lang)
-            );
-            DROP TABLE IF EXISTS ascetic_composite_book;
-            CREATE TABLE ascetic_composite_book (
-                id INTEGER NOT NULL,
-                lang VARCHAR(6) NOT NULL,
-                title VARCHAR(255),
-                author_id INT(11),
-                PRIMARY KEY (id, lang),
-                FOREIGN KEY (author_id, lang) REFERENCES ascetic_composite_author (id, lang)
-            );
-        """
-    }
-
-    @classmethod
-    def create_models(cls):
-
-        class AuthorC(Model):
-
-            class Mapper(object):
-                db_table = 'ascetic_composite_author'
-                defaults = {'bio': 'No bio available'}
-                validations = {'first_name': validators.Length(),
-                               'last_name': (validators.Length(), lambda x: x != 'BadGuy!' or 'Bad last name', )}
-
-        class BookC(Model):
-            author = ForeignKey(AuthorC, rel_field=('id', 'lang'), field=('author_id', 'lang'), rel_name='books')
-
-            class Mapper(object):
-                db_table = 'ascetic_composite_book'
-
-        return locals()
-
-    @classmethod
-    def setUpClass(cls):
-        db = databases['default']
-        db.cursor().execute(cls.create_sql[db.engine])
-        for model_name, model in cls.create_models().items():
-            globals()[model_name] = model
-
-    def setUp(self):
-        IdentityMap().disable()
-        db = databases['default']
-        for table in ('ascetic_composite_author', 'ascetic_composite_book'):
-            db.execute('DELETE FROM {0}'.format(db.qn(table)))
-
-    def test_model(self):
-        author = AuthorC(
-            id=1,
-            lang='en',
-            first_name='First name',
-            last_name='Last name',
-        )
-        self.assertIn('first_name', dir(author))
-        self.assertIn('last_name', dir(author))
-        author.save()
-        author_pk = (1, 'en')
-        author = AuthorC.get(author_pk)
-        self.assertEqual(author.pk, author_pk)
-
-        book = BookC(
-            id=5,
-            lang='en',
-            title='Book title'
-        )
-        book.author = author
-        book.save()
-        book_pk = (5, 'en')
-        book = BookC.get(book_pk)
-        self.assertEqual(book.pk, book_pk)
-        self.assertEqual(book.author.pk, author_pk)
-
-        author = AuthorC.get(author_pk)
-        self.assertEqual(author.books[0].pk, book_pk)
