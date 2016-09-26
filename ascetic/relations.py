@@ -137,26 +137,17 @@ class Relation(BaseRelation):
 
     def get_where(self, rel_obj):
         t = mapper_registry[self.model].sql_table
-        return t.get_field(self.name) == self.get_rel_value(rel_obj)  # Use CompositeExpr
-        return reduce(operator.and_,
-                      ((t.get_field(f) == rel_val)
-                       for f, rel_val in zip(self.field, self.get_rel_value(rel_obj))))
+        return t.get_field(self.name) == self.get_rel_value(rel_obj)  # CompositeExpr is used here
 
     def get_rel_where(self, obj):
         t = mapper_registry[self.rel_model].sql_table
-        # TODO: It's not well to use self.rel_name here. Relation can be non-bidirectional.
-        return t.get_field(self.rel_name) == self.get_value(obj)  # Use CompositeExpr
-        return reduce(operator.and_,
-                      ((t.get_field(rf) == val)
-                       for rf, val in zip(self.rel_field, self.get_value(obj))))
+        # TODO: Avoid to use self.rel_name here. Relation can be non-bidirectional.
+        return t.get_field(self.rel_name) == self.get_value(obj)  # CompositeExpr is used here
 
     def get_join_where(self):
         t = mapper_registry[self.model].sql_table
         rt = mapper_registry[self.rel_model].sql_table
-        return t.get_field(self.name) == rt.get_field(self.rel_name)  # Use CompositeExpr
-        return reduce(operator.and_,
-                      ((t.get_field(f) == rt.get_field(rf))
-                       for f, rf in zip(self.field, self.rel_field)))
+        return t.get_field(self.name) == rt.get_field(self.rel_name)  # CompositeExpr is used here
 
     def get_value(self, obj):
         return tuple(getattr(obj, f, None) for f in self.field)
@@ -320,13 +311,35 @@ class OneToMany(Relation):
 
 
 class ManyToMany(BaseRelation):
-
+    """
+    This class it not finished yet!
+    """
     def __init__(self, rel_model, rel_relation, relation):  # associated_model, associated_relation???
         if isinstance(rel_model, Mapper):
             rel_model = rel_model.model
         self._rel_model_or_name = rel_model
         self._rel_relation = rel_relation
         self._relation = relation
+
+    @cached_property
+    def relation(self):
+        return getattr(self.model, self._relation)
+
+    @cached_property
+    def rel_relation(self):
+        return getattr(self.rel_model, self._rel_relation)
+
+    @cached_property
+    def field(self):
+        return self.relation.field
+
+    @cached_property
+    def rel_field(self):
+        raise self.rel_relation.field
+
+    @cached_property
+    def rel_name(self):
+        raise self.rel_relation.name
 
 
 class RelationDescriptor(object):
