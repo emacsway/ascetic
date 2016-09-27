@@ -64,6 +64,10 @@ class IRelation(object):
         raise NotImplementedError
 
     def bind(self, owner):
+        """Using Prototype pattern.
+        :param owner: type
+        :return: IRelation
+        """
         raise NotImplementedError
 
     def get(self, instance):
