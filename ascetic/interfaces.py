@@ -20,6 +20,10 @@ class IRelation(object):
         raise NotImplementedError
 
     @property
+    def rel(self):
+        raise NotImplementedError
+
+    @property
     def rel_name(self):
         raise NotImplementedError
 
@@ -33,10 +37,6 @@ class IRelation(object):
 
     @property
     def rel_query(self):
-        raise NotImplementedError
-
-    @property
-    def rel_relation(self):
         raise NotImplementedError
 
     def get_where(self, rel_obj):

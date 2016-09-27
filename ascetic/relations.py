@@ -105,7 +105,7 @@ class Relation(BaseRelation):
         self._rel_query = rel_query
 
     @cached_property
-    def rel_relation(self):
+    def rel(self):
         return getattr(self.rel_model, self.rel_name).relation
 
     @cached_property
@@ -319,7 +319,7 @@ class ManyToMany(BaseRelation):
         return getattr(self.model, self._relation)
 
     @cached_property
-    def rel_relation(self):
+    def rel(self):
         return getattr(self.rel_model, self._rel_relation)
 
     @cached_property
@@ -328,7 +328,7 @@ class ManyToMany(BaseRelation):
 
     @cached_property
     def rel_field(self):
-        raise self.rel_relation.field
+        raise self.rel.field
 
     @cached_property
     def rel_name(self):
