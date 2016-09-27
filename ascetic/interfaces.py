@@ -20,7 +20,7 @@ class IRelation(object):
         raise NotImplementedError
 
     @property
-    def rel(self):
+    def rel(self):  # abbreviation of "related"
         raise NotImplementedError
 
     @property
