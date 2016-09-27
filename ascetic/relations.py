@@ -1,8 +1,7 @@
 import copy
 import weakref
-import operator
 import collections
-from functools import reduce
+from ascetic.interfaces import IRelation, IRelationDescriptor
 from ascetic.mappers import mapper_registry, model_registry, is_model_instance, Mapper
 from ascetic.utils import to_tuple
 from ascetic.exceptions import ModelNotRegistered
@@ -32,14 +31,14 @@ def do_nothing(parent, child, parent_rel, using, visited):
 # TODO: descriptor for FileField? Or custom postgresql data type? See http://www.postgresql.org/docs/8.4/static/sql-createtype.html
 
 
-class BaseRelation(object):
+class BaseRelation(IRelation):
 
     owner = None
     _rel_model_or_name = None
     descriptor = NotImplemented
 
     @cached_property
-    def descriptor_class(self):
+    def _descriptor_class(self):
         for cls in self.owner.__mro__:
             for name, attr in cls.__dict__.items():
                 if attr is self.descriptor():
@@ -47,7 +46,7 @@ class BaseRelation(object):
         raise Exception("Can't find descriptor class for {} in {}.".format(self.owner, self.owner.__mro__))
 
     @cached_property
-    def descriptor_object(self):
+    def _descriptor_object(self):
         for cls in self.owner.__mro__:
             for name, attr in cls.__dict__.items():
                 if attr is self.descriptor():
@@ -55,8 +54,8 @@ class BaseRelation(object):
         raise Exception("Can't find descriptor object")
 
     @cached_property
-    def polymorphic_class(self):
-        result_cls = self.descriptor_class
+    def _polymorphic_class(self):
+        result_cls = self._descriptor_class
         mro_reversed = list(reversed(self.owner.__mro__))
         mro_reversed = mro_reversed[mro_reversed.index(result_cls) + 1:]
         for cls in mro_reversed:
@@ -74,7 +73,7 @@ class BaseRelation(object):
 
     @cached_property
     def model(self):
-        return self.polymorphic_class
+        return self._polymorphic_class
 
     @cached_property
     def rel_model(self):
@@ -106,19 +105,7 @@ class Relation(BaseRelation):
         self._rel_query = rel_query
 
     @cached_property
-    def field(self):
-        raise NotImplementedError
-
-    @cached_property
-    def rel_field(self):
-        raise NotImplementedError
-
-    @cached_property
-    def rel_name(self):
-        raise NotImplementedError
-
-    @cached_property
-    def rel(self):
+    def rel_relation(self):
         return getattr(self.rel_model, self.rel_name).relation
 
     @cached_property
@@ -309,17 +296,21 @@ class OneToMany(Relation):
                     return
         self.get(instance).result._cache = object_list
 
+    def delete(self, instance):
+        self._set_cache(instance, self.name, None)
+
 
 class ManyToMany(BaseRelation):
     """
     This class it not finished yet!
     """
-    def __init__(self, rel_model, rel_relation, relation):  # associated_model, associated_relation???
+    def __init__(self, rel_model, rel_relation, relation, rel_name=None):  # associated_model, associated_relation???
         if isinstance(rel_model, Mapper):
             rel_model = rel_model.model
         self._rel_model_or_name = rel_model
         self._rel_relation = rel_relation
         self._relation = relation
+        self._rel_name = rel_name
 
     @cached_property
     def relation(self):
@@ -339,10 +330,15 @@ class ManyToMany(BaseRelation):
 
     @cached_property
     def rel_name(self):
-        raise self.rel_relation.name
+        if self._rel_name is None:
+            return '{0}_set'.format(self.model.__name__.lower())
+        elif isinstance(self._rel_name, collections.Callable):
+            return self._rel_name(self)
+        else:
+            return self._rel_name
 
 
-class RelationDescriptor(object):
+class RelationDescriptor(IRelationDescriptor):
 
     def __init__(self, relation):
         relation.descriptor = weakref.ref(self)
