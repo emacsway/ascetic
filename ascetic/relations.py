@@ -255,8 +255,6 @@ class OneToOne(ForeignKey):
 
 class OneToMany(Relation):
 
-    # TODO: is it need setup_related() here to construct related FK?
-
     @cached_property
     def field(self):
         return self._field or to_tuple(mapper_registry[self.model].pk)
@@ -268,6 +266,10 @@ class OneToMany(Relation):
     @cached_property
     def rel_name(self):
         return self._rel_name or self.model.__name__.lower()
+
+    def setup_related(self):
+        # TODO: is it need setup_related() here to construct related FK?
+        pass
 
     def get(self, instance):
         """

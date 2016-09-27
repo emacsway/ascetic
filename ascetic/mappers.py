@@ -242,7 +242,7 @@ class Mapper(object):
             if isinstance(rel, BaseRelation):
                 rel = RelationDescriptor(rel)
                 setattr(model, key, rel)
-            if isinstance(rel, RelationDescriptor) and hasattr(rel.relation, 'setup_related'):
+            if isinstance(rel, RelationDescriptor):
                 try:
                     rel.get_bound_relation(model).setup_related()
                 except ModelNotRegistered:
@@ -251,7 +251,7 @@ class Mapper(object):
         for rel_model in model_registry.values():
             for key, rel in mapper_registry[rel_model].relations.items():
                 try:
-                    if hasattr(rel, 'setup_related') and rel.rel_model is model:
+                    if rel.rel_model is model:
                         rel.setup_related()
                 except ModelNotRegistered:
                     pass

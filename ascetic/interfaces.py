@@ -60,7 +60,7 @@ class IRelation(object):
     def set_rel_value(self, rel_obj, value):
         raise NotImplementedError
 
-    def setup_related2(self):
+    def setup_related(self):
         raise NotImplementedError
 
     def bind(self, owner):

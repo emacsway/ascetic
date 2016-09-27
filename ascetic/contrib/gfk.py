@@ -49,7 +49,7 @@ class GenericForeignKey(ForeignKey):
 
     @cached_property
     def rel_model(self):
-        return model_registry[getattr(self.instance, self.type_field)]
+        return model_registry[getattr(self.instance, self.type_field, None)]
 
     @cached_property
     def rel_query(self):
@@ -64,9 +64,8 @@ class GenericForeignKey(ForeignKey):
                       ((t.get_field(rf) == val)
                        for rf, val in zip(self.rel_field, self.get_val(obj))))
 
-    @property
     def setup_related(self):
-        raise AttributeError
+        pass
 
     def bind_instance(self, instance):
         c = copy.copy(self)
