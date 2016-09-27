@@ -268,7 +268,7 @@ class OneToMany(Relation):
         return self._rel_name or self.model.__name__.lower()
 
     def setup_related(self):
-        # TODO: is it need setup_related() here to construct related FK?
+        # TODO: is it need construct related FK?
         pass
 
     def get(self, instance):
