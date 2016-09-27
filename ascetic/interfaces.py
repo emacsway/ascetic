@@ -51,7 +51,7 @@ class IRelation(object):
     def get_value(self, obj):
         raise NotImplementedError
 
-    def get_rel_value(self, rel_obj):
+    def get_rel_value(self, rel_obj):  # TODO: self.rel.get_value(rel_obj) ???
         raise NotImplementedError
 
     def set_value(self, obj, value):
@@ -61,6 +61,9 @@ class IRelation(object):
         raise NotImplementedError
 
     def setup_related(self):
+        """
+        :return bool: True if operation is successful else False
+        """
         raise NotImplementedError
 
     def bind(self, owner):

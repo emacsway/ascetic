@@ -31,7 +31,7 @@ def do_nothing(parent, child, parent_rel, using, visited):
 # TODO: descriptor for FileField? Or custom postgresql data type? See http://www.postgresql.org/docs/8.4/static/sql-createtype.html
 
 
-class BaseRelation(IRelation):
+class BaseRelation(object):
 
     owner = None
     _rel_model_or_name = None
@@ -90,7 +90,7 @@ class BaseRelation(IRelation):
         return c
 
 
-class Relation(BaseRelation):
+class Relation(BaseRelation, IRelation):
 
     def __init__(self, rel_model, rel_field=None, field=None, on_delete=cascade, rel_name=None, rel_query=None, query=None):
         self._cache = SpecialMappingAccessor(SpecialAttrAccessor('cache', default=dict))
@@ -171,6 +171,21 @@ class Relation(BaseRelation):
     def _set_cache(self, instance, key, value):
         self._cache.update(instance, {key: value})
 
+    def setup_related(self):
+        try:
+            rel_model = self.rel_model
+        except ModelNotRegistered:
+            return False
+
+        if self.rel_name in mapper_registry[rel_model].relations:
+            return False
+
+        setattr(rel_model, self.rel_name, RelationDescriptor(self._make_related()))
+        return True
+
+    def _make_related(self):
+        raise NotImplementedError
+
 
 class ForeignKey(Relation):
 
@@ -191,20 +206,12 @@ class ForeignKey(Relation):
         else:
             return self._rel_name
 
-    def setup_related(self):
-        try:
-            rel_model = self.rel_model
-        except ModelNotRegistered:
-            return
-
-        if self.rel_name in mapper_registry[rel_model].relations:
-            return
-
-        setattr(rel_model, self.rel_name, RelationDescriptor(OneToMany(
+    def _make_related(self):
+        return OneToMany(
             self.owner, self.field, self.rel_field,
             on_delete=self.on_delete, rel_name=self.name,
             rel_query=self._query
-        )))
+        )
 
     def get(self, instance):
         val = self.get_value(instance)
@@ -236,21 +243,20 @@ class ForeignKey(Relation):
 
 class OneToOne(ForeignKey):
 
-    def setup_related(self):
-        try:
-            rel_model = self.rel_model
-        except ModelNotRegistered:
-            return
-
-        if self.rel_name in mapper_registry[rel_model].relations:
-            return
-
-        setattr(rel_model, self.rel_name, RelationDescriptor(OneToOne(
+    def _make_related(self):
+        return OneToOne(
             self.owner, self.field, self.rel_field,
             on_delete=self.on_delete, rel_name=self.name,
             rel_query=self._query
-        )))
-        # self.on_delete = do_nothing
+        )
+
+    def setup_related__(self):
+        status = super(OneToOne, self).setup_related()
+        if status:
+            # self.on_delete = do_nothing
+            # Is "visited" parameter of Mapper.delete() is enough?
+            pass
+        return status
 
 
 class OneToMany(Relation):
@@ -268,8 +274,15 @@ class OneToMany(Relation):
         return self._rel_name or self.model.__name__.lower()
 
     def setup_related(self):
-        # TODO: is it need construct related FK?
-        pass
+        # TODO: is it need setup related FK?
+        return False
+
+    def _make_related(self):
+        return ForeignKey(
+            self.owner, self.field, self.rel_field,
+            on_delete=self.on_delete, rel_name=self.name,
+            rel_query=self._query
+        )
 
     def get(self, instance):
         """
