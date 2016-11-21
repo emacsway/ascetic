@@ -205,6 +205,7 @@ See also:
 * `Twistar <http://findingscience.com/twistar/>`_ (scheme from database), provides asynchronous DB interaction
 * `Activemodel <http://code.google.com/p/activemodel/>`_ (scheme from database)
 * `ActiveRecord <http://code.activestate.com/recipes/496905-an-activerecord-like-orm-object-relation-mapper-un/>`_ like ORM under 200 lines (scheme from database)
+* `A Query Language extension for Python <https://github.com/pythonql/pythonql>`_: Query files, objects, SQL and NoSQL databases with a built-in query language
 * `simpleql <https://bitbucket.org/robertodealmeida/simpleql/>`_ SQL table using nothing but Python to build the query
 * `Generator expressions <http://code.activestate.com/recipes/442447/>`__ for database requests (Python recipe)
 * `Object Relational Mappers (ORMs) <https://wiki.python.org/moin/HigherLevelDatabaseProgramming>`_
