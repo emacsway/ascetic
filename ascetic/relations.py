@@ -171,7 +171,7 @@ class Relation(BaseRelation, IRelation):
     def _set_cache(self, instance, key, value):
         self._cache.update(instance, {key: value})
 
-    def setup_related(self):
+    def setup_reverse_relation(self):
         try:
             related_model = self.related_model
         except ModelNotRegistered:
@@ -250,8 +250,8 @@ class OneToOne(ForeignKey):
             related_query=self._query
         )
 
-    def setup_related__(self):
-        status = super(OneToOne, self).setup_related()
+    def setup_reverse_relation__(self):
+        status = super(OneToOne, self).setup_reverse_relation()
         if status:
             # self.on_delete = do_nothing
             # Is "visited" parameter of Mapper.delete() is enough?
@@ -273,7 +273,7 @@ class OneToMany(Relation):
     def related_name(self):
         return self._related_name or self.model.__name__.lower()
 
-    def setup_related(self):
+    def setup_reverse_relation(self):
         # TODO: is it need setup related FK?
         return False
 

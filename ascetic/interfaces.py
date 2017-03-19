@@ -60,7 +60,7 @@ class IRelation(object):
     def set_related_value(self, related_obj, value):
         raise NotImplementedError
 
-    def setup_related(self):
+    def setup_reverse_relation(self):
         """
         :return bool: True if operation is successful else False
         """

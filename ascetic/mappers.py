@@ -244,7 +244,7 @@ class Mapper(object):
                 setattr(model, key, rel)
             if isinstance(rel, RelationDescriptor):
                 try:
-                    rel.get_bound_relation(model).setup_related()
+                    rel.get_bound_relation(model).setup_reverse_relation()
                 except ModelNotRegistered:
                     pass
 
@@ -252,7 +252,7 @@ class Mapper(object):
             for key, rel in mapper_registry[related_model].relations.items():
                 try:
                     if rel.related_model is model:
-                        rel.setup_related()
+                        rel.setup_reverse_relation()
                 except ModelNotRegistered:
                     pass
         class_prepared.send(sender=model, using=self._using)

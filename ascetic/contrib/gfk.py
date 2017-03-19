@@ -64,7 +64,7 @@ class GenericForeignKey(ForeignKey):
                       ((t.get_field(rf) == val)
                        for rf, val in zip(self.related_field, self.get_val(obj))))
 
-    def setup_related(self):
+    def setup_reverse_relation(self):
         pass
 
     def bind_instance(self, instance):
