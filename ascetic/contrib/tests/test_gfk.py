@@ -93,7 +93,7 @@ class TestGenericForeignKey(unittest.TestCase):
             validations = {'first_name': validators.Length(),
                            'last_name': (validators.Length(), lambda x: x != 'BadGuy!' or 'Bad last name', )}
             relationships = {
-                'books': GenericRelation('ascetic.contrib.tests.test_gfk.Book', rel_name='author'),
+                'books': GenericRelation('ascetic.contrib.tests.test_gfk.Book', related_name='author'),
             }
 
         AuthorMapper(Author)
@@ -111,7 +111,7 @@ class TestGenericForeignKey(unittest.TestCase):
             name = 'ascetic.contrib.tests.test_gfk.Book'
             db_table = 'ascetic_gfk_book'
             relationships = {
-                'author': GenericForeignKey(rel_field=('id', 'lang'), field=('object_id', 'lang')),
+                'author': GenericForeignKey(related_field=('id', 'lang'), field=('object_id', 'lang')),
             }
 
         BookMapper(Book)

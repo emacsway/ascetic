@@ -177,7 +177,7 @@ class Result(smartsql.Result):
         else:
             self._prefetch = copy.copy(self._prefetch)
             self._prefetch.update(kw)
-            self._prefetch.update({i: relations[i].rel_query for i in a})
+            self._prefetch.update({i: relations[i].related_query for i in a})
         return self._query
 
     def populate_prefetch(self):
@@ -186,12 +186,12 @@ class Result(smartsql.Result):
             relation = relations[key]
             preset_relation = RelationPresetter(relation)
             # recursive handle prefetch
-            cond = reduce(operator.or_, (relation.get_rel_where(obj) for obj in self._cache))
+            cond = reduce(operator.or_, (relation.get_related_where(obj) for obj in self._cache))
             query = query.where(cond)
             for obj in self._cache:
                 for prefetched_obj in query:
-                    if relation.get_value(obj) == relation.get_rel_value(prefetched_obj):
-                        preset_relation(obj, rel_obj=prefetched_obj)
+                    if relation.get_value(obj) == relation.get_related_value(prefetched_obj):
+                        preset_relation(obj, related_obj=prefetched_obj)
 
 
 class RelationPresetter(object):
@@ -211,7 +211,7 @@ class RelationPresetter(object):
         """
         self._relation = relation
 
-    def __call__(self, obj, rel_obj):
+    def __call__(self, obj, related_obj):
         raise NotImplementedError
 
     @property
@@ -219,41 +219,41 @@ class RelationPresetter(object):
         return self._relation.name
 
     @property
-    def rel_name(self):
-        return self._relation.rel_name
+    def related_name(self):
+        return self._relation.related_name
 
     @staticmethod
-    def set_attr(obj, attr_name, rel_obj):
-        setattr(obj, attr_name, rel_obj)
+    def set_attr(obj, attr_name, related_obj):
+        setattr(obj, attr_name, related_obj)
 
     @staticmethod
-    def append_attr(obj, attr_name, rel_item):
+    def append_attr(obj, attr_name, related_item):
         query = getattr(obj, attr_name)
         if query.result._cache is None:
             query.result._cache = []
-        query.result._cache.append(rel_item)
+        query.result._cache.append(related_item)
 
 
 
 class ForeignKeyPresetter(RelationPresetter):
-    def __call__(self, obj, rel_obj):
-        self.set_attr(obj, self.name, rel_obj)
-        self.append_attr(rel_obj, self.rel_name, obj)
+    def __call__(self, obj, related_obj):
+        self.set_attr(obj, self.name, related_obj)
+        self.append_attr(related_obj, self.related_name, obj)
 
 
 
 class OneToOnePresetter(RelationPresetter):
-    def __call__(self, obj, rel_obj):
-        self.set_attr(obj, self.name, rel_obj)
-        self.set_attr(rel_obj, self.rel_name, obj)
+    def __call__(self, obj, related_obj):
+        self.set_attr(obj, self.name, related_obj)
+        self.set_attr(related_obj, self.related_name, obj)
 
 
 class OneToManyPresetter(RelationPresetter):
-    def __call__(self, obj, rel_obj):
+    def __call__(self, obj, related_obj):
         if not hasattr(obj, self.name):
             setattr(obj, self.name, [])
-        self.append_attr(obj, self.name, rel_obj)
-        self.set_attr(rel_obj, self.rel_name, obj)
+        self.append_attr(obj, self.name, related_obj)
+        self.set_attr(related_obj, self.related_name, obj)
 
 
 def default_mapping(result, row, state):
@@ -270,7 +270,7 @@ class SelectRelatedMapping(object):
         models = [self._result.mapper.model]
         relations = self._result._select_related
         for rel in relations:
-            models.append(rel.rel_model)
+            models.append(rel.related_model)
         rows = self._get_model_rows(models, row)
         objs = self._get_objects(models, rows)
         self._build_relations(relations, objs)
@@ -302,5 +302,5 @@ class SelectRelatedMapping(object):
 
     def _build_relations(self, relations, objs):
         for i, relation in enumerate(relations):
-            obj, rel_obj = objs[i], objs[i + 1]
-            RelationPresetter(relation)(obj, rel_obj)
+            obj, related_obj = objs[i], objs[i + 1]
+            RelationPresetter(relation)(obj, related_obj)

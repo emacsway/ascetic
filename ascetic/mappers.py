@@ -248,10 +248,10 @@ class Mapper(object):
                 except ModelNotRegistered:
                     pass
 
-        for rel_model in model_registry.values():
-            for key, rel in mapper_registry[rel_model].relations.items():
+        for related_model in model_registry.values():
+            for key, rel in mapper_registry[related_model].relations.items():
                 try:
-                    if rel.rel_model is model:
+                    if rel.related_model is model:
                         rel.setup_related()
                 except ModelNotRegistered:
                     pass

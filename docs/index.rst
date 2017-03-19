@@ -141,7 +141,7 @@ Datamapper way
     class BookMapper(Mapper):
         db_table = 'books'
         relationships = {
-            'author': ForeignKey(Author, rel_name='books')
+            'author': ForeignKey(Author, related_name='books')
         }
 
     BookMapper(Book)

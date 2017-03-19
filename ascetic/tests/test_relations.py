@@ -88,7 +88,7 @@ class TestCompositeRelation(unittest.TestCase):
                                'last_name': (validators.Length(), lambda x: x != 'BadGuy!' or 'Bad last name', )}
 
         class BookC(Model):
-            author = ForeignKey(AuthorC, rel_field=('id', 'lang'), field=('author_id', 'lang'), rel_name='books')
+            author = ForeignKey(AuthorC, related_field=('id', 'lang'), field=('author_id', 'lang'), related_name='books')
 
             class Mapper(object):
                 db_table = 'ascetic_composite_book'

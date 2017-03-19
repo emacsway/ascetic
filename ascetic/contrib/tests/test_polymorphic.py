@@ -163,10 +163,10 @@ class TestPolymorphic(unittest.TestCase):
             relationships = {
                 'author': ForeignKey(
                     Author,
-                    rel_field=('id', 'lang'),
+                    related_field=('id', 'lang'),
                     field=('author_id', 'lang'),
-                    rel_name='books',
-                    rel_query=(lambda rel: mapper_registry[rel.rel_model].query)
+                    related_name='books',
+                    related_query=(lambda rel: mapper_registry[rel.related_model].query)
                 )
             }
 

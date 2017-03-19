@@ -29,7 +29,7 @@ class MpMapper(Mapper):
         setattr(model, 'parent', RelationDescriptor(ForeignKey(
             'self',
             field=tuple('parent_{}'.format(k) for k in to_tuple(self.pk)),
-            rel_name="children"
+            related_name="children"
         )))
 
     def _mp_encode(self, value):

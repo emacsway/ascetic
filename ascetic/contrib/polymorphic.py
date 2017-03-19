@@ -78,23 +78,23 @@ class PolymorphicMapper(Mapper):
     def _do_prepare_model(self, model):
         for base in model.mro():
             if base is not model and getattr(mapper_registry.get(base), 'polymorphic', False):
-                pk_rel_name = "{}_ptr".format(base.__name__.lower())
-                # self.pk = "{}_id".format(pk_rel_name)  # Useless, pk read from DB
+                pk_related_name = "{}_ptr".format(base.__name__.lower())
+                # self.pk = "{}_id".format(pk_related_name)  # Useless, pk read from DB
                 # TODO: support multiple inheritance
-                setattr(model, pk_rel_name, OneToOne(
+                setattr(model, pk_related_name, OneToOne(
                     base,
                     field=mapper_registry[model].pk,
-                    rel_field=mapper_registry[base].pk,
-                    rel_name=model.__name__.lower(),
-                    query=(lambda rel: mapper_registry[rel.rel_model].query.polymorphic(False)),  # TODO: rel.model instead of rel.rel_model?
-                    rel_query=(lambda rel: mapper_registry[rel.rel_model].query.polymorphic(False))
+                    related_field=mapper_registry[base].pk,
+                    related_name=model.__name__.lower(),
+                    query=(lambda rel: mapper_registry[rel.related_model].query.polymorphic(False)),  # TODO: rel.model instead of rel.related_model?
+                    related_query=(lambda rel: mapper_registry[rel.related_model].query.polymorphic(False))
                 ))
                 break
         else:
             if getattr(mapper_registry[model], 'polymorphic', False):
                 setattr(model, "concrete_instance", GenericForeignKey(
                     type_field="polymorphic_type_id",
-                    rel_field=(lambda rel: mapper_registry[rel.rel_model].pk),
+                    related_field=(lambda rel: mapper_registry[rel.related_model].pk),
                     field=mapper_registry[model].pk,
                 ))
         super(PolymorphicMapper, self)._do_prepare_model(self.model)

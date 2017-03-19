@@ -20,29 +20,29 @@ class IRelation(object):
         raise NotImplementedError
 
     @property
-    def rel(self):  # abbreviation of "related"
+    def related_relation(self):
         raise NotImplementedError
 
     @property
-    def rel_name(self):
+    def related_name(self):
         raise NotImplementedError
 
     @property
-    def rel_model(self):
+    def related_model(self):
         raise NotImplementedError
 
     @property
-    def rel_field(self):
+    def related_field(self):
         raise NotImplementedError
 
     @property
-    def rel_query(self):
+    def related_query(self):
         raise NotImplementedError
 
-    def get_where(self, rel_obj):
+    def get_where(self, related_obj):
         raise NotImplementedError
 
-    def get_rel_where(self, obj):
+    def get_related_where(self, obj):
         raise NotImplementedError
 
     def get_join_where(self):
@@ -51,13 +51,13 @@ class IRelation(object):
     def get_value(self, obj):
         raise NotImplementedError
 
-    def get_rel_value(self, rel_obj):  # TODO: self.rel.get_value(rel_obj) ???
+    def get_related_value(self, related_obj):  # TODO: self.related_relation.get_value(related_obj) ???
         raise NotImplementedError
 
     def set_value(self, obj, value):
         raise NotImplementedError
 
-    def set_rel_value(self, rel_obj, value):
+    def set_related_value(self, related_obj, value):
         raise NotImplementedError
 
     def setup_related(self):
