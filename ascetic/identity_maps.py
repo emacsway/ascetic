@@ -209,22 +209,22 @@ class Sync(object):
         self._identity_map = identity_map
 
     def _sync(self):
-        for model, model_object_map in self._get_typical_objects():
+        for model, model_object_map in self._get_typed_objects():
             mapper = mapper_registry[model]
             pks = list(model_object_map.values())
             for obj in self._make_query(mapper, pks):
                 assert mapper.get_pk(obj) in model_object_map
                 assert not mapper.get_changed(obj)
 
-    def _get_typical_objects(self):
-        typical_objects = {}
+    def _get_typed_objects(self):
+        typed_objects = {}
         for obj in self._identity_map.alive.values():
             model = obj.__class__
-            if model not in typical_objects:
-                typical_objects[model] = {}
+            if model not in typed_objects:
+                typed_objects[model] = {}
             mapper = mapper_registry[model]
-            typical_objects[model][mapper.get_pk(obj)] = obj
-        return typical_objects
+            typed_objects[model][mapper.get_pk(obj)] = obj
+        return typed_objects
 
     def _make_query(self, mapper, pks):
         query = mapper.query.using(

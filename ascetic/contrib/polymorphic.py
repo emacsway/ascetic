@@ -167,20 +167,20 @@ class PopulatePolymorphic(object):
 
     def _get_populated_rows(self):
         rows = self._rows[:]
-        typical_objects = self._get_typical_objects()
+        typed_objects = self._get_typed_objects()
         for i, obj in enumerate(rows):
-            if obj.polymorphic_type_id in typical_objects:
-                rows[i] = typical_objects[obj.polymorphic_type_id][self._get_current_mapper().get_pk(obj)]
+            if obj.polymorphic_type_id in typed_objects:
+                rows[i] = typed_objects[obj.polymorphic_type_id][self._get_current_mapper().get_pk(obj)]
         return rows
 
-    def _get_typical_objects(self):
-        typical_objects = {}
+    def _get_typed_objects(self):
+        typed_objects = {}
         pks = {self._get_current_mapper().get_pk(i) for i in self._rows}
         for ct in self._get_content_types():
             model = model_registry[ct]
             mapper = mapper_registry[model]
-            typical_objects[ct] = {mapper.get_pk(i): i for i in mapper.query.where(mapper.sql_table.pk.in_(pks))}
-        return typical_objects
+            typed_objects[ct] = {mapper.get_pk(i): i for i in mapper.query.where(mapper.sql_table.pk.in_(pks))}
+        return typed_objects
 
     def _get_current_mapper(self):
         current_model = self._rows[0].__class__
