@@ -319,7 +319,7 @@ class ManyToMany(BaseRelation):
     """
     This class it not finished yet!
     """
-    def __init__(self, related_model, related_relation, relation, related_name=None):  # associated_model, associated_relation???
+    def __init__(self, relation, related_model, related_relation, related_name=None):  # associated_model, associated_relation???
         if isinstance(related_model, Mapper):
             related_model = related_model.model
         self._related_model_or_name = related_model
