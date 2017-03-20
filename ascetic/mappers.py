@@ -224,38 +224,7 @@ class Mapper(object):
 
     def _prepare_model(self, model):
         self._do_prepare_model(model)
-        for name in self.model.__dict__:
-            field = getattr(model, name, None)
-            if isinstance(field, Field):
-                delattr(model, name)
-
-        if getattr(self, 'relationships', None):  # TODO: Give me better name (relationships, references, set_relations, ...)
-            for key, rel in self.relationships.items():
-                setattr(model, key, rel)
-
-        # TODO: use dir() instead __dict__ to handle relations in abstract classes,
-        # add templates support for related_name,
-        # support copy.
-        # for key, rel in model.__dict__.items():
-        for key in dir(model):
-            rel = getattr(model, key, None)
-            if isinstance(rel, BaseRelation):
-                rel = RelationDescriptor(rel)
-                setattr(model, key, rel)
-            if isinstance(rel, RelationDescriptor):
-                try:
-                    rel.get_bound_relation(model).setup_reverse_relation()
-                except ModelNotRegistered:
-                    pass
-
-        for related_model in model_registry.values():
-            for key, rel in mapper_registry[related_model].relations.items():
-                try:
-                    if rel.related_model is model:
-                        rel.setup_reverse_relation()
-                except ModelNotRegistered:
-                    pass
-        class_prepared.send(sender=model, using=self._using)
+        PrepareModel(self, model).compute()
 
     def _do_prepare_model(self, model):
         pass
@@ -415,6 +384,60 @@ class Mapper(object):
     def set_pk(self, obj, value):
         for k, v in zip(to_tuple(self.pk), to_tuple(value)):
             self.fields[k].set_value(obj, v)
+
+
+class PrepareModel(object):
+    def __init__(self, mapper, model):
+        """
+        :type mapper: ascetic.mappers.Mapper
+        :type model: object
+        """
+        self._mapper = mapper
+        self._model = model
+
+    def compute(self):
+        self._clean_model_from_declared_fields()
+        self._setup_relations()
+        self._setup_reverse_relations()
+        class_prepared.send(sender=self._model, using=self._mapper.using())
+
+    def _clean_model_from_declared_fields(self):
+        for name in self._model.__dict__:
+            field = getattr(self._model, name, None)
+            if isinstance(field, Field):
+                delattr(self._model, name)
+
+    def _setup_relations(self):
+        if getattr(self._mapper, 'relationships', None):  # TODO: Give me better name (relationships, references, set_relations, ...)
+            for key, rel in self._mapper.relationships.items():
+                setattr(self._model, key, rel)
+
+        # TODO: use dir() instead __dict__ to handle relations in abstract classes,
+        # add templates support for related_name,
+        # support copy.
+        # for key, rel in model.__dict__.items():
+        for key in dir(self._model):
+            rel = getattr(self._model, key, None)
+            if isinstance(rel, BaseRelation):
+                rel = RelationDescriptor(rel)
+                setattr(self._model, key, rel)
+
+    def _setup_reverse_relations(self):
+        for key in dir(self._model):
+            rel = getattr(self._model, key, None)
+            if isinstance(rel, RelationDescriptor):
+                try:
+                    rel.get_bound_relation(self._model).setup_reverse_relation()
+                except ModelNotRegistered:
+                    pass
+
+        for related_model in model_registry.values():
+            for key, rel in mapper_registry[related_model].relations.items():
+                try:
+                    if rel.related_model is self._model:
+                        rel.setup_reverse_relation()
+                except ModelNotRegistered:
+                    pass
 
 
 class Load(object):
