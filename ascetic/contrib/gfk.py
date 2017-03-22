@@ -39,15 +39,6 @@ class GenericForeignKey(ForeignKey):
         return self._related_field
 
     @cached_property
-    def related_name(self):
-        if self._related_name is None:
-            return '{0}_set'.format(self.model.__name__.lower())
-        elif isinstance(self._related_name, collections.Callable):
-            return self._related_name(self)
-        else:
-            return self._related_name
-
-    @cached_property
     def related_model(self):
         return model_registry[getattr(self.instance, self.type_field, None)]
 
@@ -57,12 +48,6 @@ class GenericForeignKey(ForeignKey):
             return self._related_query(self)
         else:
             return self.related_mapper.query
-
-    def get_related_where(self, obj):
-        t = self.related_mapper.sql_table
-        return reduce(operator.and_,
-                      ((t.get_field(rf) == val)
-                       for rf, val in zip(self.related_field, self.get_val(obj))))
 
     def setup_reverse_relation(self):
         pass
@@ -111,30 +96,28 @@ class GenericRelation(OneToMany):
         return self.related_relation.type_field
 
     def get(self, instance):
-        related_type_field = self.related_type_field
         val = self.get_value(instance)
         cached_query = self._get_cache(instance, self.name)
         # Be sure that value of related fields equals to value of field
         if cached_query is not None and cached_query._cache is not None:
             for cached_obj in cached_query._cache:
                 if (self.get_related_value(cached_obj) != val or
-                        getattr(cached_obj, related_type_field) != mapper_registry[instance.__class__].name):
+                        getattr(cached_obj, self.related_type_field) != mapper_registry[instance.__class__].name):
                     cached_query = None
                     break
         if cached_query is None:
             t = self.related_mapper.sql_table
             q = super(GenericRelation, self).get(instance)
-            q = q.where(t.get_field(related_type_field) == mapper_registry[instance.__class__].name)
+            q = q.where(t.get_field(self.related_type_field) == mapper_registry[instance.__class__].name)
             self._set_cache(instance, self.name, q)
         return self._get_cache(instance, self.name)
 
     def set(self, instance, object_list):
-        related_type_field = self.related_type_field
         val = self.get_value(instance)
         for cached_obj in object_list:
             if is_model_instance(cached_obj):
                 self.validate_related_obj(cached_obj)
                 if (self.get_related_value(cached_obj) != val or
-                        getattr(cached_obj, related_type_field) != mapper_registry[instance.__class__].name):
+                        getattr(cached_obj, self.related_type_field) != mapper_registry[instance.__class__].name):
                     return
         self.get(instance)._cache = object_list
