@@ -80,9 +80,17 @@ class BaseRelation(object):
         if isinstance(self._related_model_or_name, string_types):
             name = self._related_model_or_name
             if name == 'self':
-                name = mapper_registry[self.model].name
+                name = self.mapper.name
             return model_registry[name]
         return self._related_model_or_name
+
+    @cached_property
+    def mapper(self):
+        return mapper_registry[self.model]
+
+    @cached_property
+    def related_mapper(self):
+        return mapper_registry[self.related_model]
 
     def bind(self, owner):
         c = copy.copy(self)
@@ -113,27 +121,27 @@ class Relation(BaseRelation, IRelation):
         if isinstance(self._query, collections.Callable):
             return self._query(self)
         else:
-            return mapper_registry[self.model].query
+            return self.mapper.query
 
     @cached_property
     def related_query(self):
         if isinstance(self._related_query, collections.Callable):
             return self._related_query(self)
         else:
-            return mapper_registry[self.related_model].query
+            return self.related_mapper.query
 
     def get_where(self, related_obj):
-        t = mapper_registry[self.model].sql_table
+        t = self.mapper.sql_table
         return t.get_field(self.name) == self.get_related_value(related_obj)  # CompositeExpr is used here
 
     def get_related_where(self, obj):
-        t = mapper_registry[self.related_model].sql_table
+        t = self.related_mapper.sql_table
         # TODO: Avoid to use self.related_name here. Relation can be non-bidirectional.
         return t.get_field(self.related_name) == self.get_value(obj)  # CompositeExpr is used here
 
     def get_join_where(self):
-        t = mapper_registry[self.model].sql_table
-        rt = mapper_registry[self.related_model].sql_table
+        t = self.mapper.sql_table
+        rt = self.related_mapper.sql_table
         return t.get_field(self.name) == rt.get_field(self.related_name)  # CompositeExpr is used here
 
     def get_value(self, obj):
@@ -159,7 +167,7 @@ class Relation(BaseRelation, IRelation):
     def validate_related_obj(self, related_obj):
         if not isinstance(related_obj, self.related_model):
             raise Exception('Object should be an instance of "{0!r}", not "{1!r}".'.format(
-                mapper_registry[self.related_model], type(related_obj)
+                self.related_mapper, type(related_obj)
             ))
 
     def _get_cache(self, instance, key):
@@ -195,7 +203,7 @@ class ForeignKey(Relation):
 
     @cached_property
     def related_field(self):
-        return self._related_field or to_tuple(mapper_registry[self.related_model].pk)
+        return self._related_field or to_tuple(self.related_mapper.pk)
 
     @cached_property
     def related_name(self):
@@ -263,7 +271,7 @@ class OneToMany(Relation):
 
     @cached_property
     def field(self):
-        return self._field or to_tuple(mapper_registry[self.model].pk)
+        return self._field or to_tuple(self.mapper.pk)
 
     @cached_property
     def related_field(self):
