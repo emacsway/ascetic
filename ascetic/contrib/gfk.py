@@ -56,10 +56,10 @@ class GenericForeignKey(ForeignKey):
         if isinstance(self._related_query, collections.Callable):
             return self._related_query(self)
         else:
-            return mapper_registry[self.related_model].query
+            return self.related_mapper.query
 
     def get_related_where(self, obj):
-        t = mapper_registry[self.related_model].sql_table
+        t = self.related_mapper.sql_table
         return reduce(operator.and_,
                       ((t.get_field(rf) == val)
                        for rf, val in zip(self.related_field, self.get_val(obj))))
@@ -86,8 +86,8 @@ class GenericForeignKey(ForeignKey):
 
         cached_obj = self._get_cache(instance, self.name)
         if not isinstance(cached_obj, self.related_model) or self.get_related_value(cached_obj) != val:
-            if self._related_query is None and self.related_field == to_tuple(mapper_registry[self.related_model].pk):
-                obj = mapper_registry[self.related_model].get(val)  # to use IdentityMap
+            if self._related_query is None and self.related_field == to_tuple(self.related_mapper.pk):
+                obj = self.related_mapper.get(val)  # to use IdentityMap
             else:
                 obj = self.related_query.where(self.get_related_where(instance))[0]
             self._set_cache(instance, self.name, obj)
@@ -130,11 +130,11 @@ class GenericRelation(OneToMany):
         if cached_query is not None and cached_query._cache is not None:
             for cached_obj in cached_query._cache:
                 if (self.get_related_value(cached_obj) != val or
-                        getattr(cached_obj, related_type_field) != mapper_registry[type(instance)].name):
+                        getattr(cached_obj, related_type_field) != mapper_registry[instance.__class__].name):
                     cached_query = None
                     break
         if cached_query is None:
-            t = mapper_registry[self.related_model].sql_table
+            t = self.related_mapper.sql_table
             q = super(GenericRelation, self).get(instance)
             q = q.where(t.get_field(related_type_field) == mapper_registry[instance.__class__].name)
             self._set_cache(instance, self.name, q)
