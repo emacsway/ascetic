@@ -16,12 +16,12 @@ except NameError:
     integer_types = (int,)
 
 
-def cascade(parent, child, parent_rel, using, visited):
+def cascade(parent, child, parent_relation, using, visited):
     mapper_registry[child.__class__].using(using).delete(child, visited=visited)
 
 
-def set_null(parent, child, parent_rel, using, visited):
-    setattr(child, parent_rel.related_field, None)
+def set_null(parent, child, parent_relation, using, visited):
+    setattr(child, parent_relation.related_field, None)
     mapper_registry[child.__class__].using(using).save(child)
 
 
@@ -185,7 +185,7 @@ class Relation(BaseRelation, IRelation):
         except ModelNotRegistered:
             return False
 
-        if self.related_name in mapper_registry[related_model].relations:
+        if self.related_name in self.related_mapper.relations:
             return False
 
         setattr(related_model, self.related_name, RelationDescriptor(self._make_related()))
@@ -227,11 +227,9 @@ class ForeignKey(Relation):
             return None
 
         cached_obj = self._get_cache(instance, self.name)
-        related_field = self.related_field
-        related_model = self.related_model
         if cached_obj is None or self.get_related_value(cached_obj) != val:
-            if self._related_query is None and related_field == to_tuple(mapper_registry[related_model].pk):
-                obj = mapper_registry[related_model].get(val)  # to use IdentityMap
+            if self._related_query is None and self.related_field == to_tuple(self.related_mapper.pk):
+                obj = self.related_mapper.get(val)  # to use IdentityMap
             else:
                 obj = self.related_query.where(self.get_related_where(instance))[0]
             self._set_cache(instance, self.name, obj)
