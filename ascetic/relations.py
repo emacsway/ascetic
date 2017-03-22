@@ -227,7 +227,7 @@ class ForeignKey(Relation):
             return None
 
         cached_obj = self._get_cache(instance, self.name)
-        if cached_obj is None or self.get_related_value(cached_obj) != val:
+        if cached_obj is None or not isinstance(cached_obj, self.related_model) or self.get_related_value(cached_obj) != val:
             if self._related_query is None and self.related_field == to_tuple(self.related_mapper.pk):
                 obj = self.related_mapper.get(val)  # to use IdentityMap
             else:

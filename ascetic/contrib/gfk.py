@@ -80,32 +80,20 @@ class GenericForeignKey(ForeignKey):
 
     @_bindable
     def get(self, instance):
-        val = self.get_value(instance)
-        if not all(val):
-            return None
-
-        cached_obj = self._get_cache(instance, self.name)
-        if not isinstance(cached_obj, self.related_model) or self.get_related_value(cached_obj) != val:
-            if self._related_query is None and self.related_field == to_tuple(self.related_mapper.pk):
-                obj = self.related_mapper.get(val)  # to use IdentityMap
-            else:
-                obj = self.related_query.where(self.get_related_where(instance))[0]
-            self._set_cache(instance, self.name, obj)
-        return instance._cache[self.name]
+        return super(GenericForeignKey, self).get(instance)
 
     @_bindable
     def set(self, instance, value):
         if is_model_instance(value):
             setattr(instance, self.type_field, mapper_registry[value.__class__].name)
-            self._set_cache(instance, self.name, value)
-            value = self.get_related_value(value)
-        self.set_value(instance, value)
+        super(GenericForeignKey, self).set(instance, value)
 
     @_bindable
     def delete(self, instance):
-        self._set_cache(instance, self.name, None)
         setattr(instance, self.type_field(instance.__class__), None)
-        self.set_value(instance, None)
+        super(GenericForeignKey, self).delete(instance)
+
+    _bindable = staticmethod(_bindable)
 
 
 class GenericRelation(OneToMany):
