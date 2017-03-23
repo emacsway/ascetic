@@ -86,15 +86,15 @@ class PolymorphicMapper(Mapper):
                     field=mapper_registry[model].pk,
                     related_field=mapper_registry[base].pk,
                     related_name=model.__name__.lower(),
-                    query=(lambda rel: mapper_registry[rel.related_model].query.polymorphic(False)),  # TODO: rel.model instead of rel.related_model?
-                    related_query=(lambda rel: mapper_registry[rel.related_model].query.polymorphic(False))
+                    query=(lambda rel: rel.related_mapper.query.polymorphic(False)),  # TODO: rel.model instead of rel.related_model?
+                    related_query=(lambda rel: rel.related_mapper.query.polymorphic(False))
                 ))
                 break
         else:
             if getattr(mapper_registry[model], 'polymorphic', False):
                 setattr(model, "concrete_instance", GenericForeignKey(
                     type_field="polymorphic_type_id",
-                    related_field=(lambda rel: mapper_registry[rel.related_model].pk),
+                    related_field=(lambda rel: rel.related_mapper.pk),
                     field=mapper_registry[model].pk,
                 ))
         super(PolymorphicMapper, self)._do_prepare_model(self.model)

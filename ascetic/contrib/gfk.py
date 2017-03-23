@@ -12,15 +12,10 @@ class GenericForeignKey(IBaseRelation):
     instance = None
     owner = None
 
-    def __init__(self, type_field="object_type_id", related_field=None, field='object_id', on_delete=cascade,
+    def __init__(self, type_field="object_type_id", related_field=None, field=None, on_delete=cascade,
                  related_name=None, related_query=None, query=None):
         self._type_field = type_field
-
-        if not related_field or isinstance(related_field, collections.Callable):
-            self._related_field = related_field
-        else:
-            self._related_field = to_tuple(related_field)
-
+        self._related_field = related_field
         self._field = field and to_tuple(field)
         self.on_delete = on_delete
         self._related_name = related_name
@@ -30,8 +25,8 @@ class GenericForeignKey(IBaseRelation):
     def _make_relation(self, instance):
         related_model = model_registry[getattr(instance, self.type_field, None)]
         relation = ForeignKey(
-            related_model = related_model,
-            related_field=self.related_field,
+            related_model=related_model,
+            related_field=self._related_field,
             field=self.field,
             on_delete=self.on_delete,
             related_name=self._related_name,
@@ -45,12 +40,6 @@ class GenericForeignKey(IBaseRelation):
     @cached_property
     def field(self):
         return self._field or ('object_id',)
-
-    @cached_property
-    def related_field(self):
-        if isinstance(self._related_field, collections.Callable):
-            return to_tuple(self._related_field(self))
-        return self._related_field
 
     @cached_property
     def type_field(self):
@@ -77,7 +66,7 @@ class GenericForeignKey(IBaseRelation):
         self._make_relation(instance).delete(instance)
 
 
-class GenericRelation(OneToMany):
+class GenericRelation(OneToMany):  # TODO: replace to composition
 
     @cached_property
     def field(self):

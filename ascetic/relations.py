@@ -135,7 +135,6 @@ class Relation(BaseRelation, IRelation):
             self._related_field = related_field
         else:
             self._related_field = to_tuple(related_field)
-        self._related_field = related_field and to_tuple(related_field)
         self._field = field and to_tuple(field)
         self.on_delete = on_delete
         self._related_name = related_name
@@ -306,6 +305,8 @@ class OneToMany(Relation):
 
     @cached_property
     def related_field(self):
+        if isinstance(self._related_field, collections.Callable):
+            return to_tuple(self._related_field(self))
         return self._related_field or ('{0}_id'.format(self.model.__name__.lower()),)
 
     @cached_property
