@@ -1,6 +1,4 @@
 import copy
-import collections
-from functools import wraps
 from ascetic.interfaces import IBaseRelation
 from ascetic.mappers import model_registry, mapper_registry, is_model_instance
 from ascetic.relations import ForeignKey, OneToMany, cascade
@@ -78,7 +76,8 @@ class GenericRelation(OneToMany):  # TODO: replace to composition?
 
     def get_related_where(self, obj):
         where = super(GenericRelation, self).get_related_where(obj)
-        return where & (self.related_mapper.sql_table.get_field(self.related_type_field) == mapper_registry[obj.__class__].name)
+        return where & (self.related_mapper.sql_table.get_field(self.related_type_field) ==
+                        mapper_registry[obj.__class__].name)
 
     def validate_cached_related_obj(self, obj, cached_related_obj):
         super(GenericRelation, self).validate_cached_related_obj(obj, cached_related_obj)
