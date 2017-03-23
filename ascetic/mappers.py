@@ -135,6 +135,7 @@ class Mapper(object):
             self.query = self._create_query()
 
         self._prepare_model(model)
+        self._setup_reverse_relations()
 
     def _create_default_name(self, model):
         return ".".join((model.__module__, model.__name__))
@@ -229,6 +230,14 @@ class Mapper(object):
 
     def _do_prepare_model(self, model):
         pass
+
+    def _setup_reverse_relations(self):
+        for related_model in model_registry.values():
+            for key, rel in mapper_registry[related_model].relations.items():
+                try:
+                    rel.setup_reverse_relation()
+                except ModelNotRegistered:
+                    pass
 
     def _inherit(self, successor, parents):
         for base in parents:  # recursive
@@ -399,7 +408,6 @@ class PrepareModel(object):
     def compute(self):
         self._clean_model_from_declared_fields()
         self._setup_relations()
-        self._setup_reverse_relations()
         class_prepared.send(sender=self._model, using=self._mapper.using())
 
     def _clean_model_from_declared_fields(self):
@@ -422,23 +430,6 @@ class PrepareModel(object):
             if isinstance(rel, interfaces.IBaseRelation):
                 rel = RelationDescriptor(rel)
                 setattr(self._model, key, rel)
-
-    def _setup_reverse_relations(self):
-        for key in dir(self._model):
-            rel = getattr(self._model, key, None)
-            if isinstance(rel, interfaces.IRelationDescriptor):
-                try:
-                    rel.get_bound_relation(self._model).setup_reverse_relation()
-                except ModelNotRegistered:
-                    pass
-
-        for related_model in model_registry.values():
-            for key, rel in mapper_registry[related_model].relations.items():
-                try:
-                    if rel.related_model is self._model:
-                        rel.setup_reverse_relation()
-                except (ModelNotRegistered, AttributeError):
-                    pass
 
 
 class Load(object):

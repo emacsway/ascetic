@@ -314,7 +314,7 @@ class OneToMany(Relation):
         return self._related_name or self.model.__name__.lower()
 
     def setup_reverse_relation(self):
-        # TODO: is it need setup related FK?
+        # TODO: is it need setup reverse FK?
         return False
 
     def _make_related(self):
@@ -381,7 +381,7 @@ class ManyToMany(BaseRelation):
 
     @cached_property
     def related_field(self):
-        raise self.rel.field
+        raise self.related_relation.field
 
     @cached_property
     def related_name(self):
