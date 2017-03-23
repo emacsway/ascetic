@@ -69,10 +69,6 @@ class GenericForeignKey(IBaseRelation):
 class GenericRelation(OneToMany):  # TODO: replace to composition
 
     @cached_property
-    def field(self):
-        return self.related_relation.related_field
-
-    @cached_property
     def related_field(self):
         return self.related_relation.field
 
