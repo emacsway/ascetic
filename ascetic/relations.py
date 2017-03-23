@@ -126,7 +126,8 @@ class BaseRelation(object):
 
 class Relation(BaseRelation, IRelation):
 
-    def __init__(self, related_model, related_field=None, field=None, on_delete=cascade, related_name=None, related_query=None, query=None):
+    def __init__(self, related_model, related_field=None, field=None, on_delete=cascade, related_name=None,
+                 related_query=None, query=None):
         self._cache = SpecialMappingAccessor(SpecialAttrAccessor('cache', default=dict))
         if isinstance(related_model, Mapper):
             related_model = related_model.model
@@ -199,6 +200,12 @@ class Relation(BaseRelation, IRelation):
             raise ValueError('Object should be an instance of "{0!r}", not "{1!r}".'.format(
                 self.related_mapper, type(related_obj)
             ))
+
+    def validate_cached_related_obj(self, obj, cached_related_obj):
+        if not isinstance(cached_related_obj, self.related_model):
+            raise ValueError
+        if self.get_value(obj) != self.get_related_value(cached_related_obj):
+            raise ValueError
 
     def _get_cache(self, instance, key):
         try:
@@ -343,11 +350,12 @@ class OneToMany(Relation):
         return self._get_cache(instance, self.name)
 
     def set(self, instance, object_list):
-        val = self.get_value(instance)
         for cached_obj in object_list:
             if is_model_instance(cached_obj):
                 self.validate_related_obj(cached_obj)
-                if self.get_related_value(cached_obj) != val:
+                try:
+                    self.validate_cached_related_obj(instance, cached_obj)
+                except ValueError:
                     return
         self.get(instance).result._cache = object_list
 

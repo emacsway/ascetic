@@ -76,6 +76,11 @@ class GenericRelation(OneToMany):  # TODO: replace to composition
     def related_type_field(self):
         return self.related_relation.type_field
 
+    def validate_cached_related_obj(self, obj, cached_related_obj):
+        super(GenericRelation, self).validate_cached_related_obj(obj, cached_related_obj)
+        if getattr(cached_related_obj, self.related_type_field) != mapper_registry[obj.__class__].name:
+            raise ValueError
+
     def get(self, instance):
         val = self.get_value(instance)
         cached_query = self._get_cache(instance, self.name)
@@ -92,13 +97,3 @@ class GenericRelation(OneToMany):  # TODO: replace to composition
             q = q.where(t.get_field(self.related_type_field) == mapper_registry[instance.__class__].name)
             self._set_cache(instance, self.name, q)
         return self._get_cache(instance, self.name)
-
-    def set(self, instance, object_list):
-        val = self.get_value(instance)
-        for cached_obj in object_list:
-            if is_model_instance(cached_obj):
-                self.validate_related_obj(cached_obj)
-                if (self.get_related_value(cached_obj) != val or
-                        getattr(cached_obj, self.related_type_field) != mapper_registry[instance.__class__].name):
-                    return
-        self.get(instance)._cache = object_list
