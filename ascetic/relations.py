@@ -336,12 +336,12 @@ class OneToMany(Relation):
         :type instance: object
         :rtype: sqlbuilder.smartsql.Query
         """
-        val = self.get_value(instance)
         cached_query = self._get_cache(instance, self.name)
-        # Be sure that value of related fields equals to value of field
         if cached_query is not None and cached_query._cache is not None:
             for cached_obj in cached_query._cache:
-                if self.get_related_value(cached_obj) != val:
+                try:
+                    self.validate_cached_related_obj(instance, cached_obj)
+                except ValueError:
                     cached_query = None
                     break
         if cached_query is None:

@@ -66,7 +66,7 @@ class GenericForeignKey(IBaseRelation):
         self._make_relation(instance).delete(instance)
 
 
-class GenericRelation(OneToMany):  # TODO: replace to composition
+class GenericRelation(OneToMany):  # TODO: replace to composition?
 
     @cached_property
     def related_field(self):
@@ -76,24 +76,11 @@ class GenericRelation(OneToMany):  # TODO: replace to composition
     def related_type_field(self):
         return self.related_relation.type_field
 
+    def get_related_where(self, obj):
+        where = super(GenericRelation, self).get_related_where(obj)
+        return where & (self.related_mapper.sql_table.get_field(self.related_type_field) == mapper_registry[obj.__class__].name)
+
     def validate_cached_related_obj(self, obj, cached_related_obj):
         super(GenericRelation, self).validate_cached_related_obj(obj, cached_related_obj)
         if getattr(cached_related_obj, self.related_type_field) != mapper_registry[obj.__class__].name:
             raise ValueError
-
-    def get(self, instance):
-        val = self.get_value(instance)
-        cached_query = self._get_cache(instance, self.name)
-        # Be sure that value of related fields equals to value of field
-        if cached_query is not None and cached_query._cache is not None:
-            for cached_obj in cached_query._cache:
-                if (self.get_related_value(cached_obj) != val or
-                        getattr(cached_obj, self.related_type_field) != mapper_registry[instance.__class__].name):
-                    cached_query = None
-                    break
-        if cached_query is None:
-            t = self.related_mapper.sql_table
-            q = super(GenericRelation, self).get(instance)
-            q = q.where(t.get_field(self.related_type_field) == mapper_registry[instance.__class__].name)
-            self._set_cache(instance, self.name, q)
-        return self._get_cache(instance, self.name)
