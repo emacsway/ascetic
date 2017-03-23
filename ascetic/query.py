@@ -142,10 +142,12 @@ class Result(smartsql.Result):
         """Iterator"""
         cursor = self.execute()
         fields = tuple(f[0] for f in cursor.description)
+
         if isinstance(self._mapping, type):
             map_row = self._mapping(self)
         else:
             map_row = partial(self._mapping, result=self, state={})
+
         for row in cursor.fetchall():
             yield map_row(row=zip(fields, row))
 
@@ -226,37 +228,35 @@ class RelationPresetter(object):
         return self._relation.related_name
 
     @staticmethod
-    def set_attr(obj, attr_name, related_obj):
+    def set_value(obj, attr_name, related_obj):
         setattr(obj, attr_name, related_obj)
 
     @staticmethod
-    def append_attr(obj, attr_name, related_item):
+    def append_value(obj, attr_name, related_item):
         query = getattr(obj, attr_name)
         if query.result._cache is None:
             query.result._cache = []
         query.result._cache.append(related_item)
 
 
-
 class ForeignKeyPresetter(RelationPresetter):
     def __call__(self, obj, related_obj):
-        self.set_attr(obj, self.name, related_obj)
-        self.append_attr(related_obj, self.related_name, obj)
-
+        self.set_value(obj, self.name, related_obj)
+        self.append_value(related_obj, self.related_name, obj)
 
 
 class OneToOnePresetter(RelationPresetter):
     def __call__(self, obj, related_obj):
-        self.set_attr(obj, self.name, related_obj)
-        self.set_attr(related_obj, self.related_name, obj)
+        self.set_value(obj, self.name, related_obj)
+        self.set_value(related_obj, self.related_name, obj)
 
 
 class OneToManyPresetter(RelationPresetter):
     def __call__(self, obj, related_obj):
         if not hasattr(obj, self.name):
             setattr(obj, self.name, [])
-        self.append_attr(obj, self.name, related_obj)
-        self.set_attr(related_obj, self.related_name, obj)
+        self.append_value(obj, self.name, related_obj)
+        self.set_value(related_obj, self.related_name, obj)
 
 
 def default_mapping(result, row, state):
