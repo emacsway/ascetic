@@ -1,32 +1,46 @@
 import copy
-import operator
 import collections
 from functools import wraps
+from ascetic.interfaces import IBaseRelation
 from ascetic.mappers import model_registry, mapper_registry, is_model_instance
-from ascetic.utils import to_tuple
 from ascetic.relations import ForeignKey, OneToMany, cascade
-from ascetic.utils import cached_property, SpecialAttrAccessor, SpecialMappingAccessor
+from ascetic.utils import cached_property, to_tuple
 
 
-class GenericForeignKey(ForeignKey):
-
+class GenericForeignKey(IBaseRelation):
+    descriptor = None
     instance = None
+    owner = None
 
-    def __init__(self, type_field="object_type_id", related_field=None, field=None, on_delete=cascade, related_name=None, related_query=None):
-        self._cache = SpecialMappingAccessor(SpecialAttrAccessor('cache', default=dict))
+    def __init__(self, type_field="object_type_id", related_field=None, field='object_id', on_delete=cascade,
+                 related_name=None, related_query=None, query=None):
         self._type_field = type_field
+
         if not related_field or isinstance(related_field, collections.Callable):
             self._related_field = related_field
         else:
             self._related_field = to_tuple(related_field)
+
         self._field = field and to_tuple(field)
         self.on_delete = on_delete
         self._related_name = related_name
         self._related_query = related_query
+        self._query = query
 
-    @cached_property
-    def type_field(self):
-        return self._type_field
+    def _make_relation(self, instance):
+        related_model = model_registry[getattr(instance, self.type_field, None)]
+        relation = ForeignKey(
+            related_model = related_model,
+            related_field=self.related_field,
+            field=self.field,
+            on_delete=self.on_delete,
+            related_name=self._related_name,
+            related_query=self._related_query,
+            query=None
+        )
+        relation.descriptor = self.descriptor
+        relation = relation.bind(self.owner)
+        return relation
 
     @cached_property
     def field(self):
@@ -39,46 +53,28 @@ class GenericForeignKey(ForeignKey):
         return self._related_field
 
     @cached_property
-    def related_model(self):
-        return model_registry[getattr(self.instance, self.type_field, None)]
-
-    @cached_property
-    def related_query(self):
-        if isinstance(self._related_query, collections.Callable):
-            return self._related_query(self)
-        else:
-            return self.related_mapper.query
+    def type_field(self):
+        return self._type_field
 
     def setup_reverse_relation(self):
         pass
 
-    def bind_instance(self, instance):
+    def bind(self, owner):
         c = copy.copy(self)
-        c.instance = instance
+        c.owner = owner
         return c
 
-    def _bindable(func):
-        @wraps(func)
-        def _deco(self, instance, *a, **kw):
-            return func(self.bind_instance(instance), instance, *a, **kw)
-        return _deco
-
-    @_bindable
     def get(self, instance):
-        return super(GenericForeignKey, self).get(instance)
+        return self._make_relation(instance).get(instance)
 
-    @_bindable
     def set(self, instance, value):
         if is_model_instance(value):
-            setattr(instance, self.type_field, mapper_registry[value.__class__].name)
-        super(GenericForeignKey, self).set(instance, value)
+            setattr(instance, self._type_field, mapper_registry[value.__class__].name)
+        self._make_relation(instance).set(instance, value)
 
-    @_bindable
     def delete(self, instance):
-        setattr(instance, self.type_field(instance.__class__), None)
-        super(GenericForeignKey, self).delete(instance)
-
-    _bindable = staticmethod(_bindable)
+        setattr(instance, self._type_field, None)
+        self._make_relation(instance).delete(instance)
 
 
 class GenericRelation(OneToMany):

@@ -31,6 +31,32 @@ def do_nothing(parent, child, parent_rel, using, visited):
 # TODO: descriptor for FileField? Or custom postgresql data type? See http://www.postgresql.org/docs/8.4/static/sql-createtype.html
 
 
+class RelationDescriptor(IRelationDescriptor):
+
+    def __init__(self, relation):
+        relation.descriptor = weakref.ref(self)
+        self.relation = relation
+        self._bound_caches = {}
+
+    def get_bound_relation(self, owner):
+        try:
+            return self._bound_caches[owner]
+        except KeyError:
+            self._bound_caches[owner] = self.relation.bind(owner)
+            return self.get_bound_relation(owner)
+
+    def __get__(self, instance, owner):
+        if not instance:
+            return self
+        return self.get_bound_relation(owner).get(instance)
+
+    def __set__(self, instance, value):
+        self.get_bound_relation(instance.__class__).set(instance, value)
+
+    def __delete__(self, instance):
+        self.get_bound_relation(instance.__class__).delete(instance)
+
+
 class BaseRelation(object):
 
     owner = None
@@ -105,6 +131,10 @@ class Relation(BaseRelation, IRelation):
         if isinstance(related_model, Mapper):
             related_model = related_model.model
         self._related_model_or_name = related_model
+        if not related_field or isinstance(related_field, collections.Callable):
+            self._related_field = related_field
+        else:
+            self._related_field = to_tuple(related_field)
         self._related_field = related_field and to_tuple(related_field)
         self._field = field and to_tuple(field)
         self.on_delete = on_delete
@@ -136,13 +166,14 @@ class Relation(BaseRelation, IRelation):
 
     def get_related_where(self, obj):
         t = self.related_mapper.sql_table
-        # TODO: Avoid to use self.related_name here. Relation can be non-bidirectional.
-        return t.get_field(self.related_name) == self.get_value(obj)  # CompositeExpr is used here
+        # Avoid to use self.related_name here. Relation can be unidirectional.
+        return t.get_field(self.related_field) == self.get_value(obj)  # CompositeExpr is used here
 
     def get_join_where(self):
         t = self.mapper.sql_table
         rt = self.related_mapper.sql_table
-        return t.get_field(self.name) == rt.get_field(self.related_name)  # CompositeExpr is used here
+        # Avoid to use self.related_name here. Relation can be unidirectional.
+        return t.get_field(self.name) == rt.get_field(self.related_field)  # CompositeExpr is used here
 
     def get_value(self, obj):
         return tuple(getattr(obj, f, None) for f in self.field)
@@ -166,7 +197,7 @@ class Relation(BaseRelation, IRelation):
 
     def validate_related_obj(self, related_obj):
         if not isinstance(related_obj, self.related_model):
-            raise Exception('Object should be an instance of "{0!r}", not "{1!r}".'.format(
+            raise ValueError('Object should be an instance of "{0!r}", not "{1!r}".'.format(
                 self.related_mapper, type(related_obj)
             ))
 
@@ -203,6 +234,8 @@ class ForeignKey(Relation):
 
     @cached_property
     def related_field(self):
+        if isinstance(self._related_field, collections.Callable):
+            return to_tuple(self._related_field(self))
         return self._related_field or to_tuple(self.related_mapper.pk)
 
     @cached_property
@@ -342,7 +375,7 @@ class ManyToMany(BaseRelation):
         return self.relation.field
 
     @cached_property
-    def rel(self):
+    def related_relation(self):
         return getattr(self.related_model, self._related_relation)
 
     @cached_property
@@ -357,29 +390,3 @@ class ManyToMany(BaseRelation):
             return self._related_name(self)
         else:
             return self._related_name
-
-
-class RelationDescriptor(IRelationDescriptor):
-
-    def __init__(self, relation):
-        relation.descriptor = weakref.ref(self)
-        self.relation = relation
-        self._bound_caches = {}
-
-    def get_bound_relation(self, owner):
-        try:
-            return self._bound_caches[owner]
-        except KeyError:
-            self._bound_caches[owner] = self.relation.bind(owner)
-            return self.get_bound_relation(owner)
-
-    def __get__(self, instance, owner):
-        if not instance:
-            return self
-        return self.get_bound_relation(owner).get(instance)
-
-    def __set__(self, instance, value):
-        self.get_bound_relation(instance.__class__).set(instance, value)
-
-    def __delete__(self, instance):
-        self.get_bound_relation(instance.__class__).delete(instance)

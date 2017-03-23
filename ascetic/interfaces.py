@@ -1,7 +1,36 @@
 from ascetic.utils import Undef
 
 
-class IRelation(object):
+class IBaseRelation(object):
+
+    # @property
+    # def field(self):
+    #     raise NotImplementedError
+
+    def setup_reverse_relation(self):
+        """
+        :return bool: True if operation is successful else False
+        """
+        raise NotImplementedError
+
+    def bind(self, owner):
+        """Using Prototype pattern.
+        :param owner: type
+        :return: IRelation
+        """
+        raise NotImplementedError
+
+    def get(self, instance):
+        raise NotImplementedError
+
+    def set(self, instance, value):
+        raise NotImplementedError
+
+    def delete(self, instance):
+        raise NotImplementedError
+
+
+class IRelation(IBaseRelation):
 
     @property
     def name(self):
@@ -58,28 +87,6 @@ class IRelation(object):
         raise NotImplementedError
 
     def set_related_value(self, related_obj, value):
-        raise NotImplementedError
-
-    def setup_reverse_relation(self):
-        """
-        :return bool: True if operation is successful else False
-        """
-        raise NotImplementedError
-
-    def bind(self, owner):
-        """Using Prototype pattern.
-        :param owner: type
-        :return: IRelation
-        """
-        raise NotImplementedError
-
-    def get(self, instance):
-        raise NotImplementedError
-
-    def set(self, instance, value):
-        raise NotImplementedError
-
-    def delete(self, instance):
         raise NotImplementedError
 
 

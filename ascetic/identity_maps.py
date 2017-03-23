@@ -1,9 +1,6 @@
 import weakref
-
 from ascetic.databases import databases
 from ascetic.exceptions import ObjectDoesNotExist
-from ascetic.mappers import mapper_registry
-from ascetic.utils import to_tuple
 
 
 class NonexistentObject(object):
@@ -209,6 +206,7 @@ class Sync(object):
         self._identity_map = identity_map
 
     def _sync(self):
+        from ascetic.mappers import mapper_registry
         for model, model_object_map in self._get_typed_objects():
             mapper = mapper_registry[model]
             pks = list(model_object_map.values())
@@ -217,6 +215,7 @@ class Sync(object):
                 assert not mapper.get_changed(obj)
 
     def _get_typed_objects(self):
+        from ascetic.mappers import mapper_registry
         typed_objects = {}
         for obj in self._identity_map.alive.values():
             model = obj.__class__

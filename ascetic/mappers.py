@@ -7,6 +7,7 @@ from threading import RLock
 
 from sqlbuilder import smartsql
 
+from ascetic import interfaces
 from ascetic.exceptions import ObjectDoesNotExist, OrmException, ModelNotRegistered, MapperNotRegistered
 from ascetic.fields import Field
 from ascetic.utils import to_tuple, SpecialAttrAccessor, SpecialMappingAccessor
@@ -252,7 +253,7 @@ class Mapper(object):
         result = {}
         for name in dir(self.model):
             attr = getattr(self.model, name, None)
-            if isinstance(attr, RelationDescriptor):
+            if isinstance(attr, interfaces.IRelationDescriptor):
                 result[name] = attr.get_bound_relation(self.model)
         return result
 
@@ -418,14 +419,14 @@ class PrepareModel(object):
         # for key, rel in model.__dict__.items():
         for key in dir(self._model):
             rel = getattr(self._model, key, None)
-            if isinstance(rel, BaseRelation):
+            if isinstance(rel, interfaces.IBaseRelation):
                 rel = RelationDescriptor(rel)
                 setattr(self._model, key, rel)
 
     def _setup_reverse_relations(self):
         for key in dir(self._model):
             rel = getattr(self._model, key, None)
-            if isinstance(rel, RelationDescriptor):
+            if isinstance(rel, interfaces.IRelationDescriptor):
                 try:
                     rel.get_bound_relation(self._model).setup_reverse_relation()
                 except ModelNotRegistered:
@@ -436,7 +437,7 @@ class PrepareModel(object):
                 try:
                     if rel.related_model is self._model:
                         rel.setup_reverse_relation()
-                except ModelNotRegistered:
+                except (ModelNotRegistered, AttributeError):
                     pass
 
 
@@ -527,6 +528,6 @@ class Unload(object):
     def _do_unload(self):
         return {name: self._mapper.fields[name].get_value(self._obj) for name in self._fields}
 
-from ascetic.relations import BaseRelation, RelationDescriptor, OneToOne, OneToMany
+from ascetic.relations import RelationDescriptor, OneToOne, OneToMany
 from ascetic.query import factory as sql, Result
 from ascetic.identity_maps import IdentityMap

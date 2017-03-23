@@ -12,3 +12,7 @@ class MapperNotRegistered(OrmException):
 
 class ObjectDoesNotExist(OrmException):
     pass
+
+
+class ValidationError(ValueError):
+    pass

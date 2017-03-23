@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 import re
 import collections
+from ascetic.exceptions import ValidationError
 
 try:
     str = unicode  # Python 2.* compatible
@@ -9,10 +10,6 @@ try:
 except NameError:
     string_types = (str,)
     integer_types = (int,)
-
-
-class ValidationError(ValueError):
-    pass
 
 
 class Validator(object):

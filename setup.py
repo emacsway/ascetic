@@ -18,7 +18,7 @@ setup(
     license="MIT License",
     keywords = "ORM Database DataMapper SQL",
     install_requires=[
-        'sqlbuilder >= 0.7.9.46'
+        'sqlbuilder >= 0.7.10.6'
     ],
     classifiers = [
         'Development Status :: 1 - Planning',

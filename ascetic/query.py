@@ -43,6 +43,9 @@ class Table(smartsql.Table):
         return self._mapper.get_sql_fields()
 
     def get_field(self, name):
+        if type(name) == tuple:
+            return smartsql.CompositeExpr(*(self.get_field(k) for k in name))
+
         parts = name.split(smartsql.LOOKUP_SEP, 1)
         field = parts[0]
         # result = {'field': field, }
