@@ -193,5 +193,6 @@ class PopulatePolymorphic(object):
 
 
 class PolymorphicLoad(Load):
-    def _map_data_from_db(self, data):
-        return super(PolymorphicLoad, self)._map_data_from_db(data, self._mapper.polymorphic_columns)
+    def _map_data_from_db(self, data, columns=None):
+        columns = columns or self._mapper.polymorphic_columns
+        return super(PolymorphicLoad, self)._map_data_from_db(data, columns)
