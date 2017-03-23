@@ -56,11 +56,11 @@ class GenericForeignKey(IBaseRelation):
 
     def set(self, instance, value):
         if is_model_instance(value):
-            setattr(instance, self._type_field, mapper_registry[value.__class__].name)
+            setattr(instance, self.type_field, mapper_registry[value.__class__].name)
         self._make_relation(instance).set(instance, value)
 
     def delete(self, instance):
-        setattr(instance, self._type_field, None)
+        setattr(instance, self.type_field, None)
         self._make_relation(instance).delete(instance)
 
 
