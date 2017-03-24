@@ -61,25 +61,25 @@ class CreateFields(object):
         }
 
     def compute(self):
-        self._create_translated_column_map()
+        self._create_translated_column_mapping()
         self._create_fields()
         self._create_virtual_fields()
         return self._fields
 
-    def _create_translated_column_map(self):
-        self._translated_columns_map = {}
+    def _create_translated_column_mapping(self):
+        self._translated_columns_mapping = {}
         for name in self._mapper.translated_fields:
             try:
                 column = self._declared_fields[name].column
             except (KeyError, AttributeError):
                 column = name
             for lang in self._mapper.get_languages():
-                self._translated_columns_map[self._mapper.translate_column(column, lang)] = column
+                self._translated_columns_mapping[self._mapper.translate_column(column, lang)] = column
 
     def _create_fields(self):
         for data in self._columns:
             column_name = data['column']
-            column_name = self._translated_columns_map.get(column_name, column_name)
+            column_name = self._translated_columns_mapping.get(column_name, column_name)
             name = self._reversed_map.get(column_name, column_name)
             if name not in self._fields:
                 self._fields[name] = self._mapper.create_translated_field(name, data, self._declared_fields)
