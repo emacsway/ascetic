@@ -64,7 +64,7 @@ class GenericForeignKey(IBaseRelation):
         self._make_relation(instance).delete(instance)
 
 
-class GenericRelation(OneToMany):  # TODO: replace to composition?
+class GenericRelation(OneToMany):
 
     @cached_property
     def related_field(self):
