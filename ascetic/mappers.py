@@ -272,8 +272,7 @@ class Mapper(object):
     def unload(self, obj, fields=frozenset(), exclude=frozenset(), to_db=True):
         return Unload(self, obj, self._get_specified_fields(fields, exclude), to_db).compute()
 
-    @staticmethod
-    def make_identity_key(model, pk):
+    def make_identity_key(self, model, pk):
         return (model, to_tuple(pk))
 
     def get_changed(self, obj):
