@@ -54,7 +54,7 @@ class CreateFields(object):
         self._columns = columns
         self._declared_fields = declared_fields
         self._fields = collections.OrderedDict()
-        self._reversed_map = {
+        self._reverse_mapping = {
             field.column: name
             for name, field in self._declared_fields.items()
             if hasattr(field, 'column')
@@ -80,7 +80,7 @@ class CreateFields(object):
         for data in self._columns:
             column_name = data['column']
             column_name = self._translated_columns_mapping.get(column_name, column_name)
-            name = self._reversed_map.get(column_name, column_name)
+            name = self._reverse_mapping.get(column_name, column_name)
             if name not in self._fields:
                 self._fields[name] = self._mapper.create_translated_field(name, data, self._declared_fields)
 

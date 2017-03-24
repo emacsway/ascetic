@@ -108,7 +108,7 @@ class Mapper(object):
         mapper_registry[model] = self
         self.declared_fields = self._create_declared_fields(
             model,
-            getattr(self, 'map', {}),
+            getattr(self, 'mapping', {}),
             getattr(self, 'defaults', {}),
             getattr(self, 'validations', {}),
             getattr(self, 'declared_fields', {})
@@ -146,7 +146,7 @@ class Mapper(object):
             for i in (self.model.__module__.split(".") + [self.model.__name__, ])
         ])
 
-    def _create_declared_fields(self, model, map, defaults, validations, declared_fields):
+    def _create_declared_fields(self, model, mapping, defaults, validations, declared_fields):
         # We don't need depend on the state of instance, to be able to customise, or even reproduce some steps of initialisation.
         # So, we accept all data as arguments.
         # Dependencies should be made obvious through the use of good routine names, parameter lists,
@@ -161,7 +161,7 @@ class Mapper(object):
             if isinstance(field, Field):
                 result[name] = field
 
-        for name, column in map.items():
+        for name, column in mapping.items():
             result[name] = self.create_field(name, {'column': column}, declared_fields)
 
         for name, default in defaults.items():
@@ -184,10 +184,10 @@ class Mapper(object):
 
     def create_fields(self, columns, declared_fields):
         fields = collections.OrderedDict()
-        rmap = {field.column: name for name, field in declared_fields.items() if hasattr(field, 'column')}
+        reverse_mapping = {field.column: name for name, field in declared_fields.items() if hasattr(field, 'column')}
         for data in columns:
             column_name = data['column']
-            name = rmap.get(column_name, column_name)
+            name = reverse_mapping.get(column_name, column_name)
             fields[name] = self.create_field(name, data, declared_fields)
         for name, field in declared_fields.items():
             if name not in fields:

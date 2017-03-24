@@ -71,7 +71,7 @@ class TestModelTranslation(unittest.TestCase):
 
         class AuthorMapper(TranslationMapper, Mapper):
             db_table = 'ascetic_modeltranslation_author'
-            map = {'first_alias': 'first_name'}
+            mapping = {'first_alias': 'first_name'}
             defaults = {'bio': 'No bio available'}
             translated_fields = ('first_alias', 'last_name')
 
