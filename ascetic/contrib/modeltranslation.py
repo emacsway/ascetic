@@ -86,9 +86,8 @@ class CreateFields(object):
             column_name = data['column']
             column_name = self._translated_columns_map.get(column_name, column_name)
             name = self._reversed_map.get(column_name, column_name)
-            if name in self._fields:
-                continue
-            self._fields[name] = self._mapper.create_field(name, data, self._declared_fields)
+            if name not in self._fields:
+                self._fields[name] = self._mapper.create_field(name, data, self._declared_fields)
 
     def _create_virtual_fields(self):
         for name, field in self._declared_fields.items():
