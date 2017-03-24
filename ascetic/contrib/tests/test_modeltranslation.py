@@ -1,13 +1,13 @@
 import unittest
+from ascetic.contrib import modeltranslation
 from ascetic.databases import databases
 from ascetic.mappers import Mapper, mapper_registry
 from ascetic.identity_maps import IdentityMap
-from ascetic.contrib.modeltranslation import TranslationMapper
 
 Author = None
 
 
-class TranslationMapper(TranslationMapper):
+class TranslationMapper(modeltranslation.TranslationMapper):
 
     _language = 'ru'
 
