@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='ascetic',
-    version='0.7.2.31',
+    version='0.7.2.32',
 
     packages = find_packages(exclude=('examples*',)),
     include_package_data=True,
