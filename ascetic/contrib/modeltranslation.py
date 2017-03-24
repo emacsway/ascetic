@@ -1,5 +1,4 @@
 import collections
-from ascetic.fields import Field
 from ascetic.mappers import Mapper
 
 # We can't use TranslationRegistry, because Mapper can be inherited, and we need to fix hierarchy???

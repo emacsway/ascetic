@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from collections import OrderedDict
-from ascetic import validators
+from ascetic import exceptions
 from ascetic.mappers import Load, Mapper, OneToOne, Result, model_registry, mapper_registry
 from ascetic.utils import to_tuple
 from ascetic.utils import cached_property
@@ -107,16 +107,16 @@ class PolymorphicMapper(Mapper):
         for base in self.polymorphic_bases:
             try:
                 base.validate(obj, fields=fields, exclude=exclude)
-            except validators.ValidationError as e:
+            except exceptions.ValidationError as e:
                 errors.update(e.args[0])
 
         try:
             super(PolymorphicMapper, self).validate(obj, fields=fields, exclude=exclude)
-        except validators.ValidationError as e:
+        except exceptions.ValidationError as e:
             errors.update(e.args[0])
 
         if errors:
-            raise validators.ValidationError(errors)
+            raise exceptions.ValidationError(errors)
 
     def save(self, obj):
         if not self.polymorphic_fields['polymorphic_type_id'].get_value(obj):

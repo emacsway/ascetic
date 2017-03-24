@@ -1,6 +1,6 @@
 import unittest
 
-from ascetic import validators
+from ascetic import exceptions, validators
 
 
 class TestValidators(unittest.TestCase):
@@ -24,7 +24,7 @@ class TestValidators(unittest.TestCase):
 
         vc = validators.ChainValidator(validators.Length(8), validators.Email())
         self.assertTrue(vc('test@example.com'))
-        with self.assertRaises(validators.ValidationError):
+        with self.assertRaises(exceptions.ValidationError):
             vc('a@a.com')
-        with self.assertRaises(validators.ValidationError):
+        with self.assertRaises(exceptions.ValidationError):
             vc('asdfasdfasdfasdfasdf')

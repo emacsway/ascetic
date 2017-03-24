@@ -3,7 +3,7 @@ import unittest
 
 from sqlbuilder import smartsql
 
-from ascetic import validators
+from ascetic import exceptions, validators
 from ascetic.databases import databases
 from ascetic.identity_maps import IdentityMap
 from ascetic.mappers import Mapper, mapper_registry
@@ -215,7 +215,7 @@ class TestMapper(unittest.TestCase):
         author_mapper = mapper_registry[Author]
 
         a = Author(first_name='', last_name='Ted')
-        self.assertRaises(validators.ValidationError, author_mapper.validate, a)
+        self.assertRaises(exceptions.ValidationError, author_mapper.validate, a)
 
     def test_defaults(self):
         author_mapper = mapper_registry[Author]
@@ -225,7 +225,7 @@ class TestMapper(unittest.TestCase):
         self.assertEqual(a.bio, 'No bio available')
 
         a = Author(first_name='I am a', last_name='BadGuy!')
-        self.assertRaises(validators.ValidationError, author_mapper.validate, a)
+        self.assertRaises(exceptions.ValidationError, author_mapper.validate, a)
 
     def test_smartsql(self):
         author_mapper, book_mapper = mapper_registry[Author], mapper_registry[Book]
