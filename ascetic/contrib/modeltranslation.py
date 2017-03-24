@@ -87,7 +87,7 @@ class CreateFields(object):
     def _create_virtual_fields(self):
         for name, field in self._declared_fields.items():
             if name not in self._fields:
-                self._fields[name] = self._mapper.create_translated_field(name, {'virtual': True}, self._declared_fields)
+                self._fields[name] = self._mapper.create_field(name, {'virtual': True}, self._declared_fields)
 
 
 class TranslationColumnDescriptor(object):
