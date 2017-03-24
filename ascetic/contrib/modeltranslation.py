@@ -8,8 +8,8 @@ class TranslationMapper(Mapper):
 
     translated_fields = ()
 
-    def create_field(self, name, data, declared_fields=None):
-        field = super(TranslationMapper, self).create_field(name, data, declared_fields)
+    def create_translated_field(self, name, data, declared_fields=None):
+        field = self.create_field(name, data, declared_fields)
         if name in self.translated_fields:
             column_descriptor = TranslationColumnDescriptor(self)
         else:
@@ -36,14 +36,9 @@ class TranslationMapper(Mapper):
         return '{}_{}'.format(name, lang or self.get_language())
 
     def restore_column(self, name):
-        try:
-            original_column, lang = name.rsplit('_', 1)
-        except ValueError:
-            pass
-        else:
-            if lang in self.get_languages():
-                return original_column
-        return name
+        original_column, lang = name.rsplit('_', 1)
+        assert lang in self.get_languages()
+        return original_column
 
     def get_language(self):
         raise NotImplementedError
@@ -60,9 +55,9 @@ class CreateFields(object):
         self._declared_fields = declared_fields
         self._fields = collections.OrderedDict()
         self._reversed_map = {
-            field.original_column: name
+            field.column: name
             for name, field in self._declared_fields.items()
-            if hasattr(field, 'original_column')
+            if hasattr(field, 'column')
         }
 
     def compute(self):
@@ -75,7 +70,7 @@ class CreateFields(object):
         self._translated_columns_map = {}
         for name in self._mapper.translated_fields:
             try:
-                column = self._declared_fields[name].original_column
+                column = self._declared_fields[name].column
             except (KeyError, AttributeError):
                 column = name
             for lang in self._mapper.get_languages():
@@ -87,12 +82,12 @@ class CreateFields(object):
             column_name = self._translated_columns_map.get(column_name, column_name)
             name = self._reversed_map.get(column_name, column_name)
             if name not in self._fields:
-                self._fields[name] = self._mapper.create_field(name, data, self._declared_fields)
+                self._fields[name] = self._mapper.create_translated_field(name, data, self._declared_fields)
 
     def _create_virtual_fields(self):
         for name, field in self._declared_fields.items():
             if name not in self._fields:
-                self._fields[name] = self._mapper.create_field(name, {'virtual': True}, self._declared_fields)
+                self._fields[name] = self._mapper.create_translated_field(name, {'virtual': True}, self._declared_fields)
 
 
 class TranslationColumnDescriptor(object):
