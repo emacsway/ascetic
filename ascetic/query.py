@@ -87,7 +87,7 @@ class Result(smartsql.Result):
         self._prefetch = {}
         self._select_related = {}
         self._is_base = True
-        self._mapping = default_mapping
+        self._map = default_map
         self._using = mapper._using
         self._cache = None  # empty list also can be a cached result, so, using None instead of empty list
 
@@ -143,10 +143,10 @@ class Result(smartsql.Result):
         cursor = self.execute()
         fields = tuple(f[0] for f in cursor.description)
 
-        if isinstance(self._mapping, type):
-            map_row = self._mapping(self)
+        if isinstance(self._map, type):
+            map_row = self._map(self)
         else:
-            map_row = partial(self._mapping, result=self, state={})
+            map_row = partial(self._map, result=self, state={})
 
         for row in cursor.fetchall():
             yield map_row(row=zip(fields, row))
@@ -168,10 +168,10 @@ class Result(smartsql.Result):
     def db(self):
         return databases[self._using]
 
-    def map(self, mapping):
-        """Sets mapping."""
+    def map(self, map):
+        """Sets map."""
         c = self
-        c._mapping = mapping
+        c._map = map
         return c._query
 
     def prefetch(self, *a, **kw):
@@ -259,11 +259,11 @@ class OneToManyPresetter(RelationPresetter):
         self.set_value(related_obj, self.related_name, obj)
 
 
-def default_mapping(result, row, state):
+def default_map(result, row, state):
     return result.mapper.load(row, from_db=True)
 
 
-class SelectRelatedMapping(object):
+class SelectRelatedMap(object):
 
     def __init__(self, result):
         self._result = result
@@ -277,7 +277,7 @@ class SelectRelatedMapping(object):
         rows = self._get_model_rows(models, row)
         objs = self._get_objects(models, rows)
         self._build_relations(relations, objs)
-        return objs[0]
+        return objs
 
     def _get_model_rows(self, models, row):
         rows = []  # There can be multiple the same models, so, using dict instead of model
