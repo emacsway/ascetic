@@ -225,10 +225,10 @@ class Relation(BaseRelation, IRelation):
         if self.related_name in self.related_mapper.relations:
             return False
 
-        setattr(related_model, self.related_name, RelationDescriptor(self._make_related()))
+        setattr(related_model, self.related_name, RelationDescriptor(self._create_reverse_relation()))
         return True
 
-    def _make_related(self):
+    def _create_reverse_relation(self):
         raise NotImplementedError
 
 
@@ -253,7 +253,7 @@ class ForeignKey(Relation):
         else:
             return self._related_name
 
-    def _make_related(self):
+    def _create_reverse_relation(self):
         return OneToMany(
             self.owner, self.field, self.related_field,
             on_delete=self.on_delete, related_name=self.name,
@@ -288,7 +288,7 @@ class ForeignKey(Relation):
 
 class OneToOne(ForeignKey):
 
-    def _make_related(self):
+    def _create_reverse_relation(self):
         return OneToOne(
             self.owner, self.field, self.related_field,
             on_delete=self.on_delete, related_name=self.name,
@@ -324,7 +324,7 @@ class OneToMany(Relation):
         # TODO: is it need setup reverse FK?
         return False
 
-    def _make_related(self):
+    def _create_reverse_relation(self):
         return ForeignKey(
             self.owner, self.field, self.related_field,
             on_delete=self.on_delete, related_name=self.name,
