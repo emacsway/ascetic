@@ -142,7 +142,6 @@ class TestModelTranslation(unittest.TestCase):
         author.first_alias = 'First name'
         author.last_name='Last name'
         author_mapper.save(author)
-        # import ipdb; ipdb.set_trace()
         author = author_mapper.get(author_mapper.get_pk(author))
         self.assertEqual(author.first_alias, 'First name')
         self.assertEqual(author.last_name, 'Last name')
