@@ -129,7 +129,6 @@ class Mapper(object):
                 self.add_field(name, field)
 
             self.pk = self._create_pk(self.db_table, self._using, self.columns)
-
             self.sql_table = self._create_sql_table()
 
         self._prepare_model(model)
@@ -172,14 +171,6 @@ class Mapper(object):
 
         return result
 
-    def create_field(self, name, data, declared_fields=None):
-        if declared_fields and name in declared_fields:
-            field = copy.deepcopy(declared_fields[name])
-            field.__dict__.update(data)
-        else:
-            field = self.field_factory(**data)
-        return field
-
     def create_fields(self, columns, declared_fields):
         fields = collections.OrderedDict()
         reverse_mapping = {field.column: name for name, field in declared_fields.items() if hasattr(field, 'column')}
@@ -191,6 +182,14 @@ class Mapper(object):
             if name not in fields:
                 fields[name] = self.create_field(name, {'virtual': True}, declared_fields)
         return fields
+
+    def create_field(self, name, data, declared_fields=None):
+        if declared_fields and name in declared_fields:
+            field = copy.deepcopy(declared_fields[name])
+            field.__dict__.update(data)
+        else:
+            field = self.field_factory(**data)
+        return field
 
     def add_field(self, name, field):
         field.name = name
