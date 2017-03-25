@@ -86,7 +86,7 @@ class PolymorphicMapper(Mapper):
                     field=mapper_registry[model].pk,
                     related_field=mapper_registry[base].pk,
                     related_name=model.__name__.lower(),
-                    query=(lambda rel: rel.related_mapper.query.polymorphic(False)),  # TODO: rel.model instead of rel.related_model?
+                    query=(lambda rel: rel.mapper.query.polymorphic(False)),
                     related_query=(lambda rel: rel.related_mapper.query.polymorphic(False))
                 ))
                 break

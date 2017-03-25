@@ -257,7 +257,7 @@ class ForeignKey(Relation):
         return OneToMany(
             self.owner, self.field, self.related_field,
             on_delete=self.on_delete, related_name=self.name,
-            related_query=self._query
+            related_query=self.query
         )
 
     def get(self, instance):
@@ -292,7 +292,7 @@ class OneToOne(ForeignKey):
         return OneToOne(
             self.owner, self.field, self.related_field,
             on_delete=self.on_delete, related_name=self.name,
-            related_query=self._query
+            related_query=self.query
         )
 
     def setup_reverse_relation__(self):
@@ -328,7 +328,7 @@ class OneToMany(Relation):
         return ForeignKey(
             self.owner, self.field, self.related_field,
             on_delete=self.on_delete, related_name=self.name,
-            related_query=self._query
+            related_query=self.query
         )
 
     def get(self, instance):

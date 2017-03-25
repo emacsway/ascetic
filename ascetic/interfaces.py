@@ -80,7 +80,7 @@ class IRelation(IBaseRelation):
     def get_value(self, obj):
         raise NotImplementedError
 
-    def get_related_value(self, related_obj):  # TODO: self.related_relation.get_value(related_obj) ???
+    def get_related_value(self, related_obj):
         raise NotImplementedError
 
     def set_value(self, obj, value):

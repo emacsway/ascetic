@@ -166,7 +166,7 @@ class TestPolymorphic(unittest.TestCase):
                     related_field=('id', 'lang'),
                     field=('author_id', 'lang'),
                     related_name='books',
-                    related_query=(lambda rel: mapper_registry[rel.related_model].query)
+                    related_query=(lambda rel: rel.related_mapper.query)
                 )
             }
 
