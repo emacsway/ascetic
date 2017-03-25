@@ -55,11 +55,12 @@ class PolymorphicMapper(Mapper):
             cols[name] = col
         return cols
 
-    def _create_query(self):
+    @property
+    def query(self):
         bases = self.polymorphic_bases
         if bases:
             base = bases[-1]
-            q = base._create_query()
+            q = base.query
             derived_mappers = (self,) + bases[:-1]
             for derived_mapper in derived_mappers:
                 t = derived_mapper.sql_table
@@ -71,7 +72,7 @@ class PolymorphicMapper(Mapper):
                     t.pk == base.sql_table.pk
                 ))
         else:
-            q = super(PolymorphicMapper, self)._create_query()
+            q = super(PolymorphicMapper, self).query
         q.result = PolymorphicResult(self)
         return q
 

@@ -146,14 +146,14 @@ class Relation(BaseRelation, IRelation):
     def related_relation(self):
         return getattr(self.related_model, self.related_name).relation
 
-    @cached_property
+    @property
     def query(self):
         if isinstance(self._query, collections.Callable):
             return self._query(self)
         else:
             return self.mapper.query
 
-    @cached_property
+    @property
     def related_query(self):
         if isinstance(self._related_query, collections.Callable):
             return self._related_query(self)
@@ -257,7 +257,7 @@ class ForeignKey(Relation):
         return OneToMany(
             self.owner, self.field, self.related_field,
             on_delete=self.on_delete, related_name=self.name,
-            related_query=self.query
+            related_query=(lambda rel: self.query)
         )
 
     def get(self, instance):
@@ -292,7 +292,7 @@ class OneToOne(ForeignKey):
         return OneToOne(
             self.owner, self.field, self.related_field,
             on_delete=self.on_delete, related_name=self.name,
-            related_query=self.query
+            related_query=(lambda rel: self.query)
         )
 
     def setup_reverse_relation__(self):
@@ -328,7 +328,7 @@ class OneToMany(Relation):
         return ForeignKey(
             self.owner, self.field, self.related_field,
             on_delete=self.on_delete, related_name=self.name,
-            related_query=self.query
+            related_query=(lambda rel: self.query)
         )
 
     def get(self, instance):

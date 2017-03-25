@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+from threading import local
 import unittest
 from ascetic.contrib import modeltranslation
 from ascetic.databases import databases
@@ -6,16 +8,19 @@ from ascetic.identity_maps import IdentityMap
 
 Author = None
 
+context = local()
+context.current_language = 'ru'
+
 
 class TranslationMapper(modeltranslation.TranslationMapper):
 
     _language = 'ru'
 
     def get_languages(self):
-        return ('ru', 'en')
+        return ('ru', 'en', )
 
     def get_language(self):
-        return self._language
+        return context.current_language
 
 
 class TestModelTranslation(unittest.TestCase):
@@ -115,19 +120,34 @@ class TestModelTranslation(unittest.TestCase):
         self.assertEqual(len(mapper.fields), 4)
         self.assertEqual(len(mapper.columns), 6)
 
-        current_language = mapper.get_language()
+        original_language = mapper.get_language()
         for lang in mapper.get_languages():
-            mapper._language = lang
+            context.current_language = lang
             self.assertEqual(mapper.fields['id'].column, 'id')
             self.assertEqual(mapper.fields['bio'].column, 'bio')
             self.assertEqual(mapper.fields['first_alias'].column, 'first_name_{}'.format(lang))
             self.assertEqual(mapper.fields['last_name'].column, 'last_name_{}'.format(lang))
-        mapper._language = current_language
+        context.current_language = original_language
 
     def test_model(self):
+        context.current_language = 'ru'
         author_mapper = mapper_registry[Author]
-        author = Author(first_alias='First name', last_name='Last name')
+        author = Author(first_alias=u'Имя', last_name=u'Фамилия')
         author_mapper.save(author)
+        author = author_mapper.get(author_mapper.get_pk(author))
+        self.assertEqual(author.first_alias, u'Имя')
+        self.assertEqual(author.last_name, u'Фамилия')
+
+        context.current_language = 'en'
+        author.first_alias = 'First name'
+        author.last_name='Last name'
+        author_mapper.save(author)
+        # import ipdb; ipdb.set_trace()
         author = author_mapper.get(author_mapper.get_pk(author))
         self.assertEqual(author.first_alias, 'First name')
         self.assertEqual(author.last_name, 'Last name')
+
+        context.current_language = 'ru'
+        author = author_mapper.get(author_mapper.get_pk(author))
+        self.assertEqual(author.first_alias, u'Имя')
+        self.assertEqual(author.last_name, u'Фамилия')

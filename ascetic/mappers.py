@@ -131,8 +131,6 @@ class Mapper(object):
             self.pk = self._create_pk(self.db_table, self._using, self.columns)
 
             self.sql_table = self._create_sql_table()
-            self.base_query = self._create_base_query()
-            self.query = self._create_query()
 
         self._prepare_model(model)
         self._setup_reverse_relations()
@@ -210,13 +208,25 @@ class Mapper(object):
     def _create_sql_table(self):
         return sql.Table(self)
 
-    def _create_base_query(self):
+    @property
+    def base_query(self):
         """For relations."""
-        return sql.Query(self.sql_table, result=self.result_factory(self)).fields(self.get_sql_fields())
+        return sql.Query(
+            self.sql_table,
+            result=self.result_factory(self)
+        ).fields(
+            self.get_sql_fields()
+        ).using(self.using())
 
-    def _create_query(self):
+    @property
+    def query(self):
         """For selection."""
-        return sql.Query(self.sql_table, result=self.result_factory(self)).fields(self.get_sql_fields())
+        return sql.Query(
+            self.sql_table,
+            result=self.result_factory(self)
+        ).fields(
+            self.get_sql_fields()
+        ).using(self.using())
 
     def get_sql_fields(self, prefix=None):
         """Returns field list."""
@@ -253,8 +263,6 @@ class Mapper(object):
             return self
         c = copy.copy(self)
         c._using = alias
-        c.query = c.query.using(c._using)
-        c.base_query = c.base_query.using(c._using)
         return c
 
     @property

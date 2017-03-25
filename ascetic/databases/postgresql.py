@@ -1,13 +1,20 @@
 import collections
 from ascetic.databases.base import Database
+from ascetic.utils import cached_property
 
 
 @Database.register('postgresql')
 class PostgreSQLDatabase(Database):
 
-    def connection_factory(self, **kwargs):
+    @cached_property
+    def psycopg2(self):
         import psycopg2
-        return psycopg2.connect(**kwargs)
+        psycopg2.extensions.register_type(psycopg2.extensions.UNICODE)
+        psycopg2.extensions.register_type(psycopg2.extensions.UNICODEARRAY)
+        return psycopg2
+
+    def connection_factory(self, **kwargs):
+        return self.psycopg2.connect(**kwargs)
 
     def last_insert_id(self, cursor):
         cursor.execute("SELECT lastval()")
