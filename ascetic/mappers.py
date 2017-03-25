@@ -121,7 +121,7 @@ class Mapper(object):
             if not hasattr(self, 'db_table'):
                 self.db_table = self._create_default_db_table(model)
 
-            # fileds and columns can be a descriptor for multilingual mapping.
+            # fields and columns can be a descriptor for multilingual mapping.
             self.fields = collections.OrderedDict()
             self.columns = collections.OrderedDict()
 
