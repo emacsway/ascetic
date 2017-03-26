@@ -8,11 +8,11 @@ class TranslationMapper(Mapper):
 
     translated_fields = ()
 
-    def create_fields(self, columns, declared_fields):
-        return CreateFields(self, columns, declared_fields).compute()
+    def create_fields(self, field_descriptions, declared_fields):
+        return CreateFields(self, field_descriptions, declared_fields).compute()
 
-    def create_translated_field(self, name, data, declared_fields=None):
-        field = self.create_field(name, data, declared_fields)
+    def create_translated_field(self, name, description, declared_fields=None):
+        field = self.create_field(name, description, declared_fields)
         if name in self.translated_fields:
             column_descriptor = TranslationColumnDescriptor(self)
         else:
@@ -49,9 +49,9 @@ class TranslationMapper(Mapper):
 
 class CreateFields(object):
 
-    def __init__(self, mapper, columns, declared_fields):
+    def __init__(self, mapper, field_descriptions, declared_fields):
         self._mapper = mapper
-        self._columns = columns
+        self._field_descriptions = field_descriptions
         self._declared_fields = declared_fields
         self._fields = collections.OrderedDict()
         self._translated_column_mapping = {}
@@ -74,10 +74,10 @@ class CreateFields(object):
                 self._translated_column_mapping[self._mapper.translate_column(column, lang)] = column
 
     def _create_fields(self):
-        for data in self._columns:
-            name = self._get_field_name(data['column'])
+        for field_description in self._field_descriptions:
+            name = self._get_field_name(field_description['column'])
             if name not in self._fields:
-                self._fields[name] = self._mapper.create_translated_field(name, data, self._declared_fields)
+                self._fields[name] = self._mapper.create_translated_field(name, field_description, self._declared_fields)
 
     def _create_virtual_fields(self):
         for name, field in self._declared_fields.items():

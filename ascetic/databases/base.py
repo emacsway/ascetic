@@ -128,9 +128,9 @@ class Database(object):
         result = []
         for row in q.description:
             column = row[0]
-            data = schema.get(column) or {}
-            data.update({'column': column, 'type_code': row[1]})
-            result.append(data)
+            field_description = schema.get(column) or {}
+            field_description.update({'column': column, 'type_code': row[1]})
+            result.append(field_description)
         return result
 
     def describe_table(self, table_name):
