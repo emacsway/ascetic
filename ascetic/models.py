@@ -10,9 +10,9 @@ class ModelBase(type):
     mapper_class = Mapper
 
     @thread_safe
-    def __new__(cls, name, bases, attrs):
+    def __new__(mcs, name, bases, attrs):
 
-        new_cls = type.__new__(cls, name, bases, attrs)
+        new_cls = type.__new__(mcs, name, bases, attrs)
 
         if name in ('Model', 'NewBase', ):
             return new_cls
@@ -24,8 +24,8 @@ class ModelBase(type):
         if not isinstance(mapper_class, new_cls.mapper_class):
             bases.append(new_cls.mapper_class)
 
-        NewMapper = type("{}Mapper".format(new_cls.__name__), tuple(bases), {})
-        NewMapper(new_cls)
+        mapper_factory = type("{}Mapper".format(new_cls.__name__), tuple(bases), {})
+        mapper_factory(new_cls)
         for k in to_tuple(mapper_registry[new_cls].pk):
             setattr(new_cls, k, None)
 
@@ -39,12 +39,12 @@ class Model(ModelBase("NewBase", (object, ), {})):
 
     def __init__(self, *args, **kwargs):
         mapper = mapper_registry[self.__class__]
-        pre_init.send(sender=self.__class__, instance=self, args=args, kwargs=kwargs, using=mapper._using)
+        pre_init.send(sender=self.__class__, instance=self, args=args, kwargs=kwargs, using=mapper.using())
         if args:
             self.__dict__.update(zip(mapper.fields.keys(), args))
         if kwargs:
             self.__dict__.update(kwargs)
-        post_init.send(sender=self.__class__, instance=self, using=mapper._using)
+        post_init.send(sender=self.__class__, instance=self, using=mapper.using())
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self._get_pk() == other._get_pk()
@@ -64,7 +64,7 @@ class Model(ModelBase("NewBase", (object, ), {})):
         return mapper_registry[self.__class__].get_pk(self)
 
     def _set_pk(self, value):
-        return mapper_registry[self.__class__].set_pk(self, value)
+        mapper_registry[self.__class__].set_pk(self, value)
 
     pk = property(_get_pk, _set_pk)
 
@@ -75,7 +75,7 @@ class Model(ModelBase("NewBase", (object, ), {})):
         return mapper_registry[self.__class__].using(using).save(self)
 
     def delete(self, using=None, visited=None):
-        return mapper_registry[self.__class__].using(using).delete(self)
+        return mapper_registry[self.__class__].using(using).delete(self, visited)
 
     @classproperty
     def _mapper(cls):
