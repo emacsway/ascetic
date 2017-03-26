@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-from threading import local
 import unittest
+from threading import local
+from sqlbuilder import smartsql
 from ascetic.contrib import modeltranslation
 from ascetic.databases import databases
 from ascetic.mappers import Mapper, mapper_registry
@@ -114,19 +115,31 @@ class TestModelTranslation(unittest.TestCase):
             self.assertIn('last_name_{}'.format(lang), mapper.columns)
 
         for lang in mapper.get_languages():
-            self.assertNotIn('first_name', mapper.columns)
-            self.assertNotIn('last_name', mapper.columns)
+            self.assertIn('first_name', mapper.columns)
+            self.assertIn('last_name', mapper.columns)
 
         self.assertEqual(len(mapper.fields), 4)
-        self.assertEqual(len(mapper.columns), 6)
+        self.assertEqual(len(mapper.columns), 8)
 
         original_language = mapper.get_language()
         for lang in mapper.get_languages():
             context.current_language = lang
-            self.assertEqual(mapper.fields['id'].column, 'id')
-            self.assertEqual(mapper.fields['bio'].column, 'bio')
-            self.assertEqual(mapper.fields['first_alias'].column, 'first_name_{}'.format(lang))
-            self.assertEqual(mapper.fields['last_name'].column, 'last_name_{}'.format(lang))
+            self.assertEqual(
+                smartsql.compile(mapper.sql_table.get_field('id')),
+                ('"ascetic_modeltranslation_author"."id"', [])
+            )
+            self.assertEqual(
+                smartsql.compile(mapper.sql_table.get_field('bio')),
+                ('"ascetic_modeltranslation_author"."bio"', [])
+            )
+            self.assertEqual(
+                smartsql.compile(mapper.sql_table.get_field('first_alias')),
+                ('"ascetic_modeltranslation_author"."first_name_{}"'.format(lang), [])
+            )
+            self.assertEqual(
+                smartsql.compile(mapper.sql_table.get_field('last_name')),
+                ('"ascetic_modeltranslation_author"."last_name_{}"'.format(lang), [])
+            )
         context.current_language = original_language
 
     def test_model(self):
