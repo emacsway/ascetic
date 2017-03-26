@@ -31,6 +31,7 @@ class MpMapper(Mapper):
             field=tuple('parent_{}'.format(k) for k in to_tuple(self.pk)),
             related_name="children"
         )))
+        super(MpMapper, self)._do_prepare_model(self.model)
 
     def _mp_encode(self, value):
         return str(value).replace('&', '&a').replace(self.KEY_SEPARATOR, '&k').replace(self.PATH_SEPARATOR, '&p')
