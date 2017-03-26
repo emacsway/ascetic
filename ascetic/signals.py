@@ -3,7 +3,7 @@ import random
 from weakref import WeakKeyDictionary, WeakValueDictionary
 
 __all__ = ('Signal', 'pre_save', 'post_save', 'pre_delete', 'post_delete',
-           'pre_init', 'post_init', 'class_prepared', )
+           'pre_init', 'post_init', 'class_prepared', 'field_mangling', 'column_mangling', )
 
 
 class Signal(object):
@@ -82,6 +82,7 @@ def connect(signal, sender=None, weak=True, receiver_id=None):
         return fn
     return decorator
 
+
 pre_save = Signal()
 post_save = Signal()
 pre_delete = Signal()
@@ -89,3 +90,5 @@ post_delete = Signal()
 pre_init = Signal()
 post_init = Signal()
 class_prepared = Signal()
+field_mangling = Signal()
+column_mangling = Signal()

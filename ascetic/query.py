@@ -6,10 +6,10 @@ from ascetic.databases import databases
 from ascetic.exceptions import ObjectDoesNotExist
 from ascetic.mappers import mapper_registry
 from ascetic.relations import Relation, ForeignKey, OneToOne, OneToMany
+from ascetic.signals import field_mangling, column_mangling
 from ascetic.utils import to_tuple
 
 factory = copy.copy(smartsql.factory)
-
 
 try:
     str = unicode  # Python 2.* compatible
@@ -47,7 +47,7 @@ class Table(smartsql.Table):
             return smartsql.CompositeExpr(*(self.get_field(k) for k in name))
 
         parts = name.split(smartsql.LOOKUP_SEP, 1)
-        name = parts[0]
+        name = self.__mangle_field(parts[0])
 
         if name == 'pk':
             name = self._mapper.pk
@@ -61,10 +61,27 @@ class Table(smartsql.Table):
             return smartsql.CompositeExpr(*(self.get_field(k) for k in name))
 
         if name in self._mapper.fields:
-            name = self._mapper.fields[name].column
+            name = self.__mangle_column(self._mapper.fields[name].column)
         parts[0] = name
         return super(Table, self).get_field(smartsql.LOOKUP_SEP.join(parts))
 
+    def __mangle_field(self, name):
+        results = field_mangling.send(sender=self, field=name, mapper=self._mapper)
+        results = [i[1] for i in results if i[1]]
+        if results:
+            # response in format tuple(priority: int, mangled_field_name: str)
+            results.sort(key=lambda x: x[0], reverse=True)  # Sort by priority
+            return results[0][1]
+        return name
+
+    def __mangle_column(self, column):
+        results = column_mangling.send(sender=self, column=column, mapper=self._mapper)
+        results = [i[1] for i in results if i[1]]
+        if results:
+            # response in format tuple(priority: int, mangled_column_name: str)
+            results.sort(key=lambda x: x[0], reverse=True)  # Sort by priority
+            return results[0][1]
+        return column
 
 @factory.register
 class TableAlias(smartsql.TableAlias, Table):
