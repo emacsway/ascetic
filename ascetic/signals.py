@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 import random
-from weakref import WeakKeyDictionary, WeakValueDictionary
+import threading
+from weakref import WeakValueDictionary
 
 __all__ = ('Signal', 'pre_save', 'post_save', 'pre_delete', 'post_delete',
            'pre_init', 'post_init', 'class_prepared', 'field_mangling', 'column_mangling', )
@@ -14,7 +15,7 @@ class Signal(object):
         self._flush()
 
     def _flush(self):
-        self._receivers = WeakKeyDictionary()
+        self._receivers = {}
         # Different senders can have the same hash-value.
         # Hash can be primary key or something other.
         # Eventually, sender can be non-hashable.
@@ -34,6 +35,7 @@ class Signal(object):
             # self._senders holds link to hashable key of WeakKeyDictionary
             self._senders[sender_id] = sender
         self._receivers[sender_id][receiver_id] = receiver
+        self._clear_receivers()
 
     @staticmethod
     def _make_id(target):
@@ -68,12 +70,11 @@ class Signal(object):
         return responses
 
     def _clear_receivers(self):
-        # WeakKeyDictionary vs dict with clearing
-        # Dead code. Kill me if all works well.
         if random.random() < self._clearing_frequency:
-            for sender_id, receivers in list(self._receivers.items()):
-                if not receivers or sender_id not in self._senders:
-                    del self._receivers[sender_id]
+            with threading.RLock():
+                for sender_id, receivers in list(self._receivers.items()):
+                    if not receivers or sender_id not in self._senders:
+                        del self._receivers[sender_id]
 
 
 def connect(signal, sender=None, weak=True, receiver_id=None):
