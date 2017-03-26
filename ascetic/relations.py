@@ -222,6 +222,9 @@ class Relation(BaseRelation, IRelation):
         except ModelNotRegistered:
             return False
 
+        # add support for templates for related_name.
+        # support copy.
+
         if self.related_name in self.related_mapper.relations:
             return False
 

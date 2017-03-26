@@ -231,7 +231,9 @@ class Mapper(object):
         """Returns field list."""
         if prefix is None:
             prefix = self.sql_table
-        return [smartsql.Field(f.column, prefix) for f in self.fields.values() if not getattr(f, 'virtual', False)]
+        elif isinstance(prefix, string_types):
+            prefix = smartsql.Table(prefix)
+        return [prefix.get_field(f.name) for f in self.fields.values() if not getattr(f, 'virtual', False)]
 
     def _prepare_model(self, model):
         self._do_prepare_model(model)
@@ -267,10 +269,10 @@ class Mapper(object):
     @property
     def relations(self):  # bound_relations(), local_relations() ???
         result = {}
-        for name in dir(self.model):
-            attr = getattr(self.model, name, None)
-            if isinstance(attr, interfaces.IRelationDescriptor):
-                result[name] = attr.get_bound_relation(self.model)
+        for model in self.model.__mro__:
+            for key, value in model.__dict__.items():
+                if isinstance(value, interfaces.IRelationDescriptor):
+                    result[key] = value.get_bound_relation(self.model)
         return result
 
     def load(self, data, from_db=True, reload=False):
@@ -317,10 +319,12 @@ class Mapper(object):
     def _insert_query(self, obj):
         auto_pk = not all(to_tuple(self.get_pk(obj)))
         data = self.unload(obj, exclude=(to_tuple(self.pk) if auto_pk else ()), to_db=True)
+        data = {self.sql_table.get_field(k): v for k, v in data.items()}
         return smartsql.Insert(table=self.sql_table, map=data)
 
     def _update_query(self, obj):
         data = self.unload(obj, fields=self.get_changed(obj), to_db=True)
+        data = {self.sql_table.get_field(k): v for k, v in data.items()}
         return smartsql.Update(table=self.sql_table, map=data, where=(self.sql_table.pk == self.get_pk(obj)))
 
     def _delete_query(self, obj):
@@ -427,15 +431,11 @@ class PrepareModel(object):
             for key, rel in self._mapper.relationships.items():
                 setattr(self._model, key, rel)
 
-        # TODO: use dir() instead __dict__ to handle relations in abstract classes,
-        # add templates support for related_name,
-        # support copy.
-        # for key, rel in model.__dict__.items():
-        for key in dir(self._model):
-            rel = getattr(self._model, key, None)
-            if isinstance(rel, interfaces.IBaseRelation):
-                rel = RelationDescriptor(rel)
-                setattr(self._model, key, rel)
+        for model in self._model.__mro__:
+            for key, value in model.__dict__.items():
+                if isinstance(value, interfaces.IBaseRelation):
+                    relation_descriptor = RelationDescriptor(value)
+                    setattr(model, key, relation_descriptor)
 
 
 class Load(object):

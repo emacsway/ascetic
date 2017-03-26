@@ -40,7 +40,7 @@ class Table(smartsql.Table):
         return self._mapper.query
 
     def get_fields(self, prefix=None):
-        return self._mapper.get_sql_fields()
+        return self._mapper.get_sql_fields(prefix)
 
     def get_field(self, name):
         if type(name) == tuple:
@@ -61,8 +61,9 @@ class Table(smartsql.Table):
             return smartsql.CompositeExpr(*(self.get_field(k) for k in name))
 
         if name in self._mapper.fields:
-            name = self.__mangle_column(self._mapper.fields[name].column)
-        parts[0] = name
+            name = self._mapper.fields[name].column
+
+        parts[0] = self.__mangle_column(name)
         return super(Table, self).get_field(smartsql.LOOKUP_SEP.join(parts))
 
     def __mangle_field(self, name):
