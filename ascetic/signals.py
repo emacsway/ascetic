@@ -3,7 +3,7 @@ import random
 from weakref import WeakKeyDictionary, WeakValueDictionary
 
 __all__ = ('Signal', 'pre_save', 'post_save', 'pre_delete', 'post_delete',
-           'pre_init', 'post_init', 'class_prepared', 'field_conversion')
+           'pre_init', 'post_init', 'class_prepared', )
 
 
 class Signal(object):
@@ -89,4 +89,3 @@ post_delete = Signal()
 pre_init = Signal()
 post_init = Signal()
 class_prepared = Signal()
-field_conversion = Signal()

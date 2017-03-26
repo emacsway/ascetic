@@ -75,18 +75,18 @@ class CreateFields(object):
 
     def _create_fields(self):
         for data in self._columns:
-            field_name = self._get_field_name(data['column'])
-            if field_name not in self._fields:
-                self._fields[field_name] = self._mapper.create_translated_field(field_name, data, self._declared_fields)
+            name = self._get_field_name(data['column'])
+            if name not in self._fields:
+                self._fields[name] = self._mapper.create_translated_field(name, data, self._declared_fields)
 
     def _create_virtual_fields(self):
         for name, field in self._declared_fields.items():
             if name not in self._fields:
                 self._fields[name] = self._mapper.create_field(name, {'virtual': True}, self._declared_fields)
 
-    def _get_field_name(self, translated_column_name):
-        original_column_name = self._translated_column_mapping.get(translated_column_name, translated_column_name)
-        return self._reverse_mapping.get(original_column_name, original_column_name)
+    def _get_field_name(self, translated_column):
+        original_column = self._translated_column_mapping.get(translated_column, translated_column)
+        return self._reverse_mapping.get(original_column, original_column)
 
 
 class TranslationColumnDescriptor(object):

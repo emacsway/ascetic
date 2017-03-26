@@ -47,25 +47,22 @@ class Table(smartsql.Table):
             return smartsql.CompositeExpr(*(self.get_field(k) for k in name))
 
         parts = name.split(smartsql.LOOKUP_SEP, 1)
-        field = parts[0]
-        # result = {'field': field, }
-        # field_conversion.send(sender=self, result=result, field=field, model=self.model)
-        # field = result['field']
+        name = parts[0]
 
-        if field == 'pk':
-            field = self._mapper.pk
-        elif isinstance(self._mapper.relations.get(field, None), Relation):
-            field = self._mapper.relations.get(field).field
+        if name == 'pk':
+            name = self._mapper.pk
+        elif isinstance(self._mapper.relations.get(name, None), Relation):
+            name = self._mapper.relations.get(name).field
 
-        if type(field) == tuple:
+        if type(name) == tuple:
             if len(parts) > 1:
-                # FIXME: "{}_{}".format(alias, field_name) ???
+                # FIXME: "{}_{}".format(alias, name) ???
                 raise Exception("Can't set single alias for multiple fields of composite key {}.{}".format(self.model, name))
-            return smartsql.CompositeExpr(*(self.get_field(k) for k in field))
+            return smartsql.CompositeExpr(*(self.get_field(k) for k in name))
 
-        if field in self._mapper.fields:
-            field = self._mapper.fields[field].column
-        parts[0] = field
+        if name in self._mapper.fields:
+            name = self._mapper.fields[name].column
+        parts[0] = name
         return super(Table, self).get_field(smartsql.LOOKUP_SEP.join(parts))
 
 

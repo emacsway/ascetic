@@ -175,8 +175,8 @@ class Mapper(object):
         fields = collections.OrderedDict()
         reverse_mapping = {field.column: name for name, field in declared_fields.items() if hasattr(field, 'column')}
         for data in columns:
-            column_name = data['column']
-            name = reverse_mapping.get(column_name, column_name)
+            column = data['column']
+            name = reverse_mapping.get(column, column)
             fields[name] = self.create_field(name, data, declared_fields)
         for name, field in declared_fields.items():
             if name not in fields:
