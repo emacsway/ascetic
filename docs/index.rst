@@ -11,10 +11,11 @@ Ascetic exists as a super-lightweight datamapper ORM (Object-Relational Mapper) 
 
 * Home Page: https://bitbucket.org/emacsway/ascetic
 * Docs: http://ascetic.readthedocs.org/
-* Browse https://bitbucket.org/emacsway/ascetic/src
-* Get source code: ``git clone https://bitbucket.org/emacsway/ascetic.git``
+* Browse source code (canonical repo): https://bitbucket.org/emacsway/ascetic/src
+* GitHub mirror: https://github.com/emacsway/ascetic
+* Get source code (canonical repo): ``git clone https://bitbucket.org/emacsway/ascetic.git``
+* Get source code (mirror): ``git clone https://github.com/emacsway/ascetic.git``
 * PyPI: https://pypi.python.org/pypi/ascetic
-* Github mirror: https://github.com/emacsway/ascetic
 
 
 About
