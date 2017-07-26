@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='ascetic',
-    version='0.7.2.34',
+    version='0.7.2.35',
 
     packages = find_packages(exclude=('examples*',)),
     include_package_data=True,
@@ -18,7 +18,7 @@ setup(
     license="MIT License",
     keywords = "ORM Database DataMapper SQL",
     install_requires=[
-        'sqlbuilder >= 0.7.10.10'
+        'sqlbuilder >= 0.7.10.12'
     ],
     classifiers = [
         'Development Status :: 1 - Planning',
