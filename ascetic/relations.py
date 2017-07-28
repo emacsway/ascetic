@@ -383,12 +383,12 @@ class ManyToMany(BaseRelation):
         return getattr(self.model, self._relation)
 
     @cached_property
-    def field(self):
-        return self.relation.field
-
-    @cached_property
     def related_relation(self):
         return getattr(self.related_model, self._related_relation)
+
+    @cached_property
+    def field(self):
+        return self.relation.field
 
     @cached_property
     def related_field(self):
