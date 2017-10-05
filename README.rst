@@ -5,7 +5,7 @@ Ascetic, a lightweight Python datamapper ORM
 Ascetic exists as a super-lightweight datamapper ORM (Object-Relational Mapper) for Python.
 
 * Home Page: https://bitbucket.org/emacsway/ascetic
-* Docs: http://ascetic.readthedocs.org/
+* Docs: https://ascetic.readthedocs.io/
 * Browse source code (canonical repo): https://bitbucket.org/emacsway/ascetic/src
 * GitHub mirror: https://github.com/emacsway/ascetic
 * Get source code (canonical repo): ``git clone https://bitbucket.org/emacsway/ascetic.git``
@@ -175,7 +175,7 @@ Signals support
 More info
 =========
 
-See more info in docs: http://ascetic.readthedocs.org/
+See more info in docs: https://ascetic.readthedocs.io/
 
 
 Web
@@ -202,7 +202,7 @@ See also:
 * `SQLAlchemy <http://www.sqlalchemy.org/>`_ (scheme from class or database, see "`autoload <http://docs.sqlalchemy.org/en/rel_1_1/core/reflection.html>`__" option)
 * `Openorm <http://code.google.com/p/openorm/source/browse/python/>`_ (lightweight datamapper), `miror <https://bitbucket.org/emacsway/openorm/src/default/python/>`__
 * `SQLObject <http://www.sqlobject.org/>`_ (scheme from class or database, see "fromDatabase" option)
-* `Peewee <http://peewee.readthedocs.org/>`_ (scheme from class)
+* `Peewee <https://peewee.readthedocs.io/>`_ (scheme from class)
 * `Bazaar ORM <http://www.nongnu.org/bazaar/>`_
 * `Twistar <http://findingscience.com/twistar/>`_ (scheme from database), provides asynchronous DB interaction
 * `Activemodel <http://code.google.com/p/activemodel/>`_ (scheme from database)
