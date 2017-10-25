@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Copyright (c) 2012-2013 Ivan Zakrevsky, Jared Kuolt and contributors
 import os.path
+from io import open
 from setuptools import setup, find_packages
 
 setup(
@@ -13,7 +14,7 @@ setup(
     author="Ivan Zakrevsky",
     author_email="ivzak@yandex.ru",
     description="Lightweight python datamapper ORM (Object-relational mapper).",
-    long_description=open(os.path.join(os.path.dirname(__file__), 'README.rst')).read(),
+    long_description=open(os.path.join(os.path.dirname(__file__), 'README.rst'), encoding='utf-8').read(),
     url="https://bitbucket.org/emacsway/ascetic",
     license="MIT License",
     keywords = "ORM Database DataMapper SQL",
