@@ -87,8 +87,7 @@ mapper_registry = get_mapper = MapperRegistry()
 class Mapper(object):
 
     pk = 'id'
-    default_using = 'default'
-    _using = 'default'
+    default_using = _using = 'default'
     abstract = False
     field_factory = Field
     result_factory = staticmethod(lambda *a, **kw: Result(*a, **kw))
@@ -125,7 +124,7 @@ class Mapper(object):
             self.fields = collections.OrderedDict()
             self.columns = collections.OrderedDict()
 
-            for name, field in self.create_fields(databases[self._using].read_fields(self.db_table), self.declared_fields).items():
+            for name, field in self.create_fields(self._db.read_fields(self.db_table), self.declared_fields).items():
                 self.add_field(name, field)
 
             self.pk = self._create_pk(self.db_table, self._using, self.columns)
@@ -343,13 +342,13 @@ class Mapper(object):
         return result
 
     def _insert(self, obj):
-        cursor = databases[self._using].execute(self._insert_query(obj))
+        cursor = self._db.execute(self._insert_query(obj))
         if not all(to_tuple(self.get_pk(obj))):
             self.set_pk(obj, self.base_query.result.db.last_insert_id(cursor))
         IdentityMap(self._using).add(self.make_identity_key(self.model, self.get_pk(obj)))
 
     def _update(self, obj):
-        databases[self._using].execute(self._update_query(obj))
+        self._db.execute(self._update_query(obj))
 
     def delete(self, obj, visited=None):
         if visited is None:
@@ -370,7 +369,7 @@ class Mapper(object):
                 else:
                     rel.on_delete(obj, child, rel, self._using, visited)
 
-        databases[self._using].execute(self._delete_query(obj))
+        self._db.execute(self._delete_query(obj))
         post_delete.send(sender=self.model, instance=obj, using=self._using)
         IdentityMap(self._using).remove(self.make_identity_key(self.model, self.get_pk(obj)))
         return True
@@ -404,6 +403,10 @@ class Mapper(object):
     def set_pk(self, obj, value):
         for k, v in zip(to_tuple(self.pk), to_tuple(value)):
             self.fields[k].set_value(obj, v)
+
+    @property
+    def _db(self):
+        return databases[self._using]
 
 
 class PrepareModel(object):
