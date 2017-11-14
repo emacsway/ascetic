@@ -128,7 +128,7 @@ class Result(smartsql.Result):
 
     def execute(self):
         """Implementation of query execution"""
-        return self.db.execute(self._query)
+        return self._db.execute(self._query)
 
     insert = update = delete = execute
 
@@ -180,7 +180,7 @@ class Result(smartsql.Result):
         return self._query
 
     @property
-    def db(self):
+    def _db(self):
         return databases[self._using]
 
     def map(self, map):
