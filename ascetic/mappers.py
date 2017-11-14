@@ -320,12 +320,12 @@ class Mapper(object):
         auto_pk = not all(to_tuple(self.get_pk(obj)))
         data = self.unload(obj, exclude=(to_tuple(self.pk) if auto_pk else ()), to_db=True)
         data = {self.sql_table.get_field(k): v for k, v in data.items()}
-        return smartsql.Insert(table=self.sql_table, map=data)
+        return smartsql.Insert(table=self.sql_table, mapping=data)
 
     def _update_query(self, obj):
         data = self.unload(obj, fields=self.get_changed(obj), to_db=True)
         data = {self.sql_table.get_field(k): v for k, v in data.items()}
-        return smartsql.Update(table=self.sql_table, map=data, where=(self.sql_table.pk == self.get_pk(obj)))
+        return smartsql.Update(table=self.sql_table, mapping=data, where=(self.sql_table.pk == self.get_pk(obj)))
 
     def _delete_query(self, obj):
         return smartsql.Delete(table=self.sql_table, where=(self.sql_table.pk == self.get_pk(obj)))
