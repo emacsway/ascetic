@@ -126,10 +126,10 @@ class Mapper(object):
             self.fields = collections.OrderedDict()
             self.columns = collections.OrderedDict()
 
-            for name, field in self.create_fields(self._db.read_fields(self.db_table), self.declared_fields).items():
+            for name, field in self.create_fields(self._default_db().read_fields(self.db_table), self.declared_fields).items():
                 self.add_field(name, field)
 
-            self.pk = self._create_pk(self.db_table, self._using, self.columns)
+            self.pk = self._create_pk(self.db_table, self._default_db(), self.columns)
             self.sql_table = self._create_sql_table()
 
         self._prepare_model(model)
@@ -198,8 +198,7 @@ class Mapper(object):
         self.fields[name] = field
         self.columns[field.column] = field
 
-    def _create_pk(self, db_table, using, columns):
-        db = databases[using]
+    def _create_pk(self, db_table, db, columns):
         pk = tuple(columns[i].name for i in db.read_pk(db_table))
         if pk:
             return pk[0] if len(pk) == 1 else pk
@@ -409,12 +408,8 @@ class Mapper(object):
         for k, v in zip(to_tuple(self.pk), to_tuple(value)):
             self.fields[k].set_value(obj, v)
 
-    @property
-    def _db(self):
-        return databases[self._using]
-
     def get_identity_map(self, db):
-        return self._db.transaction.identity_map
+        return db.transaction.identity_map
 
 
 class PrepareModel(object):
