@@ -141,7 +141,7 @@ class Mapper(object):
     def _create_default_db_table(self, model):
         return "_".join([
             re.sub(r"[^a-z0-9]", "", i.lower())
-            for i in (self.model.__module__.split(".") + [self.model.__name__, ])
+            for i in (model.__module__.split(".") + [model.__name__, ])
         ])
 
     def _create_declared_fields(self, model, mapping, defaults, validations, declared_fields):
@@ -349,7 +349,7 @@ class Mapper(object):
         if not all(to_tuple(self.get_pk(obj))):
             self.set_pk(obj, db.last_insert_id(cursor))
         self.used_db(obj, db)
-        self._identity_map.add(self.make_identity_key(self.model, self.get_pk(obj)))
+        self.get_identity_map(db).add(self.make_identity_key(self.model, self.get_pk(obj)))
 
     def _update(self, obj, db):
         db.execute(self._update_query(obj))
@@ -374,14 +374,14 @@ class Mapper(object):
                 else:
                     rel.on_delete(obj, child, rel, self._using, visited)
 
-        self._db.execute(self._delete_query(obj))
+        db.execute(self._delete_query(obj))
         post_delete.send(sender=self.model, instance=obj, db=db)
-        self._identity_map.remove(self.make_identity_key(self.model, self.get_pk(obj)))
+        self.get_identity_map(db).remove(self.make_identity_key(self.model, self.get_pk(obj)))
         return True
 
     def get(self, _obj_pk=None, **kwargs):
         if _obj_pk is not None:
-            identity_map = self._identity_map
+            identity_map = self.get_identity_map(self._default_db())
             key = self.make_identity_key(self.model, _obj_pk)
             if identity_map.exists(key):
                 return identity_map.get(key)
@@ -413,8 +413,7 @@ class Mapper(object):
     def _db(self):
         return databases[self._using]
 
-    @property
-    def _identity_map(self):
+    def get_identity_map(self, db):
         return self._db.transaction.identity_map
 
 
@@ -511,7 +510,7 @@ class Load(object):
 
     @property
     def _identity_map(self):
-        return self._db.transaction.identity_map
+        return self._mapper.get_identity_map(self._db)
 
 
 class Unload(object):
