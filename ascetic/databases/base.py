@@ -157,7 +157,7 @@ class Database(interfaces.IDatabase):
     @classmethod
     def factory(cls, **kwargs):
         from ascetic.identity_maps import IdentityMap
-        identity_map = IdentityMap(kwargs['alias'])
+        identity_map = IdentityMap(lambda: database)
 
         from ascetic.transaction import TransactionManager
         transaction = TransactionManager(kwargs['alias'], kwargs.pop('autocommit', False), identity_map)

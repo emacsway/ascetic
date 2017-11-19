@@ -143,18 +143,18 @@ class IdentityMap(interfaces.IIdentityMap):
     _default_isolation_level = SERIALIZABLE
 
     """
-    def __new__(cls, alias='default', *args, **kwargs):
+    def __new__(cls, db_accessor, *args, **kwargs):
         if not hasattr(databases[alias], 'identity_map'):
             self = databases[alias].identity_map = object.__new__(cls)
-            self.using = alias
+            self.db = db_accessor
             self.cache = CacheLru()
             self.alive = weakref.WeakValueDictionary()
             self.set_isolation_level(self._default_isolation_level)
         return databases[alias].identity_map
     """
 
-    def __init__(self, alias='default', *args, **kwargs):
-        self.using = alias
+    def __init__(self, db_accessor, *args, **kwargs):
+        self.db = db_accessor
         self.cache = CacheLru()
         self.alive = weakref.WeakValueDictionary()
         self.set_isolation_level(self._default_isolation_level)
@@ -233,21 +233,14 @@ class Sync(object):
         return typed_objects
 
     def _make_query(self, mapper, pks):
-        query = mapper.query.using(
-            self._identity_map.using
-        ).where(
-            mapper.sql_table.pk.in_(pks)
-        )
-        query = query.map(lambda result, row, state: result.mapper.load(row, self._db, from_db=True, reload=True))
+        db = self._identity_map.db()
+        query = mapper.query.db(db).where(mapper.sql_table.pk.in_(pks))
+        query = query.map(lambda result, row, state: result.mapper.load(row, db, from_db=True, reload=True))
         return query
 
     def _get_mapper(self, model):
         from ascetic.mappers import mapper_registry
         return mapper_registry[model]
-
-    @property
-    def _db(self):
-        return databases[self._identity_map.using]
 
     def compute(self):
         self._sync()
