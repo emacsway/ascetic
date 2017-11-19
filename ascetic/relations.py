@@ -25,7 +25,7 @@ def set_null(parent, child, parent_relation, db, visited):
     mapper_registry[child.__class__].save(child, db=db)
 
 
-def do_nothing(parent, child, parent_rel, using, visited):
+def do_nothing(parent, child, parent_rel, db, visited):
     pass
 
 # TODO: descriptor for FileField? Or custom postgresql data type? See http://www.postgresql.org/docs/8.4/static/sql-createtype.html
