@@ -6,7 +6,7 @@ from ascetic.identity_maps import IdentityMap
 from ascetic.models import Model
 from ascetic.relations import ForeignKey
 
-AuthorC = BookC = None
+Author = Book = None
 
 
 class TestCompositeRelation(unittest.TestCase):
@@ -79,7 +79,7 @@ class TestCompositeRelation(unittest.TestCase):
     @classmethod
     def create_models(cls):
 
-        class AuthorC(Model):
+        class Author(Model):
 
             class Mapper(object):
                 db_table = 'ascetic_composite_author'
@@ -87,8 +87,8 @@ class TestCompositeRelation(unittest.TestCase):
                 validations = {'first_name': validators.Length(),
                                'last_name': (validators.Length(), lambda x: x != 'BadGuy!' or 'Bad last name', )}
 
-        class BookC(Model):
-            author = ForeignKey(AuthorC, related_field=('id', 'lang'), field=('author_id', 'lang'), related_name='books')
+        class Book(Model):
+            author = ForeignKey(Author, related_field=('id', 'lang'), field=('author_id', 'lang'), related_name='books')
 
             class Mapper(object):
                 db_table = 'ascetic_composite_book'
@@ -109,7 +109,7 @@ class TestCompositeRelation(unittest.TestCase):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 
     def test_model(self):
-        author = AuthorC(
+        author = Author(
             id=1,
             lang='en',
             first_name='First name',
@@ -119,10 +119,10 @@ class TestCompositeRelation(unittest.TestCase):
         self.assertIn('last_name', dir(author))
         author.save()
         author_pk = (1, 'en')
-        author = AuthorC.get(author_pk)
+        author = Author.get(author_pk)
         self.assertEqual(author.pk, author_pk)
 
-        book = BookC(
+        book = Book(
             id=5,
             lang='en',
             title='Book title'
@@ -130,9 +130,9 @@ class TestCompositeRelation(unittest.TestCase):
         book.author = author
         book.save()
         book_pk = (5, 'en')
-        book = BookC.get(book_pk)
+        book = Book.get(book_pk)
         self.assertEqual(book.pk, book_pk)
         self.assertEqual(book.author.pk, author_pk)
 
-        author = AuthorC.get(author_pk)
+        author = Author.get(author_pk)
         self.assertEqual(author.books[0].pk, book_pk)
