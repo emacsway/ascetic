@@ -34,11 +34,6 @@ class Table(smartsql.Table):
     def q(self):
         return self._mapper.query
 
-    @property
-    def qs(self):
-        smartsql.warn('Table.qs', 'Table.q')
-        return self._mapper.query
-
     def get_fields(self, prefix=None):
         return self._mapper.get_sql_fields(prefix)
 

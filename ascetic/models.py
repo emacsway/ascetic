@@ -90,11 +90,6 @@ class Model(ModelBase("NewBase", (object, ), {})):
     def q(cls):
         return mapper_registry[cls].query
 
-    @classproperty
-    def qs(cls):
-        smartsql.warn('Model.qs', 'Model.q')
-        return mapper_registry[cls].query
-
     @classmethod
     def get(cls, *args, **kwargs):
         return mapper_registry[cls].get(*args, **kwargs)

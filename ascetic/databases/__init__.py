@@ -64,9 +64,4 @@ class Databases(object):
         return iter(self._settings)
 
 
-def get_db(alias=None):
-    smartsql.warn('get_db', 'databases')
-    return databases[alias or 'default']
-
-
 databases = Databases(settings.DATABASES)
