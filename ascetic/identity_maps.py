@@ -210,7 +210,7 @@ class IdentityMap(interfaces.IIdentityMap):
 class Sync(object):
     def __init__(self, identity_map):
         """
-        :type identity_map: IdentityMap
+        :type identity_map: ascetic.interfaces.IIdentityMap
         """
         self._identity_map = identity_map
 

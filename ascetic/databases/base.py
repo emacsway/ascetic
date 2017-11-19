@@ -160,7 +160,7 @@ class Database(interfaces.IDatabase):
         identity_map = IdentityMap(lambda: database)
 
         from ascetic.transaction import TransactionManager
-        transaction = TransactionManager(kwargs['alias'], kwargs.pop('autocommit', False), identity_map)
+        transaction = TransactionManager(lambda: database, kwargs.pop('autocommit', False), identity_map)
         try:
             Cls = cls._engines[kwargs['engine']]
         except KeyError:

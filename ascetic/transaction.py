@@ -5,8 +5,8 @@ from ascetic.databases import databases
 
 
 class BaseTransaction(interfaces.ITransaction):
-    def __init__(self, using):
-        self._using = using
+    def __init__(self, db_accessor):
+        self._db = db_accessor
 
     def parent(self):
         return None
@@ -18,25 +18,21 @@ class BaseTransaction(interfaces.ITransaction):
         raise Exception("You cannot set autocommit during a managed transaction!")
 
     @utils.cached_property
-    def _db(self):
-        return databases[self._using]
-
-    @utils.cached_property
     def _identity_map(self):
-        return self._db.transaction.identity_map
+        return self._db().transaction.identity_map
 
 
 class Transaction(BaseTransaction):
 
     def begin(self):
-        self._db.execute("BEGIN")
+        self._db().execute("BEGIN")
 
     def commit(self):
-        self._db.commit()
+        self._db().commit()
         self._reset_identity_map()
 
     def rollback(self):
-        self._db.rollback()
+        self._db().rollback()
         self._reset_identity_map()
 
     def _reset_identity_map(self):
@@ -53,13 +49,13 @@ class SavePoint(BaseTransaction):
         return self._parent
 
     def begin(self):
-        self._db.begin_savepoint(self._name)
+        self._db().begin_savepoint(self._name)
 
     def commit(self):
-        self._db.commit_savepoint(self._name)
+        self._db().commit_savepoint(self._name)
 
     def rollback(self):
-        self._db.rollback_savepoint(self._name)
+        self._db().rollback_savepoint(self._name)
 
 
 class NoneTransaction(BaseTransaction):
@@ -76,20 +72,20 @@ class NoneTransaction(BaseTransaction):
         return True
 
     def set_autocommit(self, autocommit):
-        self._db.set_autocommit(autocommit)
+        self._db().set_autocommit(autocommit)
 
 
 class TransactionManager(interfaces.ITransactionManager):
     """
     :type identity_map: ascetic.interfaces.IIdentityMap
     """
-    def __init__(self, using, autocommit, identity_map):
+    def __init__(self, db_accessor, autocommit, identity_map):
         """
-        :type using:
+        :type db_accessor:
         :type autocommit:
         :type identity_map: ascetic.interfaces.IIdentityMap
         """
-        self._using = using
+        self._db = db_accessor
         self._current = None
         self._autocommit = autocommit
         self.identity_map = identity_map
@@ -124,15 +120,15 @@ class TransactionManager(interfaces.ITransactionManager):
 
     def current(self, node=utils.Undef):
         if node is utils.Undef:
-            return self._current or NoneTransaction(self._using)
+            return self._current or NoneTransaction(self._db)
         self._current = node
 
     def begin(self):
         if self._current is None:
             self.current().set_autocommit(False)
-            self.current(Transaction(self._using))
+            self.current(Transaction(self._db))
         else:
-            self.current(SavePoint(self._using, self.current()))
+            self.current(SavePoint(self._db, self.current()))
         self.current().begin()
         return
 
