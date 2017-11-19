@@ -3,7 +3,7 @@ import logging
 from time import time
 from functools import wraps
 from sqlbuilder import smartsql
-from ascetic import settings, utils
+from ascetic import interfaces, settings, utils
 
 try:
     str = unicode  # Python 2.* compatible
@@ -18,7 +18,7 @@ PLACEHOLDER = '%s'
 utils.resolve(settings.LOGGER_INIT)(settings)
 
 
-class Database(object):
+class Database(interfaces.IDatabase):
 
     _engines = {}
     placeholder = '%s'
@@ -121,6 +121,9 @@ class Database(object):
     def set_autocommit(self, autocommit):
         pass
 
+    def read_pk(self, db_table):
+        return tuple()
+
     def read_fields(self, db_table):
         schema = self.describe_table(db_table)
         q = self.execute('SELECT * FROM {0} LIMIT 1'.format(self.qn(db_table)))
@@ -133,7 +136,7 @@ class Database(object):
             result.append(field_description)
         return result
 
-    def describe_table(self, table_name):
+    def describe_table(self, db_table):
         return {}
 
     def qn(self, name):

@@ -96,6 +96,7 @@ class Mapper(object):
     def __init__(self, model=None):
         self.original_data = SpecialMappingAccessor(SpecialAttrAccessor('original_data', default=dict))
         self.is_new = SpecialAttrAccessor('new_record', default=True)
+        self.used_db = SpecialAttrAccessor('db')
 
         if model:
             self.model = model
@@ -198,8 +199,8 @@ class Mapper(object):
 
     def _create_pk(self, db_table, using, columns):
         db = databases[using]
-        if hasattr(db, 'read_pk'):
-            pk = tuple(columns[i].name for i in db.read_pk(db_table))
+        pk = tuple(columns[i].name for i in db.read_pk(db_table))
+        if pk:
             return pk[0] if len(pk) == 1 else pk
         return self.__class__.pk
 
@@ -274,8 +275,8 @@ class Mapper(object):
                     result[key] = value.get_bound_relation(self.model)
         return result
 
-    def load(self, data, from_db=True, reload=False):
-        return Load(self, data, from_db, reload).compute()
+    def load(self, data, db, from_db=True, reload=False):
+        return Load(self, data, db, from_db, reload).compute()
 
     def unload(self, obj, fields=frozenset(), exclude=frozenset(), to_db=True):
         return Unload(self, obj, self._get_specified_fields(fields, exclude), to_db).compute()
@@ -345,6 +346,7 @@ class Mapper(object):
         cursor = self._db.execute(self._insert_query(obj))
         if not all(to_tuple(self.get_pk(obj))):
             self.set_pk(obj, self._db.last_insert_id(cursor))
+        self.used_db(obj, self._db)
         self._identity_map.add(self.make_identity_key(self.model, self.get_pk(obj)))
 
     def _update(self, obj):
@@ -447,15 +449,17 @@ class PrepareModel(object):
 
 class Load(object):
 
-    def __init__(self, mapper, data, from_db, reload):
+    def __init__(self, mapper, data, db, from_db, reload):
         """
         :type mapper: Mapper
         :type data: tuple
+        :type db: ascetic.interfaces.IDatabase
         :type from_db: bool
         :type reload: bool
         """
         self._mapper = mapper
         self._data = data
+        self._db = db
         self._from_db = from_db
         self._reload = reload
 
@@ -478,6 +482,7 @@ class Load(object):
                 return obj
         self._mapper.original_data(obj, data_mapped)
         self._mapper.is_new(obj, False)
+        self._mapper.used_db(obj, self._db)
         self._identity_map.add(key, obj)
         return obj
 
@@ -503,7 +508,7 @@ class Load(object):
 
     @property
     def _identity_map(self):
-        return databases[self._mapper.using()].transaction.identity_map
+        return self._db.transaction.identity_map
 
 
 class Unload(object):

@@ -238,12 +238,16 @@ class Sync(object):
         ).where(
             mapper.sql_table.pk.in_(pks)
         )
-        query = query.map(lambda result, row, state: result.mapper.load(row, from_db=True, reload=True))
+        query = query.map(lambda result, row, state: result.mapper.load(row, self._db, from_db=True, reload=True))
         return query
 
     def _get_mapper(self, model):
         from ascetic.mappers import mapper_registry
         return mapper_registry[model]
+
+    @property
+    def _db(self):
+        return databases[self._identity_map.using]
 
     def compute(self):
         self._sync()

@@ -1,6 +1,110 @@
 from ascetic.utils import Undef
 
 
+class IDatabase(object):
+
+    def connection_factory(self, **kwargs):
+        raise NotImplementedError
+
+    def _ensure_connected(self):
+        """
+        :rtype: ascetic.interfaces.IDatabase
+        """
+        raise NotImplementedError
+
+    def execute(self, sql, params=()):
+        """
+        :type sql: str
+        :type params: collections.abc.Iterable
+        :rtype: object
+        """
+        raise NotImplementedError
+
+    def cursor(self):
+        raise NotImplementedError
+
+    def last_insert_id(self, cursor):
+        raise NotImplementedError
+
+    def begin(self):
+        raise NotImplementedError
+
+    def commit(self):
+        raise NotImplementedError
+
+    def rollback(self):
+        raise NotImplementedError
+
+    def begin_savepoint(self, name):
+        """
+        :type name: str
+        """
+        raise NotImplementedError
+
+    def commit_savepoint(self, name):
+        """
+        :type name: str
+        """
+        raise NotImplementedError
+
+    def rollback_savepoint(self, name):
+        """
+        :type name: str
+        """
+        raise NotImplementedError
+
+    def set_autocommit(self, autocommit):
+        """
+        :type autocommit: bool
+        """
+        raise NotImplementedError
+
+    def read_pk(self, db_table):
+        """
+        :type db_table: str
+        :rtype: tuple
+        """
+        raise NotImplementedError
+
+    def read_fields(self, db_table):
+        """
+        :type db_table: str
+        :rtype: dict
+        """
+        raise NotImplementedError
+
+    def describe_table(self, db_table):
+        """
+        :type db_table: str
+        :rtype: dict
+        """
+        raise NotImplementedError
+
+    def qn(self, name):
+        """
+        :type name: str
+        :rtype: str
+        """
+
+    def close(self):
+        raise NotImplementedError
+
+    @classmethod
+    def register(cls, engine):
+        """
+        :type engine: str
+        :rtype: collections.abc.Callable
+        """
+        raise NotImplementedError
+
+    @classmethod
+    def factory(cls, **kwargs):
+        """
+        :rtype: ascetic.interfaces.IDatabase
+        """
+        raise NotImplementedError
+
+
 class IBaseRelation(object):
 
     # @property
@@ -133,6 +237,8 @@ class ITransactionManager(object):
     """
     :type identity_map: ascetic.interfaces.IIdentityMap
     """
+    identity_map = None
+
     def __call__(self, func=None):
         raise NotImplementedError
 
@@ -172,7 +278,7 @@ class IIdentityMap(object):
         :type value: object or None
         :rtype: object or None
         """
-        return self._strategy.add(key, value)
+        raise NotImplementedError
 
     def get(self, key):
         """

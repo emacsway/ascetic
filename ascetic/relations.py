@@ -264,6 +264,7 @@ class ForeignKey(Relation):
         )
 
     def get(self, instance):
+        # We MUST use the same connection session which was used for instance accessing
         val = self.get_value(instance)
         if not all(val):
             return None

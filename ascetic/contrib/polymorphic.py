@@ -100,8 +100,8 @@ class PolymorphicMapper(Mapper):
                 ))
         super(PolymorphicMapper, self)._do_prepare_model(self.model)
 
-    def load(self, data, from_db=True, reload=False):
-        return PolymorphicLoad(self, data, from_db, reload).compute()
+    def load(self, data, db, from_db=True, reload=False):
+        return PolymorphicLoad(self, data, db, from_db, reload).compute()
 
     def validate(self, obj, fields=frozenset(), exclude=frozenset()):
         errors = {}

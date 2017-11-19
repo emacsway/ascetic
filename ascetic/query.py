@@ -166,12 +166,21 @@ class Result(smartsql.Result):
         for row in cursor.fetchall():
             yield map_row(row=zip(fields, row))
 
-    def using(self, alias=False):
+    def using(self, alias=None):
         if alias is None:
             return self._using
-        if alias is not False:
-            self._using = alias
+        self._using = alias
         return self._query
+
+    def db(self, db=None):
+        """
+        :type db: ascetic.interfaces.IDatabase or None
+        :rtype: ascetic.interfaces.IDatabase
+        """
+        if db is None:
+            return self._db
+        self._using = db.alias
+        return self._db
 
     def is_base(self, value=None):
         if value is None:
@@ -275,7 +284,7 @@ class OneToManyPresetter(RelationPresetter):
 
 
 def default_map(result, row, state):
-    return result.mapper.load(row, from_db=True)
+    return result.mapper.load(row, result.db(), from_db=True)
 
 
 class SelectRelatedMap(object):
@@ -314,7 +323,7 @@ class SelectRelatedMap(object):
             pk_values = tuple(model_row_dict[k] for k in pk_columns)
             key = (model, pk_values)
             if key not in self._state:
-                self._state[key] = mapper.load(model_row, from_db=True)
+                self._state[key] = mapper.load(model_row, self._result.db(), from_db=True)
             objs.append(self._state[key])
         return objs
 

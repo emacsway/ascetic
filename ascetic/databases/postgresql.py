@@ -20,7 +20,7 @@ class PostgreSQLDatabase(Database):
         cursor.execute("SELECT lastval()")
         return cursor.fetchone()[0]
 
-    def read_pk(self, table_name):
+    def read_pk(self, db_table):
         # https://wiki.postgresql.org/wiki/Retrieve_primary_key_columns
         cursor = self.execute("""
         SELECT a.attname, format_type(a.atttypid, a.atttypmod) AS data_type
@@ -29,16 +29,16 @@ class PostgreSQLDatabase(Database):
         WHERE  i.indrelid = %s::regclass
                AND i.indisprimary
         ORDER BY a.attnum;
-        """, [table_name])
+        """, [db_table])
         return tuple(i[0] for i in cursor.fetchall())
 
-    def describe_table(self, table_name):
+    def describe_table(self, db_table):
         cursor = self.execute("""
             SELECT column_name, ordinal_position, data_type, is_nullable, column_default, character_maximum_length
             FROM   information_schema.columns
             WHERE  table_name = %s
             ORDER BY ordinal_position;
-        """, [table_name])
+        """, [db_table])
         schema = collections.OrderedDict()
         for row in cursor.fetchall():
             col = {
