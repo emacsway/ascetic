@@ -17,6 +17,8 @@ class NativePolymorphicMapper(object):
 
 class PolymorphicMapper(Mapper):
 
+    result_factory = staticmethod(lambda *a, **kw: PolymorphicResult(*a, **kw))
+
     @classmethod
     def get_polymorphic_bases(cls, derived_model):
         bases = []
@@ -73,7 +75,7 @@ class PolymorphicMapper(Mapper):
                 ))
         else:
             q = super(PolymorphicMapper, self).query
-        q.result = PolymorphicResult(self)
+        q.result = PolymorphicResult(self, self._default_db())
         return q
 
     def _do_prepare_model(self, model):

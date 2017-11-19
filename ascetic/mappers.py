@@ -87,7 +87,6 @@ mapper_registry = get_mapper = MapperRegistry()
 class Mapper(object):
 
     pk = 'id'
-    default_using = _using = 'default'
     abstract = False
     field_factory = Field
     result_factory = staticmethod(lambda *a, **kw: Result(*a, **kw))
@@ -117,8 +116,6 @@ class Mapper(object):
         self._inherit(self, (mapper_registry[base] for base in self.model.__bases__ if base in mapper_registry))  # recursive
 
         if not self.abstract:
-            self._using = self.default_using
-
             if not hasattr(self, 'db_table'):
                 self.db_table = self._create_default_db_table(model)
 
@@ -212,20 +209,20 @@ class Mapper(object):
         """For relations."""
         return sql.Query(
             self.sql_table,
-            result=self.result_factory(self)
+            result=self.result_factory(self, self._default_db())
         ).fields(
             self.get_sql_fields()
-        ).using(self.using())
+        )
 
     @property
     def query(self):
         """For selection."""
         return sql.Query(
             self.sql_table,
-            result=self.result_factory(self)
+            result=self.result_factory(self, self._default_db())
         ).fields(
             self.get_sql_fields()
-        ).using(self.using())
+        )
 
     def get_sql_fields(self, prefix=None):
         """Returns field list."""
@@ -256,15 +253,6 @@ class Mapper(object):
                 for name, field in base.declared_fields.items():
                     if name not in successor.declared_fields:
                         successor.declared_fields[name] = field
-
-    def using(self, alias=False):
-        if alias is False:
-            return self._using
-        if alias is None or alias == self._using:
-            return self
-        c = copy.copy(self)
-        c._using = alias
-        return c
 
     @property
     def relations(self):  # bound_relations(), local_relations() ???
@@ -424,7 +412,7 @@ class PrepareModel(object):
     def compute(self):
         self._clean_model_from_declared_fields()
         self._setup_relations()
-        class_prepared.send(sender=self._model, using=self._mapper.using())
+        class_prepared.send(sender=self._model)
 
     def _clean_model_from_declared_fields(self):
         for name in self._model.__dict__:

@@ -94,17 +94,18 @@ class TableAlias(smartsql.TableAlias, Table):
 class Result(smartsql.Result):
     """Result adapted for table."""
 
-    def __init__(self, mapper):
+    def __init__(self, mapper, db):
         """
         :type mapper: ascetic.mappers.Mapper
+        :type db: ascetic.interfaces.IDatabase
         """
         self.mapper = mapper
         self._prefetch = {}
         self._select_related = {}
         self._is_base = True
         self._map = default_map
-        self._using = mapper._using
         self._cache = None  # empty list also can be a cached result, so, using None instead of empty list
+        self._db = db
 
     def __len__(self):
         self.fill_cache()
@@ -166,12 +167,6 @@ class Result(smartsql.Result):
         for row in cursor.fetchall():
             yield map_row(row=zip(fields, row))
 
-    def using(self, alias=None):
-        if alias is None:
-            return self._using
-        self._using = alias
-        return self._query
-
     def db(self, db=None):
         """
         :type db: ascetic.interfaces.IDatabase or None
@@ -179,7 +174,7 @@ class Result(smartsql.Result):
         """
         if db is None:
             return self._db
-        self._using = db.alias
+        self._db = db
         return self._query
 
     def is_base(self, value=None):
@@ -187,10 +182,6 @@ class Result(smartsql.Result):
             return self._is_base
         self._is_base = value
         return self._query
-
-    @property
-    def _db(self):
-        return databases[self._using]
 
     def map(self, map):
         """Sets map."""
