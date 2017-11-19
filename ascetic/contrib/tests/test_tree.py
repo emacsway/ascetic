@@ -1,7 +1,6 @@
 import unittest
 from ascetic.databases import databases
 from ascetic.mappers import Mapper, mapper_registry
-from ascetic.identity_maps import IdentityMap
 from ascetic.contrib.tree import MpMapper, MpModel
 
 Location = None
@@ -80,8 +79,8 @@ class TestMpTree(unittest.TestCase):
             globals()[model_name] = model
 
     def setUp(self):
-        IdentityMap().disable()
         db = databases['default']
+        db.transaction.identity_map.disable()
         for table in ('ascetic_tree_location',):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 

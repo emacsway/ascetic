@@ -5,7 +5,6 @@ from sqlbuilder import smartsql
 
 from ascetic import exceptions, validators
 from ascetic.databases import databases
-from ascetic.identity_maps import IdentityMap
 from ascetic.mappers import Mapper, mapper_registry
 from ascetic.relations import ForeignKey
 
@@ -110,8 +109,8 @@ class TestMapper(unittest.TestCase):
             globals()[model_name] = model
 
     def setUp(self):
-        IdentityMap().disable()
         db = databases['default']
+        db.transaction.identity_map.disable()
         for table in ('ascetic_tests_author', 'books'):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 

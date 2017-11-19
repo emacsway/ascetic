@@ -345,7 +345,7 @@ class Mapper(object):
         cursor = self._db.execute(self._insert_query(obj))
         if not all(to_tuple(self.get_pk(obj))):
             self.set_pk(obj, self._db.last_insert_id(cursor))
-        IdentityMap(self._using).add(self.make_identity_key(self.model, self.get_pk(obj)))
+        self._identity_map.add(self.make_identity_key(self.model, self.get_pk(obj)))
 
     def _update(self, obj):
         self._db.execute(self._update_query(obj))
@@ -371,12 +371,12 @@ class Mapper(object):
 
         self._db.execute(self._delete_query(obj))
         post_delete.send(sender=self.model, instance=obj, using=self._using)
-        IdentityMap(self._using).remove(self.make_identity_key(self.model, self.get_pk(obj)))
+        self._identity_map.remove(self.make_identity_key(self.model, self.get_pk(obj)))
         return True
 
     def get(self, _obj_pk=None, **kwargs):
         if _obj_pk is not None:
-            identity_map = IdentityMap(self._using)
+            identity_map = self._identity_map
             key = self.make_identity_key(self.model, _obj_pk)
             if identity_map.exists(key):
                 return identity_map.get(key)
@@ -407,6 +407,10 @@ class Mapper(object):
     @property
     def _db(self):
         return databases[self._using]
+
+    @property
+    def _identity_map(self):
+        return self._db.transaction.identity_map
 
 
 class PrepareModel(object):
@@ -460,10 +464,9 @@ class Load(object):
             data_mapped = self._map_data_from_db(self._data)
         else:
             data_mapped = dict(self._data)
-        identity_map = IdentityMap(self._mapper.using())
         key = self._mapper.make_identity_key(self._mapper.model, tuple(data_mapped[i] for i in to_tuple(self._mapper.pk)))
         try:
-            obj = identity_map.get(key)
+            obj = self._identity_map.get(key)
         except KeyError:  # First loading
             obj = self._do_load(data_mapped)
         except ObjectDoesNotExist:  # Serializable transaction level
@@ -475,7 +478,7 @@ class Load(object):
                 return obj
         self._mapper.original_data(obj, data_mapped)
         self._mapper.is_new(obj, False)
-        identity_map.add(key, obj)
+        self._identity_map.add(key, obj)
         return obj
 
     def _map_data_from_db(self, data, columns=None):
@@ -497,6 +500,10 @@ class Load(object):
                 self._mapper.fields[name].set_value(obj, data[name])
             except KeyError:
                 setattr(obj, name, value)
+
+    @property
+    def _identity_map(self):
+        return databases[self._mapper.using()].transaction.identity_map
 
 
 class Unload(object):
@@ -530,4 +537,3 @@ class Unload(object):
 
 from ascetic.relations import RelationDescriptor, OneToOne, OneToMany
 from ascetic.query import factory as sql, Result
-from ascetic.identity_maps import IdentityMap

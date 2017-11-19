@@ -21,6 +21,10 @@ class BaseTransaction(interfaces.ITransaction):
     def _db(self):
         return databases[self._using]
 
+    @utils.cached_property
+    def _identity_map(self):
+        return self._db.transaction.identity_map
+
 
 class Transaction(BaseTransaction):
 
@@ -29,15 +33,14 @@ class Transaction(BaseTransaction):
 
     def commit(self):
         self._db.commit()
-        self._clear_identity_map()
+        self._reset_identity_map()
 
     def rollback(self):
         self._db.rollback()
-        self._clear_identity_map()
+        self._reset_identity_map()
 
-    def _clear_identity_map(self):
-        from ascetic.identity_maps import IdentityMap
-        IdentityMap(self._using).clear()
+    def _reset_identity_map(self):
+        self._identity_map.clear()
 
 
 class SavePoint(BaseTransaction):
@@ -49,18 +52,18 @@ class SavePoint(BaseTransaction):
     def parent(self):
         return self._parent
 
-    def begin(self, name=None):
+    def begin(self):
         self._db.begin_savepoint(self._name)
 
     def commit(self):
         self._db.commit_savepoint(self._name)
 
     def rollback(self):
-        self.rollback_savepoint(self._name)
+        self._db.rollback_savepoint(self._name)
 
 
 class NoneTransaction(BaseTransaction):
-    def begin(self, name=None):
+    def begin(self):
         pass
 
     def commit(self):
@@ -77,10 +80,19 @@ class NoneTransaction(BaseTransaction):
 
 
 class TransactionManager(interfaces.ITransactionManager):
-    def __init__(self, using, autocommit):
+    """
+    :type identity_map: ascetic.interfaces.IIdentityMap
+    """
+    def __init__(self, using, autocommit, identity_map):
+        """
+        :type using:
+        :type autocommit:
+        :type identity_map: ascetic.interfaces.IIdentityMap
+        """
         self._using = using
         self._current = None
         self._autocommit = autocommit
+        self.identity_map = identity_map
 
     def __call__(self, func=None):
         if func is None:

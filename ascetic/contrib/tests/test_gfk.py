@@ -3,7 +3,6 @@ from ascetic import validators
 from ascetic.databases import databases
 from ascetic.contrib.gfk import GenericForeignKey, GenericRelation
 from ascetic.mappers import Mapper, mapper_registry
-from ascetic.identity_maps import IdentityMap
 
 Author = Book = None
 
@@ -125,8 +124,8 @@ class TestGenericForeignKey(unittest.TestCase):
             globals()[model_name] = model
 
     def setUp(self):
-        IdentityMap().disable()
         db = databases['default']
+        db.transaction.identity_map.disable()
         for table in ('ascetic_gfk_author', 'ascetic_gfk_book',):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 

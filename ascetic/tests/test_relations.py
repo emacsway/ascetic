@@ -2,7 +2,6 @@ import unittest
 
 from ascetic import validators
 from ascetic.databases import databases
-from ascetic.identity_maps import IdentityMap
 from ascetic.models import Model
 from ascetic.relations import ForeignKey
 
@@ -103,8 +102,8 @@ class TestCompositeRelation(unittest.TestCase):
             globals()[model_name] = model
 
     def setUp(self):
-        IdentityMap().disable()
         db = databases['default']
+        db.transaction.identity_map.disable()
         for table in ('ascetic_composite_author', 'ascetic_composite_book'):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 

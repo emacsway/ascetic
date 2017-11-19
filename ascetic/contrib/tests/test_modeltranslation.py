@@ -5,7 +5,6 @@ from sqlbuilder import smartsql
 from ascetic.contrib import modeltranslation
 from ascetic.databases import databases
 from ascetic.mappers import Mapper, mapper_registry
-from ascetic.identity_maps import IdentityMap
 
 Author = None
 
@@ -93,8 +92,8 @@ class TestModelTranslation(unittest.TestCase):
             globals()[model_name] = model
 
     def setUp(self):
-        IdentityMap().disable()
         db = databases['default']
+        db.transaction.identity_map.disable()
         for table in ('ascetic_modeltranslation_author',):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 

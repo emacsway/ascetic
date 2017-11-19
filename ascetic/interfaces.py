@@ -130,7 +130,9 @@ class ITransaction(object):
 
 
 class ITransactionManager(object):
-
+    """
+    :type identity_map: ascetic.interfaces.IIdentityMap
+    """
     def __call__(self, func=None):
         raise NotImplementedError
 
@@ -159,4 +161,64 @@ class ITransactionManager(object):
         raise NotImplementedError
 
     def autocommit(self, autocommit=None):
+        raise NotImplementedError
+
+
+class IIdentityMap(object):
+
+    def add(self, key, value=None):
+        """
+        :type key: collections.Hashable
+        :type value: object or None
+        :rtype: object or None
+        """
+        return self._strategy.add(key, value)
+
+    def get(self, key):
+        """
+        :type key: collections.Hashable
+        :rtype: object or None
+        """
+        raise NotImplementedError
+
+    def exists(self, key):
+        """
+        :type key: collections.Hashable
+        :rtype: bool
+        """
+        raise NotImplementedError
+
+    def do_add(self, key, value=None):
+        """
+        :type key: collections.Hashable
+        :type value: object or None
+        """
+        raise NotImplementedError
+
+    def do_get(self, key):
+        """
+        :type key: collections.Hashable
+        :rtype: object or None
+        """
+        raise NotImplementedError
+
+    def remove(self, key):
+        """
+        :type key: collections.Hashable
+        """
+        raise NotImplementedError
+
+    def clear(self):
+        raise NotImplementedError
+
+    def sync(self):
+        raise NotImplementedError
+
+    def set_isolation_level(self, level):
+        raise NotImplementedError
+
+    def enable(self):
+        raise NotImplementedError
+
+    def disable(self):
         raise NotImplementedError

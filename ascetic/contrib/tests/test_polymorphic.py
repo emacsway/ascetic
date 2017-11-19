@@ -4,7 +4,6 @@ from ascetic.databases import databases
 from ascetic.contrib.polymorphic import PolymorphicMapper
 from ascetic.mappers import Mapper, mapper_registry
 from ascetic.exceptions import ObjectDoesNotExist
-from ascetic.identity_maps import IdentityMap
 from ascetic.relations import ForeignKey
 
 Author = Book = Nonfiction = Avia = None
@@ -210,8 +209,8 @@ class TestPolymorphic(unittest.TestCase):
             globals()[model_name] = model
 
     def setUp(self):
-        IdentityMap().disable()
         db = databases['default']
+        db.transaction.identity_map.disable()
         for table in ('ascetic_polymorphic_author', 'ascetic_polymorphic_book',):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 

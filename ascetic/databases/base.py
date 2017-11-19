@@ -153,8 +153,11 @@ class Database(object):
 
     @classmethod
     def factory(cls, **kwargs):
+        from ascetic.identity_maps import IdentityMap
+        identity_map = IdentityMap(kwargs['alias'])
+
         from ascetic.transaction import TransactionManager
-        transaction = TransactionManager(kwargs['alias'], kwargs.pop('autocommit', False))
+        transaction = TransactionManager(kwargs['alias'], kwargs.pop('autocommit', False), identity_map)
         try:
             Cls = cls._engines[kwargs['engine']]
         except KeyError:

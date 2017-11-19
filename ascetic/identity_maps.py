@@ -1,4 +1,5 @@
 import weakref
+from ascetic import interfaces
 from ascetic.databases import databases
 from ascetic.exceptions import ObjectDoesNotExist
 
@@ -126,7 +127,7 @@ class SerializableStrategy(BaseStrategy):
             return True
 
 
-class IdentityMap(object):
+class IdentityMap(interfaces.IIdentityMap):
 
     READ_UNCOMMITTED = 0  # IdentityMap is disabled
     READ_COMMITTED = 1  # IdentityMap is disabled
@@ -141,6 +142,7 @@ class IdentityMap(object):
     }
     _default_isolation_level = SERIALIZABLE
 
+    """
     def __new__(cls, alias='default', *args, **kwargs):
         if not hasattr(databases[alias], 'identity_map'):
             self = databases[alias].identity_map = object.__new__(cls)
@@ -149,6 +151,13 @@ class IdentityMap(object):
             self.alive = weakref.WeakValueDictionary()
             self.set_isolation_level(self._default_isolation_level)
         return databases[alias].identity_map
+    """
+
+    def __init__(self, alias='default', *args, **kwargs):
+        self.using = alias
+        self.cache = CacheLru()
+        self.alive = weakref.WeakValueDictionary()
+        self.set_isolation_level(self._default_isolation_level)
 
     def add(self, key, value=None):
         return self._strategy.add(key, value)
@@ -206,22 +215,20 @@ class Sync(object):
         self._identity_map = identity_map
 
     def _sync(self):
-        from ascetic.mappers import mapper_registry
         for model, model_object_map in self._get_typed_objects():
-            mapper = mapper_registry[model]
+            mapper = self._get_mapper(model)
             pks = list(model_object_map.values())
             for obj in self._make_query(mapper, pks):
                 assert mapper.get_pk(obj) in model_object_map
                 assert not mapper.get_changed(obj)
 
     def _get_typed_objects(self):
-        from ascetic.mappers import mapper_registry
         typed_objects = {}
         for obj in self._identity_map.alive.values():
             model = obj.__class__
             if model not in typed_objects:
                 typed_objects[model] = {}
-            mapper = mapper_registry[model]
+            mapper = self._get_mapper(model)
             typed_objects[model][mapper.get_pk(obj)] = obj
         return typed_objects
 
@@ -233,6 +240,10 @@ class Sync(object):
         )
         query = query.map(lambda result, row, state: result.mapper.load(row, from_db=True, reload=True))
         return query
+
+    def _get_mapper(self, model):
+        from ascetic.mappers import mapper_registry
+        return mapper_registry[model]
 
     def compute(self):
         self._sync()
