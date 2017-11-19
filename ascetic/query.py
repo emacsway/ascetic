@@ -180,7 +180,7 @@ class Result(smartsql.Result):
         if db is None:
             return self._db
         self._using = db.alias
-        return self._db
+        return self._query
 
     def is_base(self, value=None):
         if value is None:
