@@ -271,10 +271,11 @@ class ForeignKey(Relation):
 
         cached_obj = self._get_cache(instance, self.name)
         if cached_obj is None or not isinstance(cached_obj, self.related_model) or self.get_related_value(cached_obj) != val:
+            db = self.mapper.used_db(instance)
             if self._related_query is None and self.related_field == to_tuple(self.related_mapper.pk):
-                obj = self.related_mapper.get(val)  # to use IdentityMap
+                obj = self.related_mapper.get(val, db)  # to use IdentityMap before query
             else:
-                obj = self.related_query.where(self.get_related_where(instance))[0]
+                obj = self.related_query.where(self.get_related_where(instance)).db(db)[0]
             self._set_cache(instance, self.name, obj)
         return self._get_cache(instance, self.name)
 
@@ -349,7 +350,8 @@ class OneToMany(Relation):
                     cached_query = None
                     break
         if cached_query is None:
-            q = self.related_query.where(self.get_related_where(instance))
+            db = self.mapper.used_db(instance)
+            q = self.related_query.where(self.get_related_where(instance)).db(db)
             self._set_cache(instance, self.name, q)
         return self._get_cache(instance, self.name)
 

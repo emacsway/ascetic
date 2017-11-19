@@ -366,14 +366,17 @@ class Mapper(object):
         self.get_identity_map(db).remove(self.make_identity_key(self.model, self.get_pk(obj)))
         return True
 
-    def get(self, _obj_pk=None, **kwargs):
+    def get(self, _obj_pk=None, _db=None, **kwargs):
+        if isinstance(_obj_pk, interfaces.IDatabase):
+            _db, _obj_pk = _obj_pk, _db
+        db = _db or self._default_db()
         if _obj_pk is not None:
-            identity_map = self.get_identity_map(self._default_db())
+            identity_map = self.get_identity_map(db)
             key = self.make_identity_key(self.model, _obj_pk)
             if identity_map.exists(key):
                 return identity_map.get(key)
             try:
-                obj = self.get(**{k: v for k, v in zip(to_tuple(self.pk), to_tuple(_obj_pk))})
+                obj = self.get(db, **{k: v for k, v in zip(to_tuple(self.pk), to_tuple(_obj_pk))})
             except ObjectDoesNotExist:
                 identity_map.add(key)
                 raise
@@ -382,7 +385,7 @@ class Mapper(object):
                 return obj
 
         if kwargs:
-            q = self.query
+            q = self.query.db(db)
             for k, v in kwargs.items():
                 q = q.where(self.sql_table.get_field(k) == v)
             return q[0]

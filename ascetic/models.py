@@ -71,11 +71,11 @@ class Model(ModelBase("NewBase", (object, ), {})):
     def validate(self, fields=frozenset(), exclude=frozenset()):
         return mapper_registry[self.__class__].validate(self, fields=fields, exclude=exclude)
 
-    def save(self, db=None):
-        return mapper_registry[self.__class__].save(self, db)
+    def save(self, *args, **kwargs):
+        return mapper_registry[self.__class__].save(self, *args, **kwargs)
 
-    def delete(self, db=None, visited=None):
-        return mapper_registry[self.__class__].delete(self, db, visited)
+    def delete(self, *args, **kwargs):
+        return mapper_registry[self.__class__].delete(self, *args, **kwargs)
 
     @classproperty
     def _mapper(cls):
@@ -96,8 +96,8 @@ class Model(ModelBase("NewBase", (object, ), {})):
         return mapper_registry[cls].query
 
     @classmethod
-    def get(cls, _obj_pk=None, **kwargs):
-        return mapper_registry[cls].get(_obj_pk, **kwargs)
+    def get(cls, *args, **kwargs):
+        return mapper_registry[cls].get(*args, **kwargs)
 
     def __repr__(self):
         return "<{0}.{1}: {2}>".format(type(self).__module__, type(self).__name__, self.pk)
