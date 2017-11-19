@@ -365,14 +365,14 @@ class Mapper(object):
         for key, rel in self.relations.items():
             if isinstance(rel, OneToMany):
                 for child in getattr(obj, key).iterator():
-                    rel.on_delete(obj, child, rel, self._using, visited)
+                    rel.on_delete(obj, child, rel, db, visited)
             elif isinstance(rel, OneToOne):
                 try:
                     child = getattr(obj, key)
                 except ObjectDoesNotExist:
                     pass
                 else:
-                    rel.on_delete(obj, child, rel, self._using, visited)
+                    rel.on_delete(obj, child, rel, db, visited)
 
         db.execute(self._delete_query(obj))
         post_delete.send(sender=self.model, instance=obj, db=db)

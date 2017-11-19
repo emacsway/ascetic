@@ -16,13 +16,13 @@ except NameError:
     integer_types = (int,)
 
 
-def cascade(parent, child, parent_relation, using, visited):
-    mapper_registry[child.__class__].using(using).delete(child, visited=visited)
+def cascade(parent, child, parent_relation, db, visited):
+    mapper_registry[child.__class__].delete(child, db=db, visited=visited)
 
 
-def set_null(parent, child, parent_relation, using, visited):
+def set_null(parent, child, parent_relation, db, visited):
     setattr(child, parent_relation.related_field, None)
-    mapper_registry[child.__class__].using(using).save(child)
+    mapper_registry[child.__class__].save(child, db=db)
 
 
 def do_nothing(parent, child, parent_rel, using, visited):
