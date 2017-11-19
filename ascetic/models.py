@@ -74,8 +74,8 @@ class Model(ModelBase("NewBase", (object, ), {})):
     def save(self, db=None):
         return mapper_registry[self.__class__].save(self, db)
 
-    def delete(self, using=None, visited=None):
-        return mapper_registry[self.__class__].using(using).delete(self, visited)
+    def delete(self, db=None, visited=None):
+        return mapper_registry[self.__class__].delete(self, db, visited)
 
     @classproperty
     def _mapper(cls):

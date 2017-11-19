@@ -354,13 +354,14 @@ class Mapper(object):
     def _update(self, obj, db):
         db.execute(self._update_query(obj))
 
-    def delete(self, obj, visited=None):
+    def delete(self, obj, db=None, visited=None):
+        db = db or self._default_db()
         if visited is None:
             visited = set()
         if self in visited:
             return False
         visited.add(self)
-        pre_delete.send(sender=self.model, instance=obj, using=self._using)
+        pre_delete.send(sender=self.model, instance=obj, db=db)
         for key, rel in self.relations.items():
             if isinstance(rel, OneToMany):
                 for child in getattr(obj, key).iterator():
@@ -374,7 +375,7 @@ class Mapper(object):
                     rel.on_delete(obj, child, rel, self._using, visited)
 
         self._db.execute(self._delete_query(obj))
-        post_delete.send(sender=self.model, instance=obj, using=self._using)
+        post_delete.send(sender=self.model, instance=obj, db=db)
         self._identity_map.remove(self.make_identity_key(self.model, self.get_pk(obj)))
         return True
 
