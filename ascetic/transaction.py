@@ -40,8 +40,8 @@ class Transaction(BaseTransaction):
 
 
 class SavePoint(BaseTransaction):
-    def __init__(self, using, parent, name=None):
-        BaseTransaction.__init__(self, using)
+    def __init__(self, db_accessor, parent, name=None):
+        BaseTransaction.__init__(self, db_accessor)
         self._parent = parent
         self._name = name or 's' + uuid4().hex
 
