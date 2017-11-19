@@ -39,12 +39,12 @@ class Model(ModelBase("NewBase", (object, ), {})):
 
     def __init__(self, *args, **kwargs):
         mapper = mapper_registry[self.__class__]
-        pre_init.send(sender=self.__class__, instance=self, args=args, kwargs=kwargs, using=mapper.using())
+        pre_init.send(sender=self.__class__, instance=self, args=args, kwargs=kwargs)
         if args:
             self.__dict__.update(zip(mapper.fields.keys(), args))
         if kwargs:
             self.__dict__.update(kwargs)
-        post_init.send(sender=self.__class__, instance=self, using=mapper.using())
+        post_init.send(sender=self.__class__, instance=self)
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self._get_pk() == other._get_pk()
@@ -71,8 +71,8 @@ class Model(ModelBase("NewBase", (object, ), {})):
     def validate(self, fields=frozenset(), exclude=frozenset()):
         return mapper_registry[self.__class__].validate(self, fields=fields, exclude=exclude)
 
-    def save(self, using=None):
-        return mapper_registry[self.__class__].using(using).save(self)
+    def save(self, db=None):
+        return mapper_registry[self.__class__].save(self, db)
 
     def delete(self, using=None, visited=None):
         return mapper_registry[self.__class__].using(using).delete(self, visited)

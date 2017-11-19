@@ -93,10 +93,11 @@ class Mapper(object):
     result_factory = staticmethod(lambda *a, **kw: Result(*a, **kw))
 
     @thread_safe
-    def __init__(self, model=None):
+    def __init__(self, model=None, default_db_accessor=lambda: databases['default']):
         self.original_data = SpecialMappingAccessor(SpecialAttrAccessor('original_data', default=dict))
         self.is_new = SpecialAttrAccessor('new_record', default=True)
         self.used_db = SpecialAttrAccessor('db')
+        self._default_db = default_db_accessor
 
         if model:
             self.model = model
@@ -330,27 +331,28 @@ class Mapper(object):
     def _delete_query(self, obj):
         return smartsql.Delete(table=self.sql_table, where=(self.sql_table.pk == self.get_pk(obj)))
 
-    def save(self, obj):
+    def save(self, obj, db=None):
         """Sets defaults, validates and inserts into or updates database"""
+        db = db or self._default_db()
         self.set_defaults(obj)
         self.validate(obj, fields=self.get_changed(obj))
-        pre_save.send(sender=self.model, instance=obj, using=self._using)
+        pre_save.send(sender=self.model, instance=obj, db=db)
         is_new = self.is_new(obj)
-        result = self._insert(obj) if is_new else self._update(obj)
-        post_save.send(sender=self.model, instance=obj, created=is_new, using=self._using)
+        result = self._insert(obj, db) if is_new else self._update(obj, db)
+        post_save.send(sender=self.model, instance=obj, created=is_new, db=db)
         self.original_data(obj, **self.unload(obj, to_db=False))
         self.is_new(obj, False)
         return result
 
-    def _insert(self, obj):
-        cursor = self._db.execute(self._insert_query(obj))
+    def _insert(self, obj, db):
+        cursor = db.execute(self._insert_query(obj))
         if not all(to_tuple(self.get_pk(obj))):
-            self.set_pk(obj, self._db.last_insert_id(cursor))
-        self.used_db(obj, self._db)
+            self.set_pk(obj, db.last_insert_id(cursor))
+        self.used_db(obj, db)
         self._identity_map.add(self.make_identity_key(self.model, self.get_pk(obj)))
 
-    def _update(self, obj):
-        self._db.execute(self._update_query(obj))
+    def _update(self, obj, db):
+        db.execute(self._update_query(obj))
 
     def delete(self, obj, visited=None):
         if visited is None:
