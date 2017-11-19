@@ -344,7 +344,7 @@ class Mapper(object):
     def _insert(self, obj):
         cursor = self._db.execute(self._insert_query(obj))
         if not all(to_tuple(self.get_pk(obj))):
-            self.set_pk(obj, self.base_query.result.db.last_insert_id(cursor))
+            self.set_pk(obj, self._db.last_insert_id(cursor))
         IdentityMap(self._using).add(self.make_identity_key(self.model, self.get_pk(obj)))
 
     def _update(self, obj):
