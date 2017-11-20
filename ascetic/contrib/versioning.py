@@ -70,19 +70,14 @@ class AlreadyRegistered(Exception):
 
 
 class Registry(dict):
-
-    _singleton = None
-
-    def __new__(cls, *args, **kwargs):
-        if not Registry._singleton:
-            Registry._singleton = super(Registry, cls).__new__(cls, *args, **kwargs)
-        return Registry._singleton
-
     def __call__(self, model, fields):
         if model in self:
             raise AlreadyRegistered("Already registered {}".format(
                 model.__name__)
             )
+
+
+registry = Registry()
 
 
 class IRepository(object):
@@ -101,10 +96,11 @@ class IRepository(object):
 
 
 class DatabaseRepository(IRepository):
+    _registry = registry
 
     def __init__(self, mapper):
         self._mapper = mapper
-        self._comparator = Comparator()
+        self._comparator = Comparator(self._registry)
 
     def commit(self, obj, **info):
         latest_rev = self.version()
@@ -139,7 +135,7 @@ class DatabaseRepository(IRepository):
 
     def object_version(self, obj, rev=None):
         object_version = copy.copy(obj)
-        for field_name in Registry()[obj.__class__]:
+        for field_name in self._registry[obj.__class__]:
             setattr(object_version, field_name, None)
         revisions = self.revisions()
         if rev is not None:
@@ -165,6 +161,9 @@ class DatabaseRepository(IRepository):
 
 
 class Comparator(object):
+
+    def __init__(self, registry):
+        self._registry = registry
 
     @staticmethod
     def encode_v2(val):
@@ -213,7 +212,7 @@ class Comparator(object):
     def create_delta(self, prev_obj, next_obj):
         """Create a 'diff' from prev_obj to obj_new."""
         model = next_obj.__class__
-        fields = Registry()[model]
+        fields = self._registry[model]
         lines = []
         for field in fields:
             prev_value = getattr(prev_obj, field)
@@ -233,7 +232,7 @@ class Comparator(object):
 
     def apply_delta(self, obj, delta):
         model = obj.__class__
-        fields = Registry()[model]
+        fields = self._registry[model]
         diffs = self._split_delta_by_fields(delta)
         for key, diff_or_value in diffs.items():
             model_name, field_name = key.split('.')
@@ -269,7 +268,7 @@ class Comparator(object):
 
     def is_equal(self, prev_obj, next_obj):
         """Returns True, if watched attributes of obj1 deffer from obj2."""
-        for field_name in Registry()[next_obj.__class__].fields:
+        for field_name in self._registry[next_obj.__class__].fields:
             if getattr(prev_obj, field_name) != getattr(next_obj, field_name):
                 return True
         return False
@@ -277,7 +276,7 @@ class Comparator(object):
     def display_diff(self, prev_obj, next_obj):
         """Returns a HTML representation of the diff."""
         result = []
-        for field_name in Registry()[next_obj.__class__].fields:
+        for field_name in self._registry[next_obj.__class__].fields:
             result.append("<b>{0}</b>".format(field_name))
             prev_value = getattr(prev_obj, field_name)
             next_value = getattr(next_obj, field_name)
