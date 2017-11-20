@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from collections import OrderedDict
 from ascetic import exceptions
-from ascetic.mappers import Load, Mapper, OneToOne, Result, model_registry, mapper_registry
+from ascetic.mappers import Load, Mapper, OneToOne, Result, mapper_registry
 from ascetic.utils import to_tuple
 from ascetic.utils import cached_property
 from ascetic.contrib.gfk import GenericForeignKey
@@ -179,8 +179,7 @@ class PopulatePolymorphic(object):
         typed_objects = {}
         pks = {self._get_current_mapper().get_pk(i) for i in self._rows}
         for ct in self._get_content_types():
-            model = model_registry[ct]
-            mapper = mapper_registry[model]
+            mapper = mapper_registry[ct]
             typed_objects[ct] = {mapper.get_pk(i): i for i in mapper.query.where(mapper.sql_table.pk.in_(pks))}
         return typed_objects
 

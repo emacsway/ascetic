@@ -2,9 +2,9 @@ import copy
 import weakref
 import collections
 from ascetic.interfaces import IRelation, IRelationDescriptor
-from ascetic.mappers import mapper_registry, model_registry, Mapper
+from ascetic.mappers import mapper_registry, Mapper
 from ascetic.utils import to_tuple
-from ascetic.exceptions import ModelNotRegistered
+from ascetic.exceptions import MapperNotRegistered
 from ascetic.utils import cached_property, SpecialAttrAccessor, SpecialMappingAccessor
 
 try:
@@ -59,6 +59,7 @@ class RelationDescriptor(IRelationDescriptor):
 
 class BaseRelation(object):
 
+    mapper_registry = mapper_registry
     owner = None
     _related_model_or_name = None
     descriptor = NotImplemented
@@ -107,7 +108,7 @@ class BaseRelation(object):
             name = self._related_model_or_name
             if name == 'self':
                 name = self.mapper.name
-            return model_registry[name]
+            return mapper_registry[name].model
         return self._related_model_or_name
 
     @cached_property
@@ -118,9 +119,8 @@ class BaseRelation(object):
     def related_mapper(self):
         return self.get_mapper(self.related_model)
 
-    @staticmethod
-    def get_mapper(model):
-        return mapper_registry[model]
+    def get_mapper(self, model):
+        return self.mapper_registry[model]
 
     def bind(self, owner):
         c = copy.copy(self)
@@ -223,7 +223,7 @@ class Relation(BaseRelation, IRelation):
     def setup_reverse_relation(self):
         try:
             related_model = self.related_model
-        except ModelNotRegistered:
+        except MapperNotRegistered:
             return False
 
         # add support for templates for related_name.

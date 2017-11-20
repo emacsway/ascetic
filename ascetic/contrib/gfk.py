@@ -1,6 +1,6 @@
 import copy
 from ascetic.interfaces import IBaseRelation
-from ascetic.mappers import model_registry, mapper_registry
+from ascetic.mappers import mapper_registry
 from ascetic.relations import ForeignKey, OneToMany, cascade
 from ascetic.utils import cached_property, to_tuple
 
@@ -20,7 +20,7 @@ class GenericForeignKey(IBaseRelation):
         self._query = query
 
     def _make_relation(self, instance):
-        related_model = model_registry[getattr(instance, self.type_field, None)]
+        related_model = mapper_registry[getattr(instance, self.type_field)].model
         relation = ForeignKey(
             related_model=related_model,
             related_field=self._related_field,

@@ -8,7 +8,7 @@ from threading import RLock
 from sqlbuilder import smartsql
 
 from ascetic import interfaces
-from ascetic.exceptions import ObjectDoesNotExist, OrmException, ModelNotRegistered, MapperNotRegistered
+from ascetic.exceptions import ObjectDoesNotExist, MapperNotRegistered
 from ascetic.fields import Field
 from ascetic.utils import to_tuple, SpecialAttrAccessor, SpecialMappingAccessor
 from ascetic.databases import databases
@@ -31,49 +31,54 @@ def thread_safe(func):
     return _deco
 
 
-class BaseRegistry(dict):
-    exception_class = OrmException
+class MapperRegistry(object):
 
-    def __getitem__(self, key):
-        try:
-            return dict.__getitem__(self, key)
-        except KeyError:
-            raise self.exception_class("""{} is not registered in {}""".format(key, self.keys()))
+    def __init__(self):
+        self._model_registry = dict()
+        self._name_registry = dict()
 
-    def __call__(self, key):
-        return self[key]
+    def register(self, name, model, mapper):
+        self._model_registry[model] = mapper
+        self._name_registry[name] = mapper
 
-    def get(self, key, default=None):
-        try:
-            return self[key]
-        except self.exception_class:
-            return default
-
-
-class ModelRegistry(BaseRegistry):
-    exception_class = ModelNotRegistered
+    def __contains__(self, key):
+        registry = self._name_registry if isinstance(key, string_types) else self._model_registry
+        return key in registry
 
     def __getitem__(self, key):
         """
-        :type key: str
-        :rtype: object
-        """
-        return BaseRegistry.__getitem__(self, key)
-
-model_registry = get_model = ModelRegistry()
-
-
-class MapperRegistry(BaseRegistry):
-    exception_class = MapperNotRegistered
-
-    def __getitem__(self, key):
-        """
-        :type key: object
+        :type key: object or str
+        :type default: object
         :rtype: Mapper
         """
-        return BaseRegistry.__getitem__(self, key)
+        registry = self._name_registry if isinstance(key, string_types) else self._model_registry
+        try:
+            return registry[key]
+        except KeyError:
+            raise MapperNotRegistered("""{} is not registered in {}""".format(key, registry.keys()))
 
-mapper_registry = get_mapper = MapperRegistry()
+    def __call__(self, key):
+        return self.__getitem__(key)
+
+    def values(self):
+        return self._model_registry.values()
+
+    def get(self, key, default=None):
+        """
+        :type key: object or str
+        :type default: object
+        :rtype: Mapper
+        """
+        try:
+            return self[key]
+        except MapperNotRegistered:
+            return default
+
+    def clear(self):
+        self._model_registry.clear()
+        self._name_registry.clear()
+
+mapper_registry = MapperRegistry()
 
 
 class Mapper(object):
@@ -97,8 +102,7 @@ class Mapper(object):
         if not hasattr(self, 'name'):
             self.name = self._create_default_name(model)
 
-        model_registry[self.name] = model
-        self.mapper_registry[model] = self
+        self.mapper_registry.register(self.name, model, self)
         self.declared_fields = self._create_declared_fields(
             model,
             getattr(self, 'mapping', {}),
@@ -233,11 +237,11 @@ class Mapper(object):
         pass
 
     def _setup_reverse_relations(self):
-        for related_model in model_registry.values():
-            for key, rel in self.get_mapper(related_model).relations.items():
+        for related_mapper in self.mapper_registry.values():
+            for key, rel in related_mapper.relations.items():
                 try:
                     rel.setup_reverse_relation()
-                except ModelNotRegistered:
+                except MapperNotRegistered:
                     pass
 
     def _inherit(self, successor, parents):
