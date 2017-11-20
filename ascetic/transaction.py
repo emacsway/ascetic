@@ -1,7 +1,6 @@
 from functools import wraps
 from uuid import uuid4
 from ascetic import interfaces, utils
-from ascetic.databases import databases
 
 
 class BaseTransaction(interfaces.ITransaction):
@@ -21,11 +20,14 @@ class BaseTransaction(interfaces.ITransaction):
     def _identity_map(self):
         return self._db().transaction.identity_map
 
+    def is_null(self):
+        return True
+
 
 class Transaction(BaseTransaction):
 
     def begin(self):
-        self._db().execute("BEGIN")
+        self._db().begin()
 
     def commit(self):
         self._db().commit()
@@ -58,7 +60,7 @@ class SavePoint(BaseTransaction):
         self._db().rollback_savepoint(self._name)
 
 
-class NoneTransaction(BaseTransaction):
+class DummyTransaction(BaseTransaction):
     def begin(self):
         pass
 
@@ -73,6 +75,9 @@ class NoneTransaction(BaseTransaction):
 
     def set_autocommit(self, autocommit):
         self._db().set_autocommit(autocommit)
+
+    def is_null(self):
+        return True
 
 
 class TransactionManager(interfaces.ITransactionManager):
@@ -120,7 +125,7 @@ class TransactionManager(interfaces.ITransactionManager):
 
     def current(self, node=utils.Undef):
         if node is utils.Undef:
-            return self._current or NoneTransaction(self._db)
+            return self._current or DummyTransaction(self._db)
         self._current = node
 
     def begin(self):

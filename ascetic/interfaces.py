@@ -1,6 +1,43 @@
 from ascetic.utils import Undef
 
 
+class IObservable(object):
+    def attach(self, aspects, observer):
+        """
+        :type aspects: collections.Hashable or list[collections.Hashable]
+        :type observer: callable
+        :rtype: ascetic.interfaces.IDisposable
+        """
+        raise NotImplementedError
+
+    def detach(self, aspects, observer):
+        """
+        :type aspects: collections.Hashable or list[collections.Hashable]
+        :type observer: callable
+        """
+        raise NotImplementedError
+
+    def notify(self, aspect, *args, **kwargs):
+        """
+        :type aspect: collections.Hashable
+        """
+        raise NotImplementedError
+
+    def is_null(self):
+        """
+        :rtype: bool
+        """
+        raise NotImplementedError
+
+
+class IDisposable(object):
+    def dispose(self):
+        raise NotImplementedError
+
+    def __add__(self, other):
+        raise NotImplementedError
+
+
 class IDatabase(object):
     """
     :type transaction: ascetic.interfaces.ITransaction
@@ -237,6 +274,12 @@ class ITransaction(object):
         raise NotImplementedError
 
     def set_autocommit(self, autocommit):
+        raise NotImplementedError
+
+    def is_null(self):
+        """
+        :rtype: bool
+        """
         raise NotImplementedError
 
 
