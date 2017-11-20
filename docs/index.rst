@@ -117,7 +117,6 @@ Datamapper way
 ::
 
     class Author(object):
-
         def __init__(self, id=None, first_name=None, last_name=None, bio=None):
             self.id = id
             self.first_name = first_name
@@ -136,7 +135,6 @@ Datamapper way
 
 
     class Book(object):
-
         def __init__(self, id=None, title=None, author_id=None):
             self.id = id
             self.title = title

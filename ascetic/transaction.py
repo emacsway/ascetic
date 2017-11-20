@@ -16,10 +16,6 @@ class BaseTransaction(interfaces.ITransaction):
     def set_autocommit(self, autocommit):
         raise Exception("You cannot set autocommit during a managed transaction!")
 
-    @utils.cached_property
-    def _identity_map(self):
-        return self._db().identity_map
-
     def is_null(self):
         return True
 
@@ -31,14 +27,9 @@ class Transaction(BaseTransaction):
 
     def commit(self):
         self._db().commit()
-        self._reset_identity_map()
 
     def rollback(self):
         self._db().rollback()
-        self._reset_identity_map()
-
-    def _reset_identity_map(self):
-        self._identity_map.sync()
 
 
 class SavePoint(BaseTransaction):
@@ -122,9 +113,6 @@ class TransactionManager(interfaces.ITransactionManager):
         finally:
             pass
 
-    def _subscribe(self, subject):
-        subject.observed().attach('connect', self._on_connect)
-
     def current(self, node=utils.Undef):
         if node is utils.Undef:
             return self._current or DummyTransaction(self._db)
@@ -156,6 +144,9 @@ class TransactionManager(interfaces.ITransactionManager):
         self._autocommit = autocommit
         self.current().set_autocommit(autocommit)
 
-    def _on_connect(self, *args, **kwargs):
+    def _subscribe(self, subject):
+        subject.observed().attach('connect', self._on_connect)
+
+    def _on_connect(self, subject, aspect):
         self._current = None
         self.current().set_autocommit(self._autocommit)
