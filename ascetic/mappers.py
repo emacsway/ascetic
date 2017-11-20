@@ -45,32 +45,32 @@ class MapperRegistry(object):
         registry = self._name_registry if isinstance(key, string_types) else self._model_registry
         return key in registry
 
-    def __getitem__(self, key):
+    def __getitem__(self, model_or_name):
         """
-        :type key: object or str
+        :type model_or_name: object or str
         :type default: object
         :rtype: Mapper
         """
-        registry = self._name_registry if isinstance(key, string_types) else self._model_registry
+        registry = self._name_registry if isinstance(model_or_name, string_types) else self._model_registry
         try:
-            return registry[key]
+            return registry[model_or_name]
         except KeyError:
-            raise MapperNotRegistered("""{} is not registered in {}""".format(key, registry.keys()))
+            raise MapperNotRegistered("""{} is not registered in {}""".format(model_or_name, registry.keys()))
 
-    def __call__(self, key):
-        return self.__getitem__(key)
+    def __call__(self, model_or_name):
+        return self.__getitem__(model_or_name)
 
     def values(self):
         return self._model_registry.values()
 
-    def get(self, key, default=None):
+    def get(self, model_or_name, default=None):
         """
-        :type key: object or str
+        :type model_or_name: object or str
         :type default: object
         :rtype: Mapper
         """
         try:
-            return self[key]
+            return self[model_or_name]
         except MapperNotRegistered:
             return default
 
@@ -110,7 +110,7 @@ class Mapper(object):
             getattr(self, 'validations', {}),
             getattr(self, 'declared_fields', {})
         )
-        self._inherit(self, (self.mapper_registry[base] for base in self.model.__bases__ if base in self.mapper_registry))  # recursive
+        self._inherit(self, filter(None, (self.get_mapper(base) for base in self.model.__bases__)))  # recursive
 
         if not self.abstract:
             if not hasattr(self, 'db_table'):
@@ -272,7 +272,7 @@ class Mapper(object):
     def get_changed(self, obj):
         if not self.original_data(obj):
             return set(self.fields)
-        return set(k for k, v in self.original_data(obj).items() if k in self.fields and self.fields[k].get_value(obj) != v)
+        return frozenset(k for k, v in self.original_data(obj).items() if k in self.fields and self.fields[k].get_value(obj) != v)
 
     def set_defaults(self, obj):
         for name, field in self.fields.items():
@@ -399,8 +399,8 @@ class Mapper(object):
     def get_identity_map(self, db):
         return db.transaction.identity_map
 
-    def get_mapper(self, model, default=None):
-        return self.mapper_registry.get(model, default)
+    def get_mapper(self, model_or_name, default=None):
+        return self.mapper_registry.get(model_or_name, default)
 
 
 class PrepareModel(object):

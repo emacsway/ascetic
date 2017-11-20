@@ -22,7 +22,7 @@ class PolymorphicMapper(Mapper):
     def get_polymorphic_bases(self, derived_model):
         bases = []
         for base in derived_model.__bases__:
-            if base in self.mapper_registry and getattr(self.mapper_registry[base], 'polymorphic', False):
+            if getattr(self.get_mapper(base), 'polymorphic', False):
                 bases.append(base)
             else:
                 bases += self.get_polymorphic_bases(base)
@@ -147,7 +147,7 @@ class PolymorphicResult(Result):
         if self._cache is None:
             polymorphic, self._polymorphic = self._polymorphic, False
             self._cache = list(self.iterator())
-            self._cache = PopulatePolymorphic(self._cache).compute()
+            self._cache = PopulatePolymorphic(self._cache, self.mapper.get_mapper).compute()
             self.populate_prefetch()
             self._polymorphic = polymorphic
         return self
@@ -159,8 +159,9 @@ class PolymorphicResult(Result):
 
 class PopulatePolymorphic(object):
 
-    def __init__(self, rows):
+    def __init__(self, rows, mapper_accessor):
         self._rows = rows
+        self._get_mapper = mapper_accessor
 
     def compute(self):
         if not self._rows:
@@ -179,13 +180,13 @@ class PopulatePolymorphic(object):
         typed_objects = {}
         pks = {self._get_current_mapper().get_pk(i) for i in self._rows}
         for ct in self._get_content_types():
-            mapper = mapper_registry[ct]
+            mapper = self._get_mapper(ct)
             typed_objects[ct] = {mapper.get_pk(i): i for i in mapper.query.where(mapper.sql_table.pk.in_(pks))}
         return typed_objects
 
     def _get_current_mapper(self):
         current_model = self._rows[0].__class__
-        return mapper_registry[current_model]
+        return self._get_mapper(current_model)
 
     def _get_content_types(self):
         content_types = {i.polymorphic_type_id for i in self._rows}

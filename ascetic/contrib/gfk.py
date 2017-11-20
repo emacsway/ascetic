@@ -6,6 +6,7 @@ from ascetic.utils import cached_property, to_tuple
 
 
 class GenericForeignKey(IBaseRelation):
+    mapper_registry = mapper_registry
     descriptor = None
     owner = None
 
@@ -20,7 +21,7 @@ class GenericForeignKey(IBaseRelation):
         self._query = query
 
     def _make_relation(self, instance):
-        related_model = mapper_registry[getattr(instance, self.type_field)].model
+        related_model = self.get_mapper(getattr(instance, self.type_field)).model
         relation = ForeignKey(
             related_model=related_model,
             related_field=self._related_field,
@@ -54,13 +55,16 @@ class GenericForeignKey(IBaseRelation):
         return self._make_relation(instance).get(instance)
 
     def set(self, instance, value):
-        if value.__class__ in mapper_registry:
-            setattr(instance, self.type_field, mapper_registry[value.__class__].name)
+        if self.get_mapper(value.__class__):
+            setattr(instance, self.type_field, self.get_mapper(value.__class__).name)
         self._make_relation(instance).set(instance, value)
 
     def delete(self, instance):
         setattr(instance, self.type_field, None)
         self._make_relation(instance).delete(instance)
+
+    def get_mapper(self, model_or_name):
+        return self.mapper_registry[model_or_name]
 
 
 class GenericRelation(OneToMany):

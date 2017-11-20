@@ -2,6 +2,10 @@ from ascetic.utils import Undef
 
 
 class IDatabase(object):
+    """
+    :type transaction: ascetic.interfaces.ITransaction
+    """
+    transaction = None
 
     def connection_factory(self, **kwargs):
         raise NotImplementedError

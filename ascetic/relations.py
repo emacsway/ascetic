@@ -108,7 +108,7 @@ class BaseRelation(object):
             name = self._related_model_or_name
             if name == 'self':
                 name = self.mapper.name
-            return mapper_registry[name].model
+            return self.get_mapper(name).model
         return self._related_model_or_name
 
     @cached_property
@@ -119,8 +119,8 @@ class BaseRelation(object):
     def related_mapper(self):
         return self.get_mapper(self.related_model)
 
-    def get_mapper(self, model):
-        return self.mapper_registry[model]
+    def get_mapper(self, model_or_name):
+        return self.mapper_registry[model_or_name]
 
     def bind(self, owner):
         c = copy.copy(self)
