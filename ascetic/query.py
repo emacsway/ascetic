@@ -77,6 +77,7 @@ class Table(smartsql.Table):
             return results[0][1]
         return column
 
+
 @factory.register
 class TableAlias(smartsql.TableAlias, Table):
     @property

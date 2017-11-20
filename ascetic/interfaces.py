@@ -20,11 +20,14 @@ class IDatabase(object):
         """
         :type sql: str
         :type params: collections.abc.Iterable
-        :rtype: object
+        :rtype: sqlite3.Cursor
         """
         raise NotImplementedError
 
     def cursor(self):
+        """
+        :rtype: sqlite3.Cursor
+        """
         raise NotImplementedError
 
     def last_insert_id(self, cursor):

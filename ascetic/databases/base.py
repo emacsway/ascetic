@@ -162,11 +162,11 @@ class Database(interfaces.IDatabase):
         from ascetic.transaction import TransactionManager
         transaction = TransactionManager(lambda: database, kwargs.pop('autocommit', False), identity_map)
         try:
-            Cls = cls._engines[kwargs['engine']]
+            database_factory = cls._engines[kwargs['engine']]
         except KeyError:
-            Cls = utils.resolve(kwargs['engine'])
+            database_factory = utils.resolve(kwargs['engine'])
 
-        database = Cls(transaction=transaction, **kwargs)
+        database = database_factory(transaction=transaction, **kwargs)
         if 'django_alias' in kwargs:
             database.connection_factory = django_connection_factory
         return database
