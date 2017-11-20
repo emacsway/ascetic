@@ -1,4 +1,4 @@
-import collections
+import collections, weakref
 from ascetic import interfaces, utils
 
 
@@ -53,6 +53,7 @@ class DummyObservable(interfaces.IObservable):
         :type observer: callable
         :rtype: ascetic.interfaces.IDisposable
         """
+        return Disposable(self, None, None)
 
     def detach(self, aspects, observer):
         """
@@ -95,3 +96,9 @@ class CompositeDisposable(interfaces.IDisposable):
 
     def __add__(self, other):
         return CompositeDisposable(*(self._delegates + [other]))
+
+
+def observe(subject, accessor_name, constructor):
+    observable = (constructor or Observable)(weakref.ref(subject))
+    subject[accessor_name or 'observed'] = lambda : observable
+    return subject

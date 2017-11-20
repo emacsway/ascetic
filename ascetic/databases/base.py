@@ -1,6 +1,5 @@
 from __future__ import absolute_import
-import logging
-from time import time
+import logging, time, weakref
 from functools import wraps
 from sqlbuilder import smartsql
 from ascetic import interfaces, settings, utils
@@ -25,13 +24,12 @@ class Database(interfaces.IDatabase):
     compile = smartsql.compile
     connection = None
 
-    def __init__(self, alias, engine, transaction, initial_sql, always_reconnect=False, debug=False, **kwargs):
+    def __init__(self, alias, engine, initial_sql, always_reconnect=False, debug=False, **kwargs):
         self.alias = alias
         self.engine = engine
         self.debug = debug
         self.initial_sql = initial_sql
         self.always_reconnect = always_reconnect
-        self.transaction = transaction
         self._conf = kwargs
         self._logger = logging.getLogger('.'.join((__name__, self.alias)))
 
@@ -54,14 +52,14 @@ class Database(interfaces.IDatabase):
 
         @wraps(f)
         def wrapper(sql, params=()):
-            start = time()
+            start = time.time()
             try:
                 return f(sql, params)
             except Exception as e:
                 logger.exception(e)
                 raise
             finally:
-                stop = time()
+                stop = time.time()
                 duration = stop - start
                 logger.debug(
                     '%s - (%.4f) %s; args=%s' % (alias, duration, sql, params),
@@ -156,19 +154,21 @@ class Database(interfaces.IDatabase):
 
     @classmethod
     def factory(cls, **kwargs):
-        from ascetic.identity_maps import IdentityMap
-        identity_map = IdentityMap(lambda: database)
 
-        from ascetic.transaction import TransactionManager
-        transaction = TransactionManager(lambda: database, kwargs.pop('autocommit', False), identity_map)
         try:
             database_factory = cls._engines[kwargs['engine']]
         except KeyError:
             database_factory = utils.resolve(kwargs['engine'])
 
-        database = database_factory(transaction=transaction, **kwargs)
+        database = database_factory(**kwargs)
         if 'django_alias' in kwargs:
             database.connection_factory = django_connection_factory
+
+        from ascetic.identity_maps import IdentityMap
+        identity_map = IdentityMap(weakref.ref(database))
+
+        from ascetic.transaction import TransactionManager
+        database.transaction = TransactionManager(weakref.ref(database), kwargs.pop('autocommit', False), identity_map)
         return database
 
 
