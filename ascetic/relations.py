@@ -2,7 +2,7 @@ import copy
 import weakref
 import collections
 from ascetic.interfaces import IRelation, IRelationDescriptor
-from ascetic.mappers import mapper_registry, model_registry, is_model_instance, Mapper
+from ascetic.mappers import mapper_registry, model_registry, Mapper
 from ascetic.utils import to_tuple
 from ascetic.exceptions import ModelNotRegistered
 from ascetic.utils import cached_property, SpecialAttrAccessor, SpecialMappingAccessor
@@ -284,7 +284,7 @@ class ForeignKey(Relation):
         return self._get_cache(instance, self.name)
 
     def set(self, instance, value):
-        if is_model_instance(value):
+        if isinstance(value, self.related_model):
             self.validate_related_obj(value)
             self._set_cache(instance, self.name, value)
             value = self.get_related_value(value)
@@ -361,7 +361,7 @@ class OneToMany(Relation):
 
     def set(self, instance, object_list):
         for cached_obj in object_list:
-            if is_model_instance(cached_obj):
+            if isinstance(cached_obj, self.related_model):
                 self.validate_related_obj(cached_obj)
                 try:
                     self.validate_cached_related_obj(instance, cached_obj)

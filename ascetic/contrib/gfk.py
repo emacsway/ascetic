@@ -1,13 +1,12 @@
 import copy
 from ascetic.interfaces import IBaseRelation
-from ascetic.mappers import model_registry, mapper_registry, is_model_instance
+from ascetic.mappers import model_registry, mapper_registry
 from ascetic.relations import ForeignKey, OneToMany, cascade
 from ascetic.utils import cached_property, to_tuple
 
 
 class GenericForeignKey(IBaseRelation):
     descriptor = None
-    instance = None
     owner = None
 
     def __init__(self, type_field="object_type_id", related_field=None, field=None, on_delete=cascade,
@@ -55,7 +54,7 @@ class GenericForeignKey(IBaseRelation):
         return self._make_relation(instance).get(instance)
 
     def set(self, instance, value):
-        if is_model_instance(value):
+        if value.__class__ in mapper_registry:
             setattr(instance, self.type_field, mapper_registry[value.__class__].name)
         self._make_relation(instance).set(instance, value)
 

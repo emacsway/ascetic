@@ -24,14 +24,6 @@ except NameError:
     integer_types = (int,)
 
 
-def is_model_instance(obj):
-    return obj.__class__ in model_registry.values()
-
-
-def is_model(cls):
-    return cls in model_registry.values()
-
-
 def thread_safe(func):
     def _deco(*args, **kwargs):
         with RLock():
