@@ -21,30 +21,34 @@ Ascetic exists as a super-lightweight datamapper ORM (Object-Relational Mapper) 
 About
 =====
 
-Ascetic based on "`Data Mapper <http://martinfowler.com/eaaCatalog/dataMapper.html>`_" and "`Table Data Gateway <http://martinfowler.com/eaaCatalog/tableDataGateway.html>`_" patterns.
-It also supports "`Active Record <http://www.martinfowler.com/eaaCatalog/activeRecord.html>`_" wrapper, but it's just a wrapper, - model class is free from service logic.
+Ascetic ORM based on "`Data Mapper <http://martinfowler.com/eaaCatalog/dataMapper.html>`_" pattern.
+It also supports "`Active Record <http://www.martinfowler.com/eaaCatalog/activeRecord.html>`_" pattern, but only as a wrapper, the model class is fully free from any service logic.
 Ascetic ORM follows the `KISS principle <http://en.wikipedia.org/wiki/KISS_principle>`_.
-Has automatic population of fields from database (see the example below), and minimal size.
+Has automatic population of fields from database (see the example below) and minimal size.
 You do not have to specify the columns in the class. This follows the `DRY <http://en.wikipedia.org/wiki/DRY_code>`_ principle. 
-Ascetic as small as possible.
+Ascetic ORM as small as possible.
 
-In ascetic.contrib (currently under development) you can found solutions for:
+Inside ascetic.contrib (currently under development) you can find the next solutions:
 
 - multilingual
 - polymorphic relations
 - polymorphic models (supports for "`Single Table Inheritance <http://martinfowler.com/eaaCatalog/singleTableInheritance.html>`_", "`Concrete Table Inheritance <http://martinfowler.com/eaaCatalog/concreteTableInheritance.html>`_" and "`Class Table Inheritance <http://martinfowler.com/eaaCatalog/classTableInheritance.html>`_" aka Django "`Multi-table inheritance <https://docs.djangoproject.com/en/1.8/topics/db/models/#multi-table-inheritance>`_")
-- "Materialized Path" implementation of tree
-- versioning (that stores only diff, not content copy)
+- "Materialized Path" implementation to handle tree structures
+- versioning (which stores only diff, not content copy)
 
-All solutions support composite primary/foreign keys.
+All extensions support composite primary/foreign keys.
 
 "`Identity Map <http://martinfowler.com/eaaCatalog/identityMap.html>`__" has SERIALIZABLE isolation level by default.
 
-What Ascetic does not? Ascetic does not make any data type conversions (use connection features like `this <http://initd.org/psycopg/docs/advanced.html#adapting-new-python-types-to-sql-syntax>`__), and does not has "`Unit of Work <http://martinfowler.com/eaaCatalog/unitOfWork.html>`__". I recommend using a `Storm ORM <https://storm.canonical.com/>`__, if you need it all.
+What Ascetic ORM does not?
+Ascetic ORM does not make any data type conversions (use connection features like `this <http://initd.org/psycopg/docs/advanced.html#adapting-new-python-types-to-sql-syntax>`__), and does not has "`Unit of Work <http://martinfowler.com/eaaCatalog/unitOfWork.html>`__".
+I recommend using a `Storm ORM <https://storm.canonical.com/>`__, if you need these features.
 
-Ascetic is released under the MIT License (see LICENSE file for details).
+Ascetic ORM is released under the MIT License (see LICENSE file for details).
 
-This project is currently under development, and not stable. If you are looking for stable KISS-style ORM, pay attention to `Storm ORM <https://storm.canonical.com/>`__.
+This project is currently under development, and not stable.
+If you are looking for stable KISS-style ORM, pay attention to `Storm ORM <https://storm.canonical.com/>`__.
+
 
 Contents:
 
