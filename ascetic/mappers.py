@@ -397,7 +397,7 @@ class Mapper(object):
             self.fields[k].set_value(obj, v)
 
     def get_identity_map(self, db):
-        return db.transaction.identity_map
+        return db.identity_map
 
     def get_mapper(self, model_or_name, default=None):
         return self.mapper_registry.get(model_or_name, default)

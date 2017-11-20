@@ -125,7 +125,7 @@ class TestGenericForeignKey(unittest.TestCase):
 
     def setUp(self):
         db = databases['default']
-        db.transaction.identity_map.disable()
+        db.identity_map.disable()
         for table in ('ascetic_gfk_author', 'ascetic_gfk_book',):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 

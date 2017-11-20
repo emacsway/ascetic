@@ -18,7 +18,7 @@ class BaseTransaction(interfaces.ITransaction):
 
     @utils.cached_property
     def _identity_map(self):
-        return self._db().transaction.identity_map
+        return self._db().identity_map
 
     def is_null(self):
         return True
@@ -84,16 +84,14 @@ class TransactionManager(interfaces.ITransactionManager):
     """
     :type identity_map: ascetic.interfaces.IIdentityMap
     """
-    def __init__(self, db_accessor, autocommit, identity_map):
+    def __init__(self, db_accessor, autocommit):
         """
         :type db_accessor:
         :type autocommit:
-        :type identity_map: ascetic.interfaces.IIdentityMap
         """
         self._db = db_accessor
         self._current = None
         self._autocommit = autocommit
-        self.identity_map = identity_map
         self._subscribe(self._db())
 
     def __call__(self, func=None):

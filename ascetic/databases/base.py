@@ -175,7 +175,7 @@ class Database(interfaces.IDatabase):
         database.identity_map = IdentityMap(weakref.ref(database))
 
         from ascetic.transaction import TransactionManager
-        database.transaction = TransactionManager(weakref.ref(database), kwargs.pop('autocommit', False), database.identity_map)
+        database.transaction = TransactionManager(weakref.ref(database), kwargs.pop('autocommit', False))
         return database
 
 

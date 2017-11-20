@@ -210,7 +210,7 @@ class TestPolymorphic(unittest.TestCase):
 
     def setUp(self):
         db = databases['default']
-        db.transaction.identity_map.disable()
+        db.identity_map.disable()
         for table in ('ascetic_polymorphic_author', 'ascetic_polymorphic_book',):
             db.execute('DELETE FROM {0}'.format(db.qn(table)))
 
