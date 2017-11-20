@@ -77,9 +77,9 @@ class GenericRelation(OneToMany):
     def get_related_where(self, obj):
         where = super(GenericRelation, self).get_related_where(obj)
         return where & (self.related_mapper.sql_table.get_field(self.related_type_field) ==
-                        mapper_registry[obj.__class__].name)
+                        self.get_mapper(obj.__class__).name)
 
     def validate_cached_related_obj(self, obj, cached_related_obj):
         super(GenericRelation, self).validate_cached_related_obj(obj, cached_related_obj)
-        if getattr(cached_related_obj, self.related_type_field) != mapper_registry[obj.__class__].name:
+        if getattr(cached_related_obj, self.related_type_field) != self.get_mapper(obj.__class__).name:
             raise ValueError

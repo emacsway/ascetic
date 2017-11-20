@@ -19,19 +19,18 @@ class PolymorphicMapper(Mapper):
 
     result_factory = staticmethod(lambda *a, **kw: PolymorphicResult(*a, **kw))
 
-    @classmethod
-    def get_polymorphic_bases(cls, derived_model):
+    def get_polymorphic_bases(self, derived_model):
         bases = []
         for base in derived_model.__bases__:
-            if base in mapper_registry and getattr(mapper_registry[base], 'polymorphic', False):
+            if base in self.mapper_registry and getattr(self.mapper_registry[base], 'polymorphic', False):
                 bases.append(base)
             else:
-                bases += cls.get_polymorphic_bases(base)
+                bases += self.get_polymorphic_bases(base)
         return tuple(bases)
 
     @cached_property
     def polymorphic_bases(self):
-        return tuple(mapper_registry[base_model] for base_model in self.get_polymorphic_bases(self.model))
+        return tuple(self.get_mapper(base_model) for base_model in self.get_polymorphic_bases(self.model))
 
     # TODO: Fix the diamond inheritance problem???
     # I'm not sure is it a problem... After first base save model will has PK...
@@ -80,25 +79,25 @@ class PolymorphicMapper(Mapper):
 
     def _do_prepare_model(self, model):
         for base in model.mro():
-            if base is not model and getattr(mapper_registry.get(base), 'polymorphic', False):
+            if base is not model and getattr(self.get_mapper(base), 'polymorphic', False):
                 pk_related_name = "{}_ptr".format(base.__name__.lower())
                 # self.pk = "{}_id".format(pk_related_name)  # Useless, pk read from DB
                 # TODO: support multiple inheritance
                 setattr(model, pk_related_name, OneToOne(
                     base,
-                    field=mapper_registry[model].pk,
-                    related_field=mapper_registry[base].pk,
+                    field=self.get_mapper(model).pk,
+                    related_field=self.get_mapper(base).pk,
                     related_name=model.__name__.lower(),
                     query=(lambda rel: rel.mapper.query.polymorphic(False)),
                     related_query=(lambda rel: rel.related_mapper.query.polymorphic(False))
                 ))
                 break
         else:
-            if getattr(mapper_registry[model], 'polymorphic', False):
+            if getattr(self.get_mapper(model), 'polymorphic', False):
                 setattr(model, "concrete_instance", GenericForeignKey(
                     type_field="polymorphic_type_id",
                     related_field=(lambda rel: rel.related_mapper.pk),
-                    field=mapper_registry[model].pk,
+                    field=self.get_mapper(model).pk,
                 ))
         super(PolymorphicMapper, self)._do_prepare_model(self.model)
 
@@ -123,7 +122,7 @@ class PolymorphicMapper(Mapper):
 
     def save(self, obj):
         if not self.polymorphic_fields['polymorphic_type_id'].get_value(obj):
-            obj.polymorphic_type_id = mapper_registry[obj.__class__].name
+            obj.polymorphic_type_id = self.get_mapper(obj.__class__).name
         for base in self.polymorphic_bases:
             new_record = self.is_new(obj)
             base.save(obj)

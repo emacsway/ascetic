@@ -2,7 +2,7 @@ from __future__ import absolute_import
 from sqlbuilder import smartsql
 from ascetic.mappers import mapper_registry, Mapper
 from ascetic.relations import ForeignKey, RelationDescriptor
-from ascetic.utils import cached_property, to_tuple
+from ascetic.utils import cached_property, classproperty, to_tuple
 
 try:
     str = unicode  # Python 2.* compatible
@@ -48,7 +48,7 @@ class MpMapper(Mapper):
 
     @cached_property
     def mp_root(self):
-        return mapper_registry[self.relations['parent'].model]
+        return self.get_mapper(self.relations['parent'].model)
 
     def save(self, obj):
         """Sets content_type and calls parent method."""
@@ -157,13 +157,17 @@ class MpMapper(Mapper):
 class MpModel(object):
 
     def get_ancestors(self, root=False, me=False, reverse=True):
-        return mapper_registry[self.__class__].get_ancestors(self, root, me, reverse)
+        return self._mapper.get_ancestors(self, root, me, reverse)
 
     def get_hierarchical_name(self, sep=', ', root=False, me=True, reverse=True, namegetter=str):
-        return mapper_registry[self.__class__].get_hierarchical_name(self, sep, root, me, reverse, namegetter)
+        return self._mapper.get_hierarchical_name(self, sep, root, me, reverse, namegetter)
 
     def get_children(self):
-        return mapper_registry[self.__class__].get_children(self)
+        return self._mapper.get_children(self)
 
     def get_descendants(self, me=False):
-        return mapper_registry[self.__class__].get_descendants(self, me)
+        return self._mapper.get_descendants(self, me)
+
+    @classproperty
+    def _mapper(cls):
+        return mapper_registry[cls]

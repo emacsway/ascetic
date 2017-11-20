@@ -403,8 +403,8 @@ class Mapper(object):
     def get_identity_map(self, db):
         return db.transaction.identity_map
 
-    def get_mapper(self, model):
-        return self.mapper_registry[model]
+    def get_mapper(self, model, default=None):
+        return self.mapper_registry.get(model, default)
 
 
 class PrepareModel(object):

@@ -2,9 +2,7 @@ import copy
 import operator
 from functools import reduce, partial
 from sqlbuilder import smartsql
-from ascetic.databases import databases
 from ascetic.exceptions import ObjectDoesNotExist
-from ascetic.mappers import mapper_registry
 from ascetic.relations import Relation, ForeignKey, OneToOne, OneToMany
 from ascetic.signals import field_mangling, column_mangling
 from ascetic.utils import to_tuple
@@ -293,7 +291,7 @@ class SelectRelatedMap(object):
         rows = []  # There can be multiple the same models, so, using dict instead of model
         start = 0
         for model in models:
-            mapper = mapper_registry[model]
+            mapper = self._result.mapper.get_mapper(model)
             length = len(mapper.get_sql_fields())
             rows.append(row[start:length])
             start += length
@@ -302,7 +300,7 @@ class SelectRelatedMap(object):
     def _get_objects(self, models, rows):
         objs = []
         for model, model_row in zip(models, rows):
-            mapper = mapper_registry[model]
+            mapper = self._result.mapper.get_mapper(model)
             pk = to_tuple(mapper.pk)
             pk_columns = tuple(mapper.fields[k].columns for k in pk)
             model_row_dict = dict(model_row)

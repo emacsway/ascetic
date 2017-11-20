@@ -100,3 +100,5 @@ class TestMpTree(unittest.TestCase):
         )
         obj_1_1.parent = root
         location_mapper.save(obj_1_1)
+
+        self.assertIn(location_mapper.get_pk(obj_1_1), tuple(location_mapper.get_pk(i) for i in root.get_children()))

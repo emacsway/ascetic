@@ -85,7 +85,7 @@ class BaseRelation(object):
         mro_reversed = list(reversed(self.owner.__mro__))
         mro_reversed = mro_reversed[mro_reversed.index(result_cls) + 1:]
         for cls in mro_reversed:
-            if getattr(mapper_registry[cls], 'polymorphic', False):  # Don't look into mapper.__class__.__dict__, see ModelBase.__new__()
+            if getattr(self.get_mapper(cls), 'polymorphic', False):  # Don't look into mapper.__class__.__dict__, see ModelBase.__new__()
                 break
             result_cls = cls
         return result_cls
@@ -112,11 +112,15 @@ class BaseRelation(object):
 
     @cached_property
     def mapper(self):
-        return mapper_registry[self.model]
+        return self.get_mapper(self.model)
 
     @cached_property
     def related_mapper(self):
-        return mapper_registry[self.related_model]
+        return self.get_mapper(self.related_model)
+
+    @staticmethod
+    def get_mapper(model):
+        return mapper_registry[model]
 
     def bind(self, owner):
         c = copy.copy(self)
