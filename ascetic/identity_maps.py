@@ -238,9 +238,9 @@ class Sync(object):
         query = query.map(lambda result, row, state: result.mapper.load(row, db, from_db=True, reload=True))
         return query
 
-    def _get_mapper(self, model):
+    def _get_mapper(self, model_or_name):
         from ascetic.mappers import mapper_registry
-        return mapper_registry[model]
+        return mapper_registry[model_or_name]
 
     def compute(self):
         self._sync()

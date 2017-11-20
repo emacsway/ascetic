@@ -5,7 +5,6 @@ import base64
 # import json
 import hashlib
 from datetime import datetime
-from ascetic.mappers import mapper_registry
 
 # Under construction!!! Not testet yet!!!
 
@@ -103,8 +102,8 @@ class IRepository(object):
 
 class DatabaseRepository(IRepository):
 
-    def __init__(self, model):
-        self._model = model
+    def __init__(self, mapper):
+        self._mapper = mapper
         self._comparator = Comparator()
 
     def commit(self, obj, **info):
@@ -117,7 +116,7 @@ class DatabaseRepository(IRepository):
         hash_ = hashlib.sha1(
             delta.encode("utf-8")
         ).hexdigest()
-        rev = self._model(
+        rev = self._mapper.model(
             content_object=obj,
             revision=latest_rev.revision,
             hash=hash_,
@@ -144,21 +143,21 @@ class DatabaseRepository(IRepository):
             setattr(object_version, field_name, None)
         revisions = self.revisions()
         if rev is not None:
-            revisions = revisions.where((mapper_registry[self._model].sql_table.revision <= rev))
+            revisions = revisions.where((self._mapper.sql_table.revision <= rev))
         for revision in revisions:
             self._comparator.apply_delta(object_version, revision.delta)
         return object_version
 
     def versions(self, obj):
-        t = mapper_registry[self._model].sql_table
-        return mapper_registry[self._model].query.where(
+        t = self._mapper.sql_table
+        return self._mapper.query.where(
             (t.content_object == obj)
         ).order_by(
             t.revision
         )
 
     def version(self, obj, rev=None):
-        t = mapper_registry[self._model].sql_table
+        t = self._mapper.sql_table
         q = self.versions()
         if rev is not None:
             q = q.where((t.revision == rev))

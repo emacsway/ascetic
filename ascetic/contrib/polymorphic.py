@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from collections import OrderedDict
 from ascetic import exceptions
-from ascetic.mappers import Load, Mapper, OneToOne, Result, mapper_registry
+from ascetic.mappers import Load, Mapper, OneToOne, Result
 from ascetic.utils import to_tuple
 from ascetic.utils import cached_property
 from ascetic.contrib.gfk import GenericForeignKey
