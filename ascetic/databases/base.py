@@ -2,7 +2,7 @@ from __future__ import absolute_import
 import logging, time, weakref
 from functools import wraps
 from sqlbuilder import smartsql
-from ascetic import interfaces, settings, utils
+from ascetic import interfaces, observable, settings, utils
 
 try:
     str = unicode  # Python 2.* compatible
@@ -32,16 +32,16 @@ class Database(interfaces.IDatabase):
         self.always_reconnect = always_reconnect
         self._conf = kwargs
         self._logger = logging.getLogger('.'.join((__name__, self.alias)))
-
         if self.debug:
             self._execute = self.log_sql(self._execute)
+        observable.observe(self)
 
     def connection_factory(self, **kwargs):
         raise NotImplementedError
 
     def _ensure_connected(self):
         self.connection = self.connection_factory(**self._conf)
-        self.transaction.on_connect()
+        self.observed().notify('connect')
         if self.initial_sql:
             self.connection.cursor().execute(self.initial_sql)
         return self
@@ -100,21 +100,27 @@ class Database(interfaces.IDatabase):
 
     def begin(self):
         self.execute("BEGIN")
+        self.observed().notify('begin')
 
     def commit(self):
         self.connection.commit()
+        self.observed().notify('commit')
 
     def rollback(self):
         self.connection.rollback()
+        self.observed().notify('rollback')
 
     def begin_savepoint(self, name):
         self.execute("SAVEPOINT %s", name)
+        self.observed().notify('begin_savepoint', name)
 
     def commit_savepoint(self, name):
         self.execute("RELEASE SAVEPOINT %s", name)
+        self.observed().notify('commit_savepoint', name)
 
     def rollback_savepoint(self, name):
         self.execute("ROLLBACK TO SAVEPOINT %s", name)
+        self.observed().notify('rollback_savepoint', name)
 
     def set_autocommit(self, autocommit):
         pass
@@ -161,14 +167,15 @@ class Database(interfaces.IDatabase):
             database_factory = utils.resolve(kwargs['engine'])
 
         database = database_factory(**kwargs)
+
         if 'django_alias' in kwargs:
             database.connection_factory = django_connection_factory
 
         from ascetic.identity_maps import IdentityMap
-        identity_map = IdentityMap(weakref.ref(database))
+        database.identity_map = IdentityMap(weakref.ref(database))
 
         from ascetic.transaction import TransactionManager
-        database.transaction = TransactionManager(weakref.ref(database), kwargs.pop('autocommit', False), identity_map)
+        database.transaction = TransactionManager(weakref.ref(database), kwargs.pop('autocommit', False), database.identity_map)
         return database
 
 

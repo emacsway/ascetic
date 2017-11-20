@@ -94,6 +94,7 @@ class TransactionManager(interfaces.ITransactionManager):
         self._current = None
         self._autocommit = autocommit
         self.identity_map = identity_map
+        self._subscribe(self._db())
 
     def __call__(self, func=None):
         if func is None:
@@ -123,6 +124,9 @@ class TransactionManager(interfaces.ITransactionManager):
         finally:
             pass
 
+    def _subscribe(self, subject):
+        subject.observed().attach('connect', self._on_connect)
+
     def current(self, node=utils.Undef):
         if node is utils.Undef:
             return self._current or DummyTransaction(self._db)
@@ -148,12 +152,12 @@ class TransactionManager(interfaces.ITransactionManager):
     def can_reconnect(self):
         return self.current().can_reconnect()
 
-    def on_connect(self):
-        self._current = None
-        self.current().set_autocommit(self._autocommit)
-
     def autocommit(self, autocommit=None):
         if autocommit is None:
             return self._autocommit and not self._current
         self._autocommit = autocommit
         self.current().set_autocommit(autocommit)
+
+    def _on_connect(self, *args, **kwargs):
+        self._current = None
+        self.current().set_autocommit(self._autocommit)

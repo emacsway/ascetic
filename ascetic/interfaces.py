@@ -41,8 +41,12 @@ class IDisposable(object):
 class IDatabase(object):
     """
     :type transaction: ascetic.interfaces.ITransaction
+    :type identity_map: ascetic.interfaces.IIdentityMap
+    :type identity_map: () -> ascetic.interfaces.IObservable
     """
     transaction = None
+    identity_map = None
+    observed = None
 
     def connection_factory(self, **kwargs):
         raise NotImplementedError
@@ -284,10 +288,6 @@ class ITransaction(object):
 
 
 class ITransactionManager(object):
-    """
-    :type identity_map: ascetic.interfaces.IIdentityMap
-    """
-    identity_map = None
 
     def __call__(self, func=None):
         raise NotImplementedError
@@ -311,9 +311,6 @@ class ITransactionManager(object):
         raise NotImplementedError
 
     def can_reconnect(self):
-        raise NotImplementedError
-
-    def on_connect(self):
         raise NotImplementedError
 
     def autocommit(self, autocommit=None):

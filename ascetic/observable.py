@@ -98,7 +98,7 @@ class CompositeDisposable(interfaces.IDisposable):
         return CompositeDisposable(*(self._delegates + [other]))
 
 
-def observe(subject, accessor_name, constructor):
-    observable = (constructor or Observable)(weakref.ref(subject))
-    subject[accessor_name or 'observed'] = lambda : observable
+def observe(subject, accessor_name='observed', factory=Observable):
+    observable = factory(weakref.ref(subject))
+    setattr(subject, accessor_name, lambda: observable)
     return subject
