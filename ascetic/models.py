@@ -38,7 +38,7 @@ class Model(ModelBase("NewBase", (object, ), {})):
     _s = None
 
     def __init__(self, *args, **kwargs):
-        mapper = mapper_registry[self.__class__]
+        mapper = self._mapper
         pre_init.send(sender=self.__class__, instance=self, args=args, kwargs=kwargs)
         if args:
             self.__dict__.update(zip(mapper.fields.keys(), args))
@@ -58,24 +58,24 @@ class Model(ModelBase("NewBase", (object, ), {})):
         return hash(self._get_pk())
 
     def __dir__(self):
-        return dir(super(Model, self)) + list(mapper_registry[self.__class__].fields)
+        return dir(super(Model, self)) + list(self._mapper.fields)
 
     def _get_pk(self):
-        return mapper_registry[self.__class__].get_pk(self)
+        return self._mapper.get_pk(self)
 
     def _set_pk(self, value):
-        mapper_registry[self.__class__].set_pk(self, value)
+        self._mapper.set_pk(self, value)
 
     pk = property(_get_pk, _set_pk)
 
     def validate(self, fields=frozenset(), exclude=frozenset()):
-        return mapper_registry[self.__class__].validate(self, fields=fields, exclude=exclude)
+        return self._mapper.validate(self, fields=fields, exclude=exclude)
 
     def save(self, *args, **kwargs):
-        return mapper_registry[self.__class__].save(self, *args, **kwargs)
+        return self._mapper.save(self, *args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        return mapper_registry[self.__class__].delete(self, *args, **kwargs)
+        return self._mapper.delete(self, *args, **kwargs)
 
     @classproperty
     def _mapper(cls):

@@ -88,6 +88,7 @@ class Mapper(object):
 
     pk = 'id'
     abstract = False
+    mapper_registry = mapper_registry
     original_data = SpecialMappingAccessor(SpecialAttrAccessor('original_data', default=dict))
     is_new = SpecialAttrAccessor('new_record', default=True)
     used_db = SpecialAttrAccessor('db')
@@ -105,7 +106,7 @@ class Mapper(object):
             self.name = self._create_default_name(model)
 
         model_registry[self.name] = model
-        mapper_registry[model] = self
+        self.mapper_registry[model] = self
         self.declared_fields = self._create_declared_fields(
             model,
             getattr(self, 'mapping', {}),
@@ -113,7 +114,7 @@ class Mapper(object):
             getattr(self, 'validations', {}),
             getattr(self, 'declared_fields', {})
         )
-        self._inherit(self, (mapper_registry[base] for base in self.model.__bases__ if base in mapper_registry))  # recursive
+        self._inherit(self, (self.mapper_registry[base] for base in self.model.__bases__ if base in self.mapper_registry))  # recursive
 
         if not self.abstract:
             if not hasattr(self, 'db_table'):
@@ -241,7 +242,7 @@ class Mapper(object):
 
     def _setup_reverse_relations(self):
         for related_model in model_registry.values():
-            for key, rel in mapper_registry[related_model].relations.items():
+            for key, rel in self.mapper_registry[related_model].relations.items():
                 try:
                     rel.setup_reverse_relation()
                 except ModelNotRegistered:
