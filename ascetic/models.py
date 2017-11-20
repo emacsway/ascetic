@@ -1,6 +1,4 @@
-from sqlbuilder import smartsql
-
-from ascetic.mappers import mapper_registry, Mapper, thread_safe
+from ascetic.mappers import Mapper, thread_safe
 from ascetic.signals import pre_init, post_init
 from ascetic.utils import classproperty, to_tuple
 
@@ -25,8 +23,8 @@ class ModelBase(type):
             bases.append(new_cls.mapper_class)
 
         mapper_factory = type("{}Mapper".format(new_cls.__name__), tuple(bases), {})
-        mapper_factory(new_cls)
-        for k in to_tuple(mapper_registry[new_cls].pk):
+        new_cls._mapper = mapper_factory(new_cls)
+        for k in to_tuple(new_cls._mapper.pk):
             setattr(new_cls, k, None)
 
         return new_cls
@@ -38,10 +36,9 @@ class Model(ModelBase("NewBase", (object, ), {})):
     _s = None
 
     def __init__(self, *args, **kwargs):
-        mapper = self._mapper
         pre_init.send(sender=self.__class__, instance=self, args=args, kwargs=kwargs)
         if args:
-            self.__dict__.update(zip(mapper.fields.keys(), args))
+            self.__dict__.update(zip(self._mapper.fields.keys(), args))
         if kwargs:
             self.__dict__.update(kwargs)
         post_init.send(sender=self.__class__, instance=self)
@@ -76,10 +73,6 @@ class Model(ModelBase("NewBase", (object, ), {})):
 
     def delete(self, *args, **kwargs):
         return self._mapper.delete(self, *args, **kwargs)
-
-    @classproperty
-    def _mapper(cls):
-        return mapper_registry[cls]
 
     @classproperty
     def s(cls):

@@ -242,7 +242,7 @@ class Mapper(object):
 
     def _setup_reverse_relations(self):
         for related_model in model_registry.values():
-            for key, rel in self.mapper_registry[related_model].relations.items():
+            for key, rel in self.get_mapper(related_model).relations.items():
                 try:
                     rel.setup_reverse_relation()
                 except ModelNotRegistered:
@@ -402,6 +402,9 @@ class Mapper(object):
 
     def get_identity_map(self, db):
         return db.transaction.identity_map
+
+    def get_mapper(self, model):
+        return self.mapper_registry[model]
 
 
 class PrepareModel(object):
