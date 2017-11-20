@@ -84,15 +84,15 @@ class Model(ModelBase("NewBase", (object, ), {})):
     @classproperty
     def s(cls):
         # TODO: Use Model class descriptor without __set__().
-        return mapper_registry[cls].sql_table
+        return cls._mapper.sql_table
 
     @classproperty
     def q(cls):
-        return mapper_registry[cls].query
+        return cls._mapper.query
 
     @classmethod
     def get(cls, *args, **kwargs):
-        return mapper_registry[cls].get(*args, **kwargs)
+        return cls._mapper.get(*args, **kwargs)
 
     def __repr__(self):
         return "<{0}.{1}: {2}>".format(type(self).__module__, type(self).__name__, self.pk)

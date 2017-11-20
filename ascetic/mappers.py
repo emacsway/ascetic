@@ -88,14 +88,14 @@ class Mapper(object):
 
     pk = 'id'
     abstract = False
+    original_data = SpecialMappingAccessor(SpecialAttrAccessor('original_data', default=dict))
+    is_new = SpecialAttrAccessor('new_record', default=True)
+    used_db = SpecialAttrAccessor('db')
     field_factory = Field
     result_factory = staticmethod(lambda *a, **kw: Result(*a, **kw))
 
     @thread_safe
     def __init__(self, model=None, default_db_accessor=lambda: databases['default']):
-        self.original_data = SpecialMappingAccessor(SpecialAttrAccessor('original_data', default=dict))
-        self.is_new = SpecialAttrAccessor('new_record', default=True)
-        self.used_db = SpecialAttrAccessor('db')
         self._default_db = default_db_accessor
 
         if model:

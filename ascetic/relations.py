@@ -125,10 +125,10 @@ class BaseRelation(object):
 
 
 class Relation(BaseRelation, IRelation):
+    _cache = SpecialMappingAccessor(SpecialAttrAccessor('cache', default=dict))
 
     def __init__(self, related_model, related_field=None, field=None, on_delete=cascade, related_name=None,
                  related_query=None, query=None):
-        self._cache = SpecialMappingAccessor(SpecialAttrAccessor('cache', default=dict))
         if isinstance(related_model, Mapper):
             related_model = related_model.model
         self._related_model_or_name = related_model
