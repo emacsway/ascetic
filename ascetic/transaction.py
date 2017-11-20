@@ -36,7 +36,7 @@ class Transaction(BaseTransaction):
         self._reset_identity_map()
 
     def _reset_identity_map(self):
-        self._identity_map.clear()
+        self._identity_map.sync()
 
 
 class SavePoint(BaseTransaction):
