@@ -158,7 +158,7 @@ class IdentityMap(interfaces.IIdentityMap):
         self.cache = CacheLru()
         self.alive = weakref.WeakValueDictionary()
         self.set_isolation_level(self._default_isolation_level)
-        self._subscribe(self.db())
+        self._disposable = self._subscribe(self.db())
 
     def add(self, key, value=None):
         return self._strategy.add(key, value)
@@ -208,8 +208,10 @@ class IdentityMap(interfaces.IIdentityMap):
             self.set_isolation_level(self.READ_UNCOMMITTED)
 
     def _subscribe(self, subject):
-        subject.observed().attach('commit', self._on_commit)
-        subject.observed().attach('rollback', self._on_rollback)
+        return (
+            subject.observed().attach('commit', self._on_commit) +
+            subject.observed().attach('rollback', self._on_rollback)
+        )
 
     def _on_commit(self, subject, aspect):
         self.sync()

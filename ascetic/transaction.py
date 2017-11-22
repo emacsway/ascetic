@@ -83,7 +83,7 @@ class TransactionManager(interfaces.ITransactionManager):
         self._db = db_accessor
         self._current = None
         self._autocommit = autocommit
-        self._subscribe(self._db())
+        self._disposable = self._subscribe(self._db())
 
     def __call__(self, func=None):
         if func is None:
@@ -145,7 +145,7 @@ class TransactionManager(interfaces.ITransactionManager):
         self.current().set_autocommit(autocommit)
 
     def _subscribe(self, subject):
-        subject.observed().attach('connect', self._on_connect)
+        return subject.observed().attach('connect', self._on_connect)
 
     def _on_connect(self, subject, aspect):
         self._current = None
