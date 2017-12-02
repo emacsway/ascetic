@@ -323,6 +323,7 @@ class Mapper(object):
         pre_save.send(sender=self.model, instance=obj, db=db)
         is_new = self.is_new(obj)
         result = self._insert(obj, db) if is_new else self._update(obj, db)
+        # TODO: Set default values from DB?
         post_save.send(sender=self.model, instance=obj, created=is_new, db=db)
         self.original_data(obj, **self.unload(obj, to_db=False))
         self.is_new(obj, False)

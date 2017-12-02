@@ -84,11 +84,18 @@ class Database(interfaces.IDatabase):
     def execute(self, sql, params=()):
         if not isinstance(sql, string_types):
             sql, params = self.compile(sql)
-        if self.placeholder != PLACEHOLDER:
-            sql = sql.replace(PLACEHOLDER, self.placeholder)
         sql = sql.rstrip("; \t\n\r")
+        if self.placeholder != PLACEHOLDER:
+            sql = self._sql_replace(sql, PLACEHOLDER, self.placeholder)
         cursor = self._execute(sql, params)
         return cursor
+
+    @staticmethod
+    def _sql_replace(self, statement, old, new):
+        tokens = statement.split("'")
+        for i in range(0, len(tokens), 2):
+            tokens[i] = tokens[i].replace(old, new)
+        return "'".join(tokens)
 
     def cursor(self):
         if not self.connection:
