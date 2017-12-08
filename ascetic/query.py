@@ -82,7 +82,7 @@ class Table(smartsql.Table):
 class TableAlias(smartsql.TableAlias, Table):
     @property
     def _mapper(self):
-        return getattr(self._table, '_mapper', None)  # Can be subquery
+        return getattr(self._table, '_mapper', None)  # self._table can be a subquery
 
 
 class Result(smartsql.Result):
