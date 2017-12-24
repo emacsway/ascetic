@@ -45,7 +45,13 @@ class Table(smartsql.Table):
         if name == 'pk':
             name = self._mapper.pk
         elif isinstance(self._mapper.relations.get(name, None), Relation):
-            name = self._mapper.relations.get(name).field
+            relation = self._mapper.relations.get(name)
+            related_alias = relation.related_mapper.sql_table.as_(next(smartsql.auto_name))
+            return AutoJoinedTable(
+                related_alias,
+                smartsql.InnerJoin(None, related_alias, relation.get_join_where(self, related_alias))
+            ).f
+            # name = self._mapper.relations.get(name).field
 
         if type(name) == tuple:
             if len(parts) > 1:
@@ -83,6 +89,28 @@ class TableAlias(smartsql.TableAlias, Table):
     @property
     def _mapper(self):
         return getattr(self._table, '_mapper', None)  # self._table can be a subquery
+
+
+class AutoJoinedTable(Table):
+    def __init__(self, delegate, auto_join):
+        self.m_delegate__ = delegate
+        self.m_auto_join__ = auto_join
+
+        smartsql.Table.__init__(self, None)
+        if isinstance(delegate, smartsql.Table):
+            for f in delegate._fields.values():
+                self._append_field(copy.copy(f))
+
+    @property
+    def _mapper(self):
+        return getattr(self.m_delegate__, '_mapper', None)  # self._table can be a subquery
+
+
+@smartsql.compile.when(AutoJoinedTable)
+def compile_autojoinedtable(compile, expr, state):
+    if (expr.m_auto_join__ not in state.auto_join_tables):
+        state.auto_join_tables.append(expr.m_auto_join__)
+    compile(expr.m_delegate__, state)
 
 
 class Result(smartsql.Result):

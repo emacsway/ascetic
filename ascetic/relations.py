@@ -173,11 +173,13 @@ class Relation(BaseRelation, IRelation):
         # Avoid to use self.related_name here. Relation can be unidirectional.
         return t.get_field(self.related_field) == self.get_value(obj)  # CompositeExpr is used here
 
-    def get_join_where(self):
-        t = self.mapper.sql_table
-        rt = self.related_mapper.sql_table
+    def get_join_where(self, prefix=None, related_prefix=None):
+        if prefix is None:
+            prefix = self.mapper.sql_table
+        if related_prefix is None:
+            related_prefix = self.related_mapper.sql_table
         # Avoid to use self.related_name here. Relation can be unidirectional.
-        return t.get_field(self.name) == rt.get_field(self.related_field)  # CompositeExpr is used here
+        return prefix.get_field(self.field) == related_prefix.get_field(self.related_field)  # CompositeExpr is used here
 
     def get_value(self, obj):
         return tuple(getattr(obj, f, None) for f in self.field)

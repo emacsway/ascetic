@@ -226,7 +226,12 @@ class IRelation(IBaseRelation):
     def get_related_where(self, obj):
         raise NotImplementedError
 
-    def get_join_where(self):
+    def get_join_where(self, prefix=None, related_prefix=None):
+        """
+        :type prefix: ascetic.query.Table
+        :type related_prefix: ascetic.query.Table
+        :rtype: sqlbuilder.smartsql.expressions.Operable
+        """
         raise NotImplementedError
 
     def get_value(self, obj):

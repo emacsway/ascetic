@@ -239,7 +239,41 @@ class TestMapper(unittest.TestCase):
              '"ascetic_tests_author"."bio"', ]
         )
 
-        self.assertEqual(smartsql.compile(book_mapper.sql_table.author)[0], '"books"."author_id"')
+        # self.assertEqual(smartsql.compile(book_mapper.sql_table.author)[0], '"books"."author_id"')
+        smartsql.auto_name.counter = 0
+        self.assertEqual(
+            smartsql.compile(book_mapper.query.where(book_mapper.sql_table.author.id == 1)),
+            ('SELECT "books"."id", "books"."title", "books"."author_id" FROM "books" INNER '
+             'JOIN "ascetic_tests_author" AS "_auto_1" ON ("books"."author_id" = '
+             '"_auto_1"."id") WHERE "_auto_1"."id" = %s',
+             [1])
+        )
+        smartsql.auto_name.counter = 0
+        self.assertEqual(
+            smartsql.compile(author_mapper.query.where(
+                (book_mapper.sql_table.author.id == 1) & (book_mapper.sql_table.author.first_name == 'Ivan')
+            )),
+            ('SELECT "ascetic_tests_author"."id", "ascetic_tests_author"."first_name", '
+             '"ascetic_tests_author"."last_name", "ascetic_tests_author"."bio" FROM '
+             '"ascetic_tests_author" INNER JOIN "ascetic_tests_author" AS "_auto_1" ON '
+             '("books"."author_id" = "_auto_1"."id") INNER JOIN "ascetic_tests_author" AS '
+             '"_auto_2" ON ("books"."author_id" = "_auto_2"."id") WHERE "_auto_1"."id" = '
+             '%s AND "_auto_2"."first_name" = %s',
+             [1, 'Ivan'])
+        )
+        smartsql.auto_name.counter = 0
+        author_table = book_mapper.sql_table.author
+        self.assertEqual(
+            smartsql.compile(author_mapper.query.where(
+                (author_table.id == 1) & (author_table.first_name == 'Ivan')
+            )),
+            ('SELECT "ascetic_tests_author"."id", "ascetic_tests_author"."first_name", '
+             '"ascetic_tests_author"."last_name", "ascetic_tests_author"."bio" FROM '
+             '"ascetic_tests_author" INNER JOIN "ascetic_tests_author" AS "_auto_1" ON '
+             '("books"."author_id" = "_auto_1"."id") WHERE "_auto_1"."id" = %s AND '
+             '"_auto_1"."first_name" = %s',
+             [1, 'Ivan'])
+        )
 
         q = author_mapper.query
         self.assertEqual(smartsql.compile(q)[0], '''SELECT "ascetic_tests_author"."id", "ascetic_tests_author"."first_name", "ascetic_tests_author"."last_name", "ascetic_tests_author"."bio" FROM "ascetic_tests_author"''')
