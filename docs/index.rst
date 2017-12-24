@@ -266,6 +266,8 @@ See also:
 * `Storm <https://storm.canonical.com/>`_ (properties from class) - excellent and simple ORM!
 * Article (in English) "`Why I prefer Storm ORM for Python <https://emacsway.github.io/en/storm-orm/>`_"
 * Article (in Russian) "`Почему я выбираю Storm ORM для Python <https://emacsway.github.io/ru/storm-orm/>`_"
+* Article (in English) "`Implementation of Repository pattern for browser’s JavaScript <https://emacsway.github.io/en/javascript-and-repository-pattern/>`_"
+* Article (in Russian) "`Реализация паттерна Repository в браузерном JavaScript <https://emacsway.github.io/ru/javascript-and-repository-pattern/>`_"
 * `SQLAlchemy <http://www.sqlalchemy.org/>`_ (scheme from class or database, see "`autoload <http://docs.sqlalchemy.org/en/rel_1_1/core/reflection.html>`__" option)
 * `Openorm <http://code.google.com/p/openorm/source/browse/python/>`_ (lightweight datamapper), `miror <https://bitbucket.org/emacsway/openorm/src/default/python/>`__
 * `SQLObject <http://www.sqlobject.org/>`_ (scheme from class or database, see "fromDatabase" option)
