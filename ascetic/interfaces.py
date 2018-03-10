@@ -60,7 +60,7 @@ class IDatabase(object):
     def execute(self, sql, params=()):
         """
         :type sql: str
-        :type params: collections.abc.Iterable
+        :type params: collections.Iterable
         :rtype: sqlite3.Cursor
         """
         raise NotImplementedError
@@ -141,7 +141,7 @@ class IDatabase(object):
     def register(cls, engine):
         """
         :type engine: str
-        :rtype: collections.abc.Callable
+        :rtype: collections.Callable
         """
         raise NotImplementedError
 

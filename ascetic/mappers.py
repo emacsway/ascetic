@@ -280,7 +280,7 @@ class Mapper(object):
         return obj
 
     def validate(self, obj, fields=frozenset(), exclude=frozenset()):
-        # Don't need '__model__' key. Just override this method in subclass.
+        # Don't need '__model__' key. Just override this method in subclass. Or we can use empty string '' as key.
         self.set_defaults(obj)
         fields = self._get_specified_fields(fields, exclude)
         CompositeMappingValidator(
