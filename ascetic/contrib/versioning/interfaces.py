@@ -1,11 +1,9 @@
-import collections
-
-
 class IRegistry(object):
     def register(self, model, fields, object_accessor):
         """
         :type model: object
         :type fields: list[str]
+        :type object_accessor: IObjectAccessor
         """
         raise NotImplementedError
 
@@ -30,11 +28,12 @@ class IRegistry(object):
         raise NotImplementedError
 
 
-class IVersionStampSequence(collections.Iterator):
-    pass
+class IChangesetRepository(object):
+    def next(self, subset_of_stamp=None):
+        raise NotImplementedError
 
 
-class IRepository(object):
+class IRevisionRepository(object):
     def commit(self, obj, stamp):
         raise NotImplementedError
 

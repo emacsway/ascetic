@@ -2,19 +2,19 @@ from ascetic.contrib.versioning.interfaces import ITransaction, ITransactionMana
 
 
 class DummyTransaction(ITransaction):
-    def __init__(self, repository, version_stamp_sequence):
+    def __init__(self, changeset_repository, revision_repository):
         """
-        :type repository: ascetic.contrib.versioning.interfaces.IRepository
-        :type version_stamp_sequence: ascetic.contrib.versioning.interfaces.IVersionStampSequence
+        :type changeset_repository: ascetic.contrib.versioning.interfaces.IChangesetRepository
+        :type revision_repository: ascetic.contrib.versioning.interfaces.IRevisionRepository
         """
-        self._repository = repository
-        self._version_stamp_sequence = version_stamp_sequence
+        self._revision_repository = revision_repository
+        self._changeset_repository = changeset_repository
 
     def add_object(self, obj):
         pass
 
     def begin(self):
-        return Transaction(self._repository, self._version_stamp_sequence)
+        return Transaction(self._changeset_repository, self._revision_repository)
 
     def commit(self):
         return self
@@ -27,14 +27,14 @@ class DummyTransaction(ITransaction):
 
 
 class Transaction(ITransaction):
-    def __init__(self, repository, version_stamp_sequence):
+    def __init__(self, changeset_repository, revision_repository):
         """
-        :type repository: ascetic.contrib.versioning.interfaces.IRepository
-        :type version_stamp_sequence: ascetic.contrib.versioning.interfaces.IVersionStampSequence
+        :type changeset_repository: ascetic.contrib.versioning.interfaces.IChangesetRepository
+        :type revision_repository: ascetic.contrib.versioning.interfaces.IRevisionRepository
         """
-        self._repository = repository
-        self._version_stamp_sequence = version_stamp_sequence
-        self._stamp = next(self._version_stamp_sequence)
+        self._revision_repository = revision_repository
+        self._changeset_repository = changeset_repository
+        self._stamp = self._changeset_repository.next()
         self._objects = list()
         self._committed = set()
 
@@ -48,11 +48,11 @@ class Transaction(ITransaction):
         for obj in self._objects:
             obj_id = self._get_object_id(obj)
             if obj_id not in self._committed:
-                self._repository.commit(obj, self._stamp)
+                self._revision_repository.commit(obj, self._stamp)
                 self._committed.add(obj_id)
 
     def rollback(self):
-        return DummyTransaction(self._repository, self._version_stamp_sequence)
+        return DummyTransaction(self._changeset_repository, self._revision_repository)
 
     def is_null(self):
         return False

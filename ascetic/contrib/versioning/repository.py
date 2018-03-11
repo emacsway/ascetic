@@ -3,10 +3,10 @@ import copy
 import datetime
 import hashlib
 
-from ascetic.contrib.versioning.interfaces import IRepository
+from ascetic.contrib.versioning.interfaces import IRevisionRepository
 
 
-class DatabaseRepository(IRepository):
+class DatabaseRevisionRepository(IRevisionRepository):
     _registry = None
 
     def __init__(self, mapper, registry, comparator, actual_serializer, known_serializers):
@@ -26,8 +26,9 @@ class DatabaseRepository(IRepository):
     def commit(self, obj, stamp, **info):
         prev_stamp = self.version(obj).stamp
         prev_obj = self.object_version(obj, stamp=prev_stamp)
-        if self._comparator.is_equal(prev_obj, obj):
-            return
+        # We have to save each revision of changeset, even empty
+        # if self._comparator.is_equal(prev_obj, obj):
+        #     return
 
         delta = self._comparator.create_delta(prev_obj, obj)
         serialized_delta = self._actual_serializer.dumps(delta)
